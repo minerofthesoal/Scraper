@@ -1,0 +1,55 @@
+{
+  "manifest_version": 2,
+  "name": "WebScraper Pro",
+  "version": "1.0.0",
+  "description": "Scrape text, images, links, and audio from selected areas with auto-pagination, HuggingFace upload, and MLA citation support.",
+  "author": "WebScraper Pro Team",
+  "homepage_url": "https://github.com/minerofthesoal/Scraper",
+
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "downloads",
+    "notifications",
+    "webNavigation",
+    "<all_urls>"
+  ],
+
+  "browser_action": {
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    },
+    "default_title": "WebScraper Pro",
+    "default_popup": "popup/popup.html"
+  },
+
+  "background": {
+    "scripts": ["lib/utils.js", "lib/mla_citation.js", "lib/hf_upload.js", "background/background.js"],
+    "persistent": true
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/selector.js", "content/scraper.js", "content/auto_scan.js"],
+      "css": ["content/overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+
+  "web_accessible_resources": [
+    "icons/*"
+  ]
+}

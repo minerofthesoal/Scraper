@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebScraper Pro - Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-container">
+    <header>
+      <h1>WebScraper Pro Settings</h1>
+      <p class="subtitle">Configure scraping, storage, and upload options</p>
+    </header>
+
+    <!-- Scraping Settings -->
+    <section class="card">
+      <h2>Scraping</h2>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-auto-start">
+        <span>Auto-start scraping on new page loads</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-auto-scroll" checked>
+        <span>Auto-scroll for infinite-scroll pages</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-auto-next" checked>
+        <span>Auto-detect and click "Next" buttons</span>
+      </label>
+
+      <div class="field">
+        <label for="inp-delay">Delay between pages (ms):</label>
+        <input type="number" id="inp-delay" value="1500" min="500" max="30000" step="100">
+      </div>
+
+      <div class="field">
+        <label for="inp-max-pages">Max pages per session:</label>
+        <input type="number" id="inp-max-pages" value="200" min="1" max="10000">
+      </div>
+
+      <div class="field">
+        <label for="sel-format">Data format:</label>
+        <select id="sel-format">
+          <option value="jsonl">JSONL (recommended)</option>
+          <option value="json">JSON</option>
+          <option value="csv">CSV</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Local Storage -->
+    <section class="card">
+      <h2>Local Storage</h2>
+
+      <div class="field">
+        <label for="inp-save-path">Save directory:</label>
+        <input type="text" id="inp-save-path" placeholder="webscraper-pro/" value="webscraper-pro/">
+        <small>Relative to your downloads folder. Works on Linux (Arch, Ubuntu, etc.) and Windows 10/11.</small>
+      </div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-save-local" checked>
+        <span>Save scraped data locally</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-download-images">
+        <span>Download images as PNG files</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-convert-audio">
+        <span>Convert audio to .wav format</span>
+      </label>
+    </section>
+
+    <!-- HuggingFace Upload -->
+    <section class="card">
+      <h2>HuggingFace Upload</h2>
+
+      <div class="field">
+        <label for="inp-hf-token">HF API Token:</label>
+        <input type="password" id="inp-hf-token" placeholder="hf_xxxxxxxxxxxxx">
+        <button id="btn-validate-token" class="btn btn-small">Validate</button>
+        <span id="token-status" class="status"></span>
+      </div>
+
+      <div class="field">
+        <label for="inp-hf-repo">Repo ID (user/dataset-name):</label>
+        <input type="text" id="inp-hf-repo" placeholder="username/my-dataset">
+        <small>Enter a repo link (https://huggingface.co/datasets/user/name) or repo ID (user/name)</small>
+      </div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-hf-create" checked>
+        <span>Auto-create repo if it doesn't exist</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-hf-private">
+        <span>Make repo private</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-hf-auto-upload">
+        <span>Auto-upload after scraping session</span>
+      </label>
+
+      <div class="field">
+        <label for="inp-hf-owner-repo">Extension owner's repo (optional):</label>
+        <input type="text" id="inp-hf-owner-repo" placeholder="owner/shared-dataset">
+        <small>Optionally upload to the extension developer's shared dataset</small>
+      </div>
+    </section>
+
+    <!-- Citation Settings -->
+    <section class="card">
+      <h2>Citations</h2>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-auto-cite" checked>
+        <span>Auto-generate MLA citations for all sources</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-cite-readme" checked>
+        <span>Include citations in HF README</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-cite-links" checked>
+        <span>Cite all original links and creators</span>
+      </label>
+    </section>
+
+    <!-- Data Management -->
+    <section class="card">
+      <h2>Data Management</h2>
+      <div class="btn-row">
+        <button id="btn-export" class="btn btn-primary">Export All Data</button>
+        <button id="btn-upload-hf" class="btn btn-accent">Upload to HuggingFace</button>
+        <button id="btn-clear" class="btn btn-danger">Clear All Data</button>
+      </div>
+      <div id="data-stats" class="stats-display"></div>
+    </section>
+
+    <!-- Save -->
+    <div class="save-bar">
+      <span id="save-status" class="status"></span>
+      <button id="btn-save" class="btn btn-primary">Save Settings</button>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

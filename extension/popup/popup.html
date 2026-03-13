@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header>
+      <h1>WebScraper Pro</h1>
+      <span id="status-badge" class="badge badge-idle">Idle</span>
+    </header>
+
+    <section class="controls">
+      <button id="btn-select-area" class="btn btn-primary" title="Click then drag to select an area on the page">
+        Select Area
+      </button>
+      <button id="btn-scrape-page" class="btn btn-secondary" title="Scrape the entire visible page">
+        Scrape Full Page
+      </button>
+      <button id="btn-start-auto" class="btn btn-accent" title="Auto-scan: find next page or scroll to load more">
+        Auto-Scan
+      </button>
+      <button id="btn-stop" class="btn btn-danger hidden" title="Stop current operation">
+        Stop
+      </button>
+    </section>
+
+    <section class="quick-config">
+      <h2>Quick Settings</h2>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-auto-start">
+        <span>Auto-start on new page</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-auto-scroll">
+        <span>Auto-scroll for more content</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-auto-next">
+        <span>Auto-click next page</span>
+      </label>
+
+      <div class="field-row">
+        <label for="sel-save-mode">Save to:</label>
+        <select id="sel-save-mode">
+          <option value="local">Local Disk</option>
+          <option value="hf">HuggingFace</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+
+      <div class="field-row">
+        <label for="sel-format">Format:</label>
+        <select id="sel-format">
+          <option value="jsonl">JSONL</option>
+          <option value="json">JSON</option>
+          <option value="csv">CSV</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="stats">
+      <h2>Session Stats</h2>
+      <div class="stat-grid">
+        <div class="stat"><span id="stat-pages">0</span><small>Pages</small></div>
+        <div class="stat"><span id="stat-texts">0</span><small>Texts</small></div>
+        <div class="stat"><span id="stat-images">0</span><small>Images</small></div>
+        <div class="stat"><span id="stat-links">0</span><small>Links</small></div>
+        <div class="stat"><span id="stat-audio">0</span><small>Audio</small></div>
+      </div>
+    </section>
+
+    <section class="actions">
+      <button id="btn-export" class="btn btn-small">Export Data</button>
+      <button id="btn-upload-hf" class="btn btn-small">Upload to HF</button>
+      <button id="btn-options" class="btn btn-small">Full Options</button>
+    </section>
+
+    <footer>
+      <small>v1.0.0 | <a id="link-options" href="#">Settings</a></small>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
