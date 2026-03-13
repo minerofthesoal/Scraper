@@ -1,0 +1,89 @@
+/* ── WebScraper Pro Overlay Styles ── */
+
+/* Selection overlay when user is drawing a rectangle */
+#wsp-selection-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 2147483646;
+  cursor: crosshair;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* The drawn selection rectangle */
+#wsp-selection-rect {
+  position: fixed;
+  border: 2px dashed #7c83ff;
+  background: rgba(124, 131, 255, 0.12);
+  z-index: 2147483647;
+  pointer-events: none;
+  border-radius: 3px;
+  box-shadow: 0 0 0 3px rgba(124, 131, 255, 0.25);
+}
+
+/* Floating toolbar after selection */
+#wsp-toolbar {
+  position: fixed;
+  z-index: 2147483647;
+  background: #1a1a2e;
+  border: 1px solid #7c83ff;
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  gap: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#wsp-toolbar button {
+  background: #2d3748;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+#wsp-toolbar button:hover { background: #7c83ff; color: #fff; }
+#wsp-toolbar button.wsp-btn-danger:hover { background: #e74c3c; }
+
+/* Toast notifications */
+#wsp-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #7c83ff;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+#wsp-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Highlight scraped elements */
+.wsp-scraped-highlight {
+  outline: 2px solid rgba(124, 131, 255, 0.5) !important;
+  outline-offset: 2px;
+}
+
+/* Auto-scan progress bar */
+#wsp-progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #7c83ff, #e67e22);
+  z-index: 2147483647;
+  transition: width 0.3s;
+}
