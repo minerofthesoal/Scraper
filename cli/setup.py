@@ -28,7 +28,7 @@ setup(
     python_requires=">=3.8",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
+        "License :: Other/Proprietary License",  # Uni-S License
         "Operating System :: OS Independent",
     ],
 )

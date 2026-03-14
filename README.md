@@ -281,4 +281,13 @@ scrape upload.owner
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+**Uni-S License** (Universal Scraping License) - see [LICENSE](LICENSE) for full text.
+
+**TL;DR:**
+
+| What | Rule |
+|------|------|
+| **Software code** | Open source forever. Use, modify, share freely. Must stay open source. Must attribute. |
+| **Scraped data** | We own NONE of it. Original creators own everything. You are responsible for legal compliance. Cite your sources. |
+| **Community dataset** | Same rules — all rights belong to original content creators. |
+| **Citations** | Auto-generated to help you attribute, not a grant of rights. Verify before publishing. |

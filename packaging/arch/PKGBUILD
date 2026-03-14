@@ -5,7 +5,7 @@ pkgrel=1
 pkgdesc="Firefox extension + CLI for web scraping with HuggingFace upload and MLA citations"
 arch=('any')
 url="https://github.com/minerofthesoal/Scraper"
-license=('MIT')
+license=('custom:Uni-S')
 depends=(
     'python>=3.8'
     'python-click'
