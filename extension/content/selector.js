@@ -1,12 +1,14 @@
-/* ── Area Selection Module ── */
+/* ── Area Selection Module v0.5.5b ── */
 /* global WSP_Scraper */
 (function () {
   "use strict";
 
   let overlay = null;
   let rect = null;
+  let counter = null;
   let startX = 0, startY = 0;
   let isDrawing = false;
+  let previewTimer = null;
 
   function createOverlay() {
     removeOverlay();
@@ -18,6 +20,11 @@
     rect.id = "wsp-selection-rect";
     document.body.appendChild(rect);
 
+    counter = document.createElement("div");
+    counter.id = "wsp-selection-counter";
+    counter.style.display = "none";
+    document.body.appendChild(counter);
+
     overlay.addEventListener("mousedown", onMouseDown);
     overlay.addEventListener("mousemove", onMouseMove);
     overlay.addEventListener("mouseup", onMouseUp);
@@ -28,6 +35,8 @@
   function removeOverlay() {
     if (overlay) { overlay.remove(); overlay = null; }
     if (rect) { rect.remove(); rect = null; }
+    if (counter) { counter.remove(); counter = null; }
+    clearTimeout(previewTimer);
     document.removeEventListener("keydown", onKeyDown);
   }
 
@@ -49,6 +58,7 @@
     rect.style.width = "0";
     rect.style.height = "0";
     rect.style.display = "block";
+    if (counter) counter.style.display = "none";
   }
 
   function onMouseMove(e) {
@@ -61,11 +71,63 @@
     rect.style.top = y + "px";
     rect.style.width = w + "px";
     rect.style.height = h + "px";
+
+    // Live preview: count elements in selection (debounced)
+    clearTimeout(previewTimer);
+    if (w > 30 && h > 30) {
+      previewTimer = setTimeout(() => {
+        updateLiveCounter({
+          left: x, top: y,
+          right: x + w, bottom: y + h,
+        }, e.clientX, e.clientY);
+      }, 100);
+    }
+  }
+
+  function updateLiveCounter(selRect, mouseX, mouseY) {
+    if (!counter) return;
+
+    const all = document.querySelectorAll("body *");
+    let wordCount = 0;
+    let imgCount = 0;
+    let linkCount = 0;
+    const seenText = new Set();
+
+    for (const el of all) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      if (r.left >= selRect.right || r.right <= selRect.left ||
+          r.top >= selRect.bottom || r.bottom <= selRect.top) continue;
+
+      if (el.tagName === "IMG") imgCount++;
+      if (el.tagName === "A" && el.href) linkCount++;
+
+      const text = (el.innerText || "").trim();
+      if (text && text.length > 2 && !seenText.has(text)) {
+        seenText.add(text);
+        wordCount += text.split(/\s+/).filter(w => w.length > 0).length;
+      }
+    }
+
+    counter.innerHTML = `<span class="count-words">${wordCount}</span> words · <span class="count-imgs">${imgCount}</span> imgs · <span class="count-links">${linkCount}</span> links`;
+    counter.style.left = (mouseX + 15) + "px";
+    counter.style.top = (mouseY - 25) + "px";
+    counter.style.display = "block";
+
+    // Keep in viewport
+    requestAnimationFrame(() => {
+      if (!counter) return;
+      const cr = counter.getBoundingClientRect();
+      if (cr.right > window.innerWidth) counter.style.left = (mouseX - cr.width - 10) + "px";
+      if (cr.top < 0) counter.style.top = (mouseY + 15) + "px";
+    });
   }
 
   function onMouseUp(e) {
     if (!isDrawing) return;
     isDrawing = false;
+    clearTimeout(previewTimer);
+    if (counter) counter.style.display = "none";
 
     const selRect = {
       left: Math.min(startX, e.clientX),
@@ -111,6 +173,15 @@
       }
     });
 
+    const btnScrollScrape = document.createElement("button");
+    btnScrollScrape.textContent = "Scroll & Scrape";
+    btnScrollScrape.addEventListener("click", () => {
+      removeToolbar();
+      if (typeof WSP_Scraper !== "undefined") {
+        WSP_Scraper.scrapeWithScroll();
+      }
+    });
+
     const btnCancel = document.createElement("button");
     btnCancel.className = "wsp-btn-danger";
     btnCancel.textContent = "Cancel";
@@ -118,6 +189,7 @@
 
     bar.appendChild(btnScrape);
     bar.appendChild(btnScrapeAndNext);
+    bar.appendChild(btnScrollScrape);
     bar.appendChild(btnCancel);
 
     // Position toolbar below the selection

@@ -62,7 +62,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.5b"
+VERSION = "0.5.5b"
 
 # ── Config paths ──
 def get_config_dir():

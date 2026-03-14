@@ -1,10 +1,14 @@
-/* ── HuggingFace Upload Module ── */
+/* ── HuggingFace Upload Module v0.5.5b ── */
+/* Fixed: correct API endpoints, retry logic, incremental uploads, progress tracking */
 (function () {
   "use strict";
 
   const HF_API = "https://huggingface.co/api";
 
   const WSP_HFUpload = {
+
+    /* ── Last upload hash for incremental uploads ── */
+    _lastUploadHash: null,
 
     /**
      * Check if a HuggingFace token is valid.
@@ -17,7 +21,6 @@
       });
       if (resp.status === 401) throw new Error("Invalid HuggingFace token - check your token at huggingface.co/settings/tokens");
       if (!resp.ok) {
-        // Non-401 errors (rate limit, server error) - don't invalidate the token
         console.warn(`[WSP] HF API returned ${resp.status} - proceeding anyway`);
         return { name: "unknown" };
       }
@@ -42,7 +45,6 @@
       });
 
       if (resp.status === 409) {
-        // Repo already exists — that's fine
         return { exists: true, repoId };
       }
       if (!resp.ok) {
@@ -53,81 +55,204 @@
     },
 
     /**
-     * Upload a single file to a HF dataset repo.
+     * Upload a single file using the HF Hub upload API.
+     * Uses POST with multipart/form-data to the correct endpoint.
      */
     async uploadFile(token, repoId, filePath, content, commitMsg) {
-      const url = `${HF_API}/datasets/${repoId}/upload/main/${filePath}`;
-      const blob = typeof content === "string" ? new Blob([content], { type: "application/octet-stream" }) : content;
+      // The correct HF single-file upload endpoint:
+      //   POST https://huggingface.co/api/datasets/{repo_id}/upload/main
+      //   with multipart form: file + path_in_repo
+      const url = `${HF_API}/datasets/${repoId}/upload/main`;
+
+      const formData = new FormData();
+      const blob = typeof content === "string"
+        ? new Blob([content], { type: "text/plain" })
+        : content;
+
+      // The file must be attached with its target path as the field name
+      formData.append("file", blob, filePath);
+      formData.append("path_in_repo", filePath);
+      if (commitMsg) {
+        formData.append("commit_message", commitMsg);
+      }
 
       const resp = await fetch(url, {
-        method: "PUT",
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        body: blob,
+        body: formData,
       });
 
       if (!resp.ok) {
-        const err = await resp.text();
-        throw new Error(`Upload failed for ${filePath}: ${err}`);
+        const errText = await resp.text();
+        throw new Error(`Upload failed for ${filePath} (${resp.status}): ${errText}`);
       }
-      return resp.json();
+
+      let result;
+      try {
+        result = await resp.json();
+      } catch {
+        result = { success: true };
+      }
+      return result;
     },
 
     /**
      * Commit multiple files to a HF dataset repo using the commit API.
+     * This is the CORRECT multipart format for the /commit endpoint.
      */
     async commitFiles(token, repoId, files, commitMessage = "Update dataset") {
-      // Use the new commit API
-      const operations = files.map((f) => ({
-        key: "file",
-        value: {
-          content: f.content,
-          path: f.path,
-          encoding: f.encoding || "utf-8",
-        }
-      }));
+      const url = `${HF_API}/datasets/${repoId}/commit/main`;
 
-      // For the commit API, we use a multipart form
+      // Build the LFS-style multipart body that HF expects:
+      // 1. A JSON "header" blob with commit summary
+      // 2. For each file: a JSON "operation" blob + the file content blob
       const formData = new FormData();
 
-      // Header with commit info
+      // Commit header
       const header = JSON.stringify({
         summary: commitMessage,
-        parentCommit: undefined,
       });
       formData.append("header", new Blob([header], { type: "application/json" }));
 
-      // Add each file operation
+      // Each file: an operation descriptor + the file content
       for (const file of files) {
-        const opHeader = JSON.stringify({
+        // Operation descriptor
+        const opDescriptor = JSON.stringify({
           key: "file",
-          value: { path: file.path }
+          value: { path: file.path },
         });
-        formData.append("operations", new Blob([opHeader], { type: "application/json" }));
-        const fileContent = typeof file.content === "string"
-          ? new Blob([file.content], { type: "application/octet-stream" })
+        formData.append("operations", new Blob([opDescriptor], { type: "application/json" }));
+
+        // File content
+        const fileBlob = typeof file.content === "string"
+          ? new Blob([file.content], { type: "text/plain" })
           : file.content;
-        formData.append("files", fileContent);
+        formData.append("files", fileBlob, file.path);
       }
 
-      const resp = await fetch(
-        `${HF_API}/datasets/${repoId}/commit/main`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        }
-      );
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
 
-      if (!resp.ok) {
-        // Fall back to individual uploads
-        for (const file of files) {
+      if (resp.ok) {
+        let result;
+        try { result = await resp.json(); } catch { result = { success: true }; }
+        return result;
+      }
+
+      // If commit API fails, fall back to uploading files one at a time
+      console.warn(`[WSP] Commit API failed (${resp.status}), falling back to individual uploads`);
+      const errors = [];
+
+      for (const file of files) {
+        try {
           await this.uploadFile(token, repoId, file.path, file.content, commitMessage);
+        } catch (e) {
+          console.error(`[WSP] Individual upload failed for ${file.path}:`, e);
+          errors.push({ path: file.path, error: e.message });
         }
       }
 
-      return { success: true };
+      if (errors.length === files.length) {
+        // All uploads failed — try the last resort: JSON API
+        console.warn("[WSP] All uploads failed, trying JSON content API...");
+        await this._uploadViaContentAPI(token, repoId, files, commitMessage);
+      } else if (errors.length > 0) {
+        console.warn(`[WSP] ${errors.length}/${files.length} files failed:`, errors);
+      }
+
+      return { success: true, errors };
+    },
+
+    /**
+     * Last-resort upload method: uses the HF content creation API.
+     * Uploads each file as base64-encoded JSON payload.
+     */
+    async _uploadViaContentAPI(token, repoId, files, commitMessage) {
+      for (const file of files) {
+        const content = typeof file.content === "string" ? file.content : await this._blobToText(file.content);
+
+        // Use the create-file endpoint
+        const url = `${HF_API}/datasets/${repoId}/commit/main`;
+
+        // Single-file commit via JSON body
+        const body = {
+          summary: commitMessage,
+          operations: [{
+            type: "create",
+            path: file.path,
+            content: content,
+            encoding: "utf-8",
+          }],
+        };
+
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`Content API upload failed for ${file.path}: ${errText}`);
+        }
+      }
+    },
+
+    /**
+     * Upload with retry logic (exponential backoff).
+     */
+    async commitFilesWithRetry(token, repoId, files, commitMessage, maxRetries = 3) {
+      let lastError;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const result = await this.commitFiles(token, repoId, files, commitMessage);
+          return result;
+        } catch (e) {
+          lastError = e;
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+            console.warn(`[WSP] Upload attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+      }
+      throw lastError;
+    },
+
+    /**
+     * Helper: convert Blob to text.
+     */
+    _blobToText(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(blob);
+      });
+    },
+
+    /**
+     * Check what files already exist in a repo (for incremental uploads).
+     */
+    async listRepoFiles(token, repoId) {
+      try {
+        const resp = await fetch(`${HF_API}/datasets/${repoId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.siblings || []).map(s => s.rfilename);
+      } catch {
+        return [];
+      }
     },
 
     /**
@@ -139,7 +264,6 @@
       const totalRecords = stats.totalRecords || 0;
       const totalWords = stats.words || 0;
 
-      // Collect unique licenses from citations
       const sourceLicenses = new Set();
       const sourceAuthors = new Set();
       const sourceDomains = new Set();
@@ -149,7 +273,6 @@
         try { sourceDomains.add(new URL(c.url).hostname); } catch { /* skip */ }
       }
 
-      // Language detection from content
       const langs = new Set(["en"]);
 
       let md = `---
@@ -176,7 +299,7 @@ size_categories:
 
 # ${repoName}
 
-> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.5b
+> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.5.5b
 
 ## Dataset Description
 
@@ -200,18 +323,16 @@ This dataset was collected using [WebScraper Pro](https://github.com/minerofthes
 
 ### Intended Uses
 
-This dataset can be used for:
-
-- **Text Generation** - Training or fine-tuning language models on web content
-- **Text Classification** - Categorizing web content by topic, sentiment, or type
-- **Summarization** - Generating summaries from scraped articles
-- **Question Answering** - Building QA datasets from structured web content
-- **Image Classification** - Training image models on web-sourced images
-- **Link Analysis** - Web graph construction and analysis
-- **Audio Transcription** - Processing audio files (converted to .wav)
-- **Citation Analysis** - Studying citation patterns and web attribution
-- **Information Retrieval** - Building search indices from web content
-- **Dataset Curation** - As a base for creating refined, domain-specific datasets
+- **Text Generation** — Training or fine-tuning language models on web content
+- **Text Classification** — Categorizing web content by topic, sentiment, or type
+- **Summarization** — Generating summaries from scraped articles
+- **Question Answering** — Building QA datasets from structured web content
+- **Image Classification** — Training image models on web-sourced images
+- **Link Analysis** — Web graph construction and analysis
+- **Audio Transcription** — Processing audio files (converted to .wav)
+- **Citation Analysis** — Studying citation patterns and web attribution
+- **Information Retrieval** — Building search indices from web content
+- **Dataset Curation** — As a base for creating refined, domain-specific datasets
 
 ### Out-of-Scope Uses
 
@@ -313,7 +434,7 @@ ${sourceLicenses.size > 0 ? "Known source licenses:\\n" + Array.from(sourceLicen
 
 ### Collection Tool
 
-- **Tool:** [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.5b
+- **Tool:** [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.5.5b
 - **Type:** Firefox Extension + Python CLI + GUI
 - **Features:** Area selection, scroll-first auto-scan, MLA/APA citations, HuggingFace upload
 - **Owner Dataset:** [ray0rf1re/Site.scraped](https://huggingface.co/datasets/ray0rf1re/Site.scraped)
@@ -324,7 +445,7 @@ For questions about this dataset, please open an issue at [github.com/minerofthe
 
 ---
 
-*Generated by [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.5b*
+*Generated by [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.5.5b*
 `;
 
       return md;

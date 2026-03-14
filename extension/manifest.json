@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebScraper Pro",
-  "version": "0.5.0",
+  "version": "0.5.5",
   "description": "Scrape text, images, links, and audio from selected areas with auto-pagination, HuggingFace upload, and MLA citation support.",
   "author": "WebScraper Pro Team",
   "homepage_url": "https://github.com/minerofthesoal/Scraper",
@@ -51,5 +51,28 @@
 
   "web_accessible_resources": [
     "icons/*"
-  ]
+  ],
+
+  "commands": {
+    "start-selection": {
+      "suggested_key": { "default": "Alt+S" },
+      "description": "Start area selection"
+    },
+    "scrape-page": {
+      "suggested_key": { "default": "Alt+P" },
+      "description": "Scrape full page"
+    },
+    "scroll-scrape": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Scroll & scrape entire page"
+    },
+    "auto-scan": {
+      "suggested_key": { "default": "Alt+A" },
+      "description": "Start auto-scan"
+    },
+    "stop-scrape": {
+      "suggested_key": { "default": "Alt+X" },
+      "description": "Stop all scraping"
+    }
+  }
 }
