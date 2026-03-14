@@ -1,4 +1,4 @@
-/* ── Scraper Module v0.5b ── */
+/* ── Scraper Module v0.6b ── */
 /* Universal text/image/link/audio extraction that works on ANY site */
 (function () {
   "use strict";

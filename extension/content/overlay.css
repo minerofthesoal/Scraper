@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Overlay Styles ── */
+/* ── WebScraper Pro Overlay Styles v0.6b ── */
 
 /* Selection overlay when user is drawing a rectangle */
 #wsp-selection-overlay {
@@ -19,6 +19,25 @@
   border-radius: 3px;
   box-shadow: 0 0 0 3px rgba(124, 131, 255, 0.25);
 }
+
+/* Live preview counter during selection */
+#wsp-selection-counter {
+  position: fixed;
+  z-index: 2147483647;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border: 1px solid #7c83ff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+#wsp-selection-counter .count-words { color: #7c83ff; font-weight: bold; }
+#wsp-selection-counter .count-imgs { color: #e67e22; font-weight: bold; }
+#wsp-selection-counter .count-links { color: #27ae60; font-weight: bold; }
 
 /* Floating toolbar after selection */
 #wsp-toolbar {
@@ -66,6 +85,7 @@
   transform: translateY(10px);
   transition: opacity 0.3s, transform 0.3s;
   pointer-events: none;
+  max-width: 400px;
 }
 #wsp-toast.visible {
   opacity: 1;
@@ -76,6 +96,7 @@
 .wsp-scraped-highlight {
   outline: 2px solid rgba(124, 131, 255, 0.5) !important;
   outline-offset: 2px;
+  transition: outline-color 0.3s;
 }
 
 /* Auto-scan progress bar */
@@ -86,4 +107,45 @@
   background: linear-gradient(90deg, #7c83ff, #e67e22);
   z-index: 2147483647;
   transition: width 0.3s;
+}
+
+/* Rate limit indicator */
+#wsp-rate-indicator {
+  position: fixed;
+  top: 4px;
+  right: 10px;
+  z-index: 2147483647;
+  background: rgba(26, 26, 46, 0.9);
+  color: #888;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-family: monospace;
+  pointer-events: none;
+}
+
+/* Keyboard shortcut hint overlay */
+#wsp-shortcut-hint {
+  position: fixed;
+  bottom: 60px;
+  right: 20px;
+  z-index: 2147483647;
+  background: rgba(26, 26, 46, 0.95);
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-family: monospace;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+#wsp-shortcut-hint.visible { opacity: 1; }
+#wsp-shortcut-hint kbd {
+  background: #2d3748;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
 }

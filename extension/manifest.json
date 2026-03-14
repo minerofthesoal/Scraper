@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "WebScraper Pro",
-  "version": "0.5.0",
-  "description": "Scrape text, images, links, and audio from selected areas with auto-pagination, HuggingFace upload, and MLA citation support.",
+  "version": "0.6.0",
+  "description": "Scrape text, images, links, and audio with smart extraction, batch queuing, session management, HuggingFace upload, and MLA/APA citations.",
   "author": "WebScraper Pro Team",
   "homepage_url": "https://github.com/minerofthesoal/Scraper",
 
@@ -31,14 +31,28 @@
   },
 
   "background": {
-    "scripts": ["lib/utils.js", "lib/mla_citation.js", "lib/hf_upload.js", "background/background.js"],
+    "scripts": [
+      "lib/utils.js",
+      "lib/mla_citation.js",
+      "lib/rate_limiter.js",
+      "lib/session_manager.js",
+      "lib/hf_upload.js",
+      "background/background.js"
+    ],
     "persistent": true
   },
 
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/robots_checker.js", "content/selector.js", "content/scraper.js", "content/auto_scan.js", "content/download_manager.js"],
+      "js": [
+        "content/robots_checker.js",
+        "content/selector.js",
+        "content/scraper.js",
+        "content/smart_extract.js",
+        "content/auto_scan.js",
+        "content/download_manager.js"
+      ],
       "css": ["content/overlay.css"],
       "run_at": "document_idle"
     }
@@ -51,5 +65,28 @@
 
   "web_accessible_resources": [
     "icons/*"
-  ]
+  ],
+
+  "commands": {
+    "start-selection": {
+      "suggested_key": { "default": "Alt+S" },
+      "description": "Start area selection"
+    },
+    "scrape-page": {
+      "suggested_key": { "default": "Alt+P" },
+      "description": "Scrape full page"
+    },
+    "scroll-scrape": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Scroll & scrape entire page"
+    },
+    "auto-scan": {
+      "suggested_key": { "default": "Alt+A" },
+      "description": "Start auto-scan"
+    },
+    "stop-scrape": {
+      "suggested_key": { "default": "Alt+X" },
+      "description": "Stop all scraping"
+    }
+  }
 }
