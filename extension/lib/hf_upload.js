@@ -153,7 +153,7 @@
       const langs = new Set(["en"]);
 
       let md = `---
-license: cc-by-4.0
+license: other
 task_categories:
   - text-generation
   - text-classification
@@ -274,21 +274,31 @@ ${citations.length > 0 ? WSP_Citation.generateReadmeCitations(citations) : "## S
 
 ## Licensing
 
-### Dataset License
+### Uni-S License (Universal Scraping License)
 
-This dataset compilation is released under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+This dataset and the tool that collected it are governed by the **[Uni-S License](https://github.com/minerofthesoal/Scraper/blob/main/LICENSE)**.
+
+**Key points:**
+
+1. **We do NOT own any of this data.** All rights to scraped content belong to the original authors, creators, publishers, and rights holders.
+2. **The Software (WebScraper Pro) is open source forever.** It must remain open source and cannot be re-licensed as proprietary.
+3. **Users are solely responsible** for ensuring they have the legal right to scrape, store, and redistribute any content they collect.
+4. **Citations are provided to assist attribution**, not to grant permission to use content.
 
 ### Source Content Licenses
 
-Individual content items retain their original licensing from their respective sources. Users of this dataset must verify and comply with the licensing terms of each individual source.
+Individual content items retain their original licensing from their respective sources. Users of this dataset MUST verify and comply with the licensing terms of each individual source before use.
 
-${sourceLicenses.size > 0 ? "Known source licenses:\n" + Array.from(sourceLicenses).map(l => `- ${l}`).join("\n") : "Source licenses should be verified individually at the original URLs."}
+**The dataset maintainer (minerofthesoal / ray0rf1re) explicitly does NOT claim ownership of any scraped content. All rights remain with original creators.**
+
+${sourceLicenses.size > 0 ? "Known source licenses:\\n" + Array.from(sourceLicenses).map(l => \`- \${l}\`).join("\\n") : "Source licenses should be verified individually at the original URLs."}
 
 ### Attribution Requirements
 
 - All original authors and sources are cited in both MLA 9th and APA 7th edition formats
-- When using content from this dataset, please cite the original source
+- When using content from this dataset, you MUST cite the original source
 - Citation data is available in \`data/citations.jsonl\`
+- Any rights holder may request removal of their content by opening an issue at [github.com/minerofthesoal/Scraper](https://github.com/minerofthesoal/Scraper/issues)
 
 ## Ethical Considerations
 

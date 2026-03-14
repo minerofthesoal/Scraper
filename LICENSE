@@ -1,21 +1,207 @@
-MIT License
+Uni-S License (Universal Scraping License)
+Version 1.0
 
 Copyright (c) 2026 minerofthesoal
+https://github.com/minerofthesoal/Scraper
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+=============================================================================
+PART I — SOFTWARE LICENSE (WebScraper Pro Extension, CLI, and GUI Code)
+=============================================================================
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. OPEN SOURCE REQUIREMENT
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   The source code of WebScraper Pro — including the Firefox extension, the
+   Python CLI, the GUI, all build scripts, packaging files, GitHub Actions
+   workflows, and any associated tooling (collectively, the "Software") —
+   SHALL remain open source in perpetuity.
+
+   Anyone may, free of charge:
+
+     a) Use the Software for any lawful purpose, personal or commercial.
+     b) Study, modify, and adapt the Software.
+     c) Distribute copies of the original or modified Software.
+     d) Merge the Software into other open-source projects.
+
+   Subject to the following conditions:
+
+     i)   This license notice and the copyright notice above SHALL be
+          included in all copies or substantial portions of the Software.
+     ii)  Any distribution of modified versions MUST clearly indicate that
+          changes were made and MUST NOT misrepresent the original authors.
+     iii) The Software, in whole or in part, SHALL NOT be re-licensed under
+          a proprietary or closed-source license.
+
+2. NO PROPRIETARY FORKS
+
+   You may NOT take this Software and release it as closed-source,
+   proprietary, or otherwise restrict the freedoms granted by this license.
+   Derivative works that incorporate substantial portions of this Software
+   MUST also be released under this license or a compatible open-source
+   license (MIT, Apache 2.0, GPL 3.0, or later versions thereof).
+
+3. ATTRIBUTION
+
+   If you distribute or publicly deploy this Software (including as a
+   service), you MUST provide clear attribution to the original project:
+
+     WebScraper Pro — https://github.com/minerofthesoal/Scraper
+     Created by minerofthesoal
+
+=============================================================================
+PART II — SCRAPED DATA OWNERSHIP AND RIGHTS
+=============================================================================
+
+4. NO OWNERSHIP OF SCRAPED CONTENT
+
+   The authors, contributors, and maintainers of WebScraper Pro
+   (collectively, "We") do NOT claim any ownership, copyright, or
+   intellectual property rights over ANY data, text, images, audio, video,
+   links, or other content collected using this Software (collectively,
+   "Scraped Content").
+
+   To be explicitly clear:
+
+     a) We do NOT own the Scraped Content.
+     b) We do NOT claim any rights to the Scraped Content.
+     c) We do NOT license the Scraped Content.
+     d) The mere act of scraping does NOT transfer any rights to Us or to
+        the user performing the scraping.
+
+5. ORIGINAL RIGHTS PRESERVED
+
+   ALL rights, copyrights, trademarks, and intellectual property rights in
+   the Scraped Content belong to, and remain with, the ORIGINAL authors,
+   creators, publishers, and/or rights holders of that content.
+
+   This includes but is not limited to:
+
+     a) Text content — belongs to the original author(s) and/or publisher(s).
+     b) Images, photographs, and artwork — belong to the original
+        creator(s), photographer(s), artist(s), and/or rights holder(s).
+     c) Audio and video — belong to the original creator(s), performer(s),
+        producer(s), and/or rights holder(s).
+     d) Software code found on web pages — belongs to the original
+        developer(s) and is subject to its own license.
+     e) Databases and structured data — belong to the original compiler(s)
+        and may be subject to database rights.
+     f) Trademarks and brand elements — belong to their respective owners.
+
+6. USER RESPONSIBILITY
+
+   Users of this Software are SOLELY responsible for:
+
+     a) Ensuring they have the legal right to scrape, collect, store,
+        process, and/or redistribute any content they collect.
+     b) Complying with all applicable laws, including but not limited to
+        copyright law, data protection regulations (GDPR, CCPA, etc.),
+        computer fraud and abuse laws, and terms of service.
+     c) Respecting robots.txt directives and website terms of service.
+     d) Properly attributing and citing all sources (the Software provides
+        automated MLA 9th and APA 7th edition citation generation to
+        assist with this, but users must verify accuracy).
+     e) Obtaining necessary permissions or licenses before redistributing
+        any Scraped Content.
+     f) Removing any Scraped Content upon request from the rights holder.
+
+7. COMMUNITY DATASET (ray0rf1re/Site.scraped)
+
+   The community shared dataset hosted at:
+     https://huggingface.co/datasets/ray0rf1re/Site.scraped
+
+   Is a community-contributed collection. The same principles apply:
+
+     a) The dataset maintainer (ray0rf1re / minerofthesoal) does NOT claim
+        ownership of any contributed Scraped Content.
+     b) All rights remain with the original content creators.
+     c) Contributors are responsible for ensuring they have the right to
+        contribute the data they upload.
+     d) The dataset is provided for research and educational purposes.
+     e) Any rights holder may request removal of their content from the
+        dataset by opening an issue on the GitHub repository.
+
+8. CITATIONS AND ATTRIBUTION
+
+   This Software automatically generates citations in MLA 9th and APA 7th
+   edition formats. These citations:
+
+     a) Are provided to ASSIST users in properly attributing sources.
+     b) Are generated automatically and may contain errors — users MUST
+        verify citation accuracy before use in academic or published work.
+     c) Do NOT constitute legal permission to use the cited content.
+     d) Serve as a record of provenance, not a grant of rights.
+
+=============================================================================
+PART III — DISCLAIMERS AND LIMITATIONS
+=============================================================================
+
+9. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+10. LIMITATION OF LIABILITY
+
+    IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE
+    LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION
+    OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
+    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+    THIS INCLUDES, WITHOUT LIMITATION, ANY LIABILITY ARISING FROM:
+
+      a) The use or misuse of the Software to collect data.
+      b) Any legal claims by third parties regarding Scraped Content.
+      c) Any violations of terms of service, copyright law, or other
+         regulations committed by users of the Software.
+      d) Any inaccuracies in automatically generated citations.
+      e) Any data loss, corruption, or unintended disclosure of data.
+
+11. INDEMNIFICATION
+
+    Users of this Software agree to indemnify and hold harmless the authors,
+    contributors, and maintainers from any claims, damages, or expenses
+    (including legal fees) arising from the user's use of the Software or
+    any Scraped Content collected using the Software.
+
+12. COMPLIANCE WITH LAW
+
+    Nothing in this license grants permission to violate any applicable law.
+    Users MUST comply with all local, national, and international laws when
+    using this Software. If any provision of this license conflicts with
+    applicable law, that provision shall be modified to the minimum extent
+    necessary to comply.
+
+=============================================================================
+PART IV — GENERAL
+=============================================================================
+
+13. SEVERABILITY
+
+    If any provision of this license is held invalid or unenforceable, the
+    remaining provisions shall continue in full force and effect.
+
+14. ENTIRE AGREEMENT
+
+    This license constitutes the entire agreement between the parties with
+    respect to the Software and supersedes all prior agreements relating
+    to the Software. The MIT License previously applied to this Software
+    is hereby superseded by this Uni-S License.
+
+15. AMENDMENTS
+
+    This license may be updated by the original copyright holder
+    (minerofthesoal). Updated versions will be published in the project
+    repository. Users may choose to adopt the updated version or continue
+    under the version that was in effect when they obtained the Software.
+
+=============================================================================
+
+Summary (not legally binding — see full text above):
+
+  SOFTWARE:  Open source forever. Use, modify, share freely. Must stay
+             open source. Must attribute.
+
+  DATA:      We own NONE of it. Original creators own everything. You are
+             responsible for legal compliance. Cite your sources.
+
+=============================================================================
