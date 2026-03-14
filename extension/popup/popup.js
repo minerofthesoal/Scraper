@@ -56,8 +56,8 @@
   }
 
   function updateStats(s) {
+    $("#stat-words").textContent = s.words || 0;
     $("#stat-pages").textContent = s.pages || 0;
-    $("#stat-texts").textContent = s.texts || 0;
     $("#stat-images").textContent = s.images || 0;
     $("#stat-links").textContent = s.links || 0;
     $("#stat-audio").textContent = s.audio || 0;
@@ -87,6 +87,16 @@
     updateStatus("scraping");
     btnStop.classList.remove("hidden");
   });
+
+  const btnScrollScrape = $("#btn-scroll-scrape");
+  if (btnScrollScrape) {
+    btnScrollScrape.addEventListener("click", () => {
+      sendToTab("SCRAPE_WITH_SCROLL");
+      updateStatus("scraping");
+      btnStop.classList.remove("hidden");
+      window.close();
+    });
+  }
 
   btnStartAuto.addEventListener("click", () => {
     sendToTab("START_AUTO_SCAN");

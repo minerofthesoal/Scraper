@@ -49,6 +49,23 @@
           <option value="csv">CSV</option>
         </select>
       </div>
+
+      <div class="field">
+        <label for="inp-min-text">Min text length (characters):</label>
+        <input type="number" id="inp-min-text" value="3" min="1" max="1000" step="1">
+        <small>Skip text fragments shorter than this many characters</small>
+      </div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-scrape-js">
+        <span>Extract JavaScript-rendered content (data attrs, JSON-LD, iframes)</span>
+      </label>
+      <small style="display:block;padding:0 36px;color:#888">Off by default. Enable to capture dynamically-loaded content from SPAs.</small>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-respect-robots" checked>
+        <span>Respect robots.txt directives</span>
+      </label>
     </section>
 
     <!-- Local Storage -->
@@ -110,19 +127,33 @@
       </label>
 
       <div class="field">
-        <label for="inp-hf-owner-repo">Extension owner's repo (optional):</label>
-        <input type="text" id="inp-hf-owner-repo" placeholder="owner/shared-dataset">
-        <small>Optionally upload to the extension developer's shared dataset</small>
+        <label for="inp-hf-owner-repo">Extension owner's shared dataset:</label>
+        <input type="text" id="inp-hf-owner-repo" value="ray0rf1re/Site.scraped" readonly>
+        <small>Community dataset at <a href="https://huggingface.co/datasets/ray0rf1re/Site.scraped" target="_blank" style="color:#7c83ff">huggingface.co/datasets/ray0rf1re/Site.scraped</a></small>
       </div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-upload-owner">
+        <span>Also upload to owner's shared community dataset</span>
+      </label>
     </section>
 
     <!-- Citation Settings -->
     <section class="card">
       <h2>Citations</h2>
 
+      <div class="field">
+        <label for="sel-citation-format">Citation format:</label>
+        <select id="sel-citation-format">
+          <option value="mla">MLA 9th Edition</option>
+          <option value="apa">APA 7th Edition</option>
+          <option value="both">Both MLA & APA</option>
+        </select>
+      </div>
+
       <label class="toggle-row">
         <input type="checkbox" id="chk-auto-cite" checked>
-        <span>Auto-generate MLA citations for all sources</span>
+        <span>Auto-generate citations for all sources</span>
       </label>
 
       <label class="toggle-row">

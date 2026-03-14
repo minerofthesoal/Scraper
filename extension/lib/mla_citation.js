@@ -1,4 +1,4 @@
-/* ── MLA Citation Generator ── */
+/* ── Citation Generator (MLA 9th + APA 7th) ── */
 (function () {
   "use strict";
 
@@ -16,7 +16,7 @@
 
       // Author
       if (meta.author) {
-        const author = this.formatAuthor(meta.author);
+        const author = this.formatAuthorMLA(meta.author);
         parts.push(author);
       }
 
@@ -55,50 +55,164 @@
     },
 
     /**
+     * Generate an APA 7th edition citation from page metadata.
+     *
+     * Format:
+     *   Author, A. B. (Year, Month Day). Title of page. Site Name. URL
+     */
+    generateAPA(meta) {
+      const parts = [];
+
+      // Author
+      if (meta.author) {
+        const author = this.formatAuthorAPA(meta.author);
+        parts.push(author);
+      } else {
+        // No author - use site name or skip
+        if (meta.siteName) {
+          parts.push(meta.siteName + ".");
+        }
+      }
+
+      // Date
+      if (meta.datePublished) {
+        const pubDate = this._parseDate(meta.datePublished);
+        if (pubDate) {
+          parts.push(`(${this._formatAPADate(pubDate)}).`);
+        } else {
+          parts.push("(n.d.).");
+        }
+      } else {
+        parts.push("(n.d.).");
+      }
+
+      // Title (italicized for web pages)
+      const title = meta.title || "Untitled page";
+      parts.push(`*${title}*.`);
+
+      // Site name (only if different from author)
+      if (meta.siteName && meta.siteName !== meta.author) {
+        parts.push(meta.siteName + ".");
+      }
+
+      // URL
+      parts.push(meta.url);
+
+      return parts.join(" ");
+    },
+
+    /**
      * Generate a citation entry for a dataset README.
+     * Supports both MLA and APA.
      */
     generateDatasetCitation(meta) {
       return {
         mla: this.generateMLA(meta),
+        apa: this.generateAPA(meta),
         url: meta.url,
         title: meta.title || "Untitled",
         author: meta.author || "Unknown",
         accessDate: new Date().toISOString(),
         siteName: meta.siteName || this._extractDomain(meta.url),
         publishDate: meta.datePublished || null,
+        license: meta.license || meta.copyright || null,
+        description: meta.description || null,
+        contentType: meta.contentType || null,
+        isbn: meta.isbn || null,
       };
     },
 
     /**
      * Format author name for MLA (Last, First).
      */
-    formatAuthor(name) {
+    formatAuthorMLA(name) {
       if (!name) return "";
-      const parts = name.trim().split(/\s+/);
-      if (parts.length === 1) return parts[0] + ".";
-      const last = parts.pop();
-      return last + ", " + parts.join(" ") + ".";
+      // Handle multiple authors separated by comma or "and"
+      const authors = name.split(/,\s*(?:and\s*)?|\s+and\s+/i).filter(a => a.trim());
+      if (authors.length === 0) return "";
+
+      const formatted = authors.map((a, i) => {
+        const parts = a.trim().split(/\s+/);
+        if (parts.length === 1) return parts[0] + ".";
+        const last = parts.pop();
+        if (i === 0) {
+          return last + ", " + parts.join(" ") + ".";
+        }
+        // Subsequent authors: First Last
+        return parts.join(" ") + " " + last;
+      });
+
+      if (formatted.length === 1) return formatted[0];
+      if (formatted.length === 2) return formatted.join(" and ");
+      return formatted.slice(0, -1).join(", ") + ", and " + formatted[formatted.length - 1];
+    },
+
+    /**
+     * Format author name for APA (Last, F. M.).
+     */
+    formatAuthorAPA(name) {
+      if (!name) return "";
+      const authors = name.split(/,\s*(?:and\s*)?|\s+and\s+/i).filter(a => a.trim());
+      if (authors.length === 0) return "";
+
+      const formatted = authors.map((a) => {
+        const parts = a.trim().split(/\s+/);
+        if (parts.length === 1) return parts[0] + ".";
+        const last = parts.pop();
+        const initials = parts.map(p => p[0].toUpperCase() + ".").join(" ");
+        return last + ", " + initials;
+      });
+
+      if (formatted.length === 1) return formatted[0];
+      if (formatted.length === 2) return formatted.join(", & ");
+      if (formatted.length <= 20) {
+        return formatted.slice(0, -1).join(", ") + ", & " + formatted[formatted.length - 1];
+      }
+      return formatted.slice(0, 19).join(", ") + ", ... " + formatted[formatted.length - 1];
     },
 
     /**
      * Generate full citation block for HF README.
+     * Includes both MLA and APA, plus licenses.
      */
     generateReadmeCitations(citations) {
-      let md = "## Sources & Citations (MLA 9th Edition)\n\n";
-      md += "| # | Source | Author | MLA Citation |\n";
-      md += "|---|--------|--------|--------------|\n";
+      let md = "## Sources & Citations\n\n";
+
+      // Summary table
+      md += "### Source Summary\n\n";
+      md += "| # | Source | Author | License | Content Type |\n";
+      md += "|---|--------|--------|---------|-------------|\n";
 
       citations.forEach((c, i) => {
         const safeTitle = (c.title || "Untitled").replace(/\|/g, "\\|");
         const safeAuthor = (c.author || "Unknown").replace(/\|/g, "\\|");
-        const safeMLA = (c.mla || "").replace(/\|/g, "\\|");
-        md += `| ${i + 1} | [${safeTitle}](${c.url}) | ${safeAuthor} | ${safeMLA} |\n`;
+        const license = (c.license || "See source").replace(/\|/g, "\\|");
+        const ctype = (c.contentType || "Web page").replace(/\|/g, "\\|");
+        md += `| ${i + 1} | [${safeTitle}](${c.url}) | ${safeAuthor} | ${license} | ${ctype} |\n`;
       });
 
-      md += "\n### Full Citations\n\n";
+      // MLA citations
+      md += "\n### MLA 9th Edition Citations\n\n";
       citations.forEach((c, i) => {
         md += `${i + 1}. ${c.mla}\n\n`;
       });
+
+      // APA citations
+      md += "### APA 7th Edition Citations\n\n";
+      citations.forEach((c, i) => {
+        md += `${i + 1}. ${c.apa || "N/A"}\n\n`;
+      });
+
+      // License summary
+      const licenses = new Set(citations.filter(c => c.license).map(c => c.license));
+      if (licenses.size > 0) {
+        md += "### Source Licenses\n\n";
+        for (const lic of licenses) {
+          const sources = citations.filter(c => c.license === lic);
+          md += `- **${lic}**: ${sources.length} source(s)\n`;
+        }
+        md += "\n";
+      }
 
       return md;
     },
@@ -118,6 +232,12 @@
       const months = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "June",
         "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."];
       return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+    },
+
+    _formatAPADate(date) {
+      const months = ["January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"];
+      return `${date.getFullYear()}, ${months[date.getMonth()]} ${date.getDate()}`;
     }
   };
 

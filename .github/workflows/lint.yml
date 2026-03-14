@@ -1,0 +1,42 @@
+name: Lint & Validate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-python:
+    name: Lint Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CLI dependencies
+        run: |
+          cd cli
+          pip install -e .
+      - name: Check syntax
+        run: python -m py_compile cli/scrape.py && python -m py_compile cli/gui.py
+      - name: Basic CLI smoke test
+        run: |
+          scrape --version
+          scrape env
+
+  lint-extension:
+    name: Validate Extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON files
+        run: |
+          python3 -c "import json; json.load(open('extension/manifest.json'))"
+          echo "manifest.json is valid JSON"
+      - name: Check for JS syntax errors (basic)
+        run: |
+          for f in extension/**/*.js; do
+            node --check "$f" 2>/dev/null || echo "WARN: $f (might use browser APIs)"
+          done

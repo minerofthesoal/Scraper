@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebScraper Pro",
-  "version": "1.0.0",
+  "version": "0.5.0",
   "description": "Scrape text, images, links, and audio from selected areas with auto-pagination, HuggingFace upload, and MLA citation support.",
   "author": "WebScraper Pro Team",
   "homepage_url": "https://github.com/minerofthesoal/Scraper",
@@ -38,7 +38,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/selector.js", "content/scraper.js", "content/auto_scan.js"],
+      "js": ["content/robots_checker.js", "content/selector.js", "content/scraper.js", "content/auto_scan.js", "content/download_manager.js"],
       "css": ["content/overlay.css"],
       "run_at": "document_idle"
     }

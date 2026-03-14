@@ -6,7 +6,7 @@
   /* ── State ── */
   let scrapedRecords = [];
   let citations = [];
-  let sessionStats = { pages: 0, texts: 0, images: 0, links: 0, audio: 0 };
+  let sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
 
   // Load persisted data on startup
   browser.storage.local.get(["scrapedRecords", "citations", "sessionStats"]).then((data) => {
@@ -69,11 +69,17 @@
   function handleScrapedData(data) {
     const meta = data.meta || {};
 
-    // Generate citation
+    // Generate citation (MLA + APA)
     const citation = WSP_Citation.generateDatasetCitation(meta);
     const existingIdx = citations.findIndex((c) => c.url === citation.url);
     if (existingIdx === -1) {
       citations.push(citation);
+    } else {
+      // Update existing citation if new one has more info
+      const existing = citations[existingIdx];
+      if (!existing.apa && citation.apa) existing.apa = citation.apa;
+      if (!existing.license && citation.license) existing.license = citation.license;
+      if (!existing.description && citation.description) existing.description = citation.description;
     }
 
     // Process text records
@@ -90,9 +96,10 @@
           site_name: meta.siteName || WSP_Utils.extractDomain(meta.url),
           scraped_at: data.scrapedAt,
           citation_mla: citation.mla,
+          citation_apa: citation.apa || "",
         });
       }
-      sessionStats.texts += data.texts.length;
+      sessionStats.words += data.totalWords || data.texts.reduce((sum, t) => sum + (t.text || "").split(/\s+/).length, 0);
     }
 
     // Process images
@@ -110,6 +117,7 @@
           author: meta.author || "Unknown",
           scraped_at: data.scrapedAt,
           citation_mla: citation.mla,
+          citation_apa: citation.apa || "",
         });
       }
       sessionStats.images += data.images.length;
@@ -143,6 +151,7 @@
           source_title: meta.title,
           scraped_at: data.scrapedAt,
           citation_mla: citation.mla,
+          citation_apa: citation.apa || "",
         });
       }
       sessionStats.audio += data.audio.length;
@@ -203,10 +212,12 @@
     });
   }
 
+  const OWNER_HF_REPO = "ray0rf1re/Site.scraped";
+
   /* ── Upload to HuggingFace ── */
   async function uploadToHF() {
     const cfg = await browser.storage.local.get(["hfToken", "hfRepoId", "hfCreateRepo", "hfPrivate",
-      "autoScroll", "autoNext", "dataFormat"]);
+      "autoScroll", "autoNext", "dataFormat", "hfOwnerRepo", "uploadToOwner"]);
 
     if (!cfg.hfToken) {
       browser.notifications.create({
@@ -263,7 +274,7 @@
       // Citations
       files.push({ path: "data/citations.jsonl", content: WSP_Utils.toJSONL(citations) });
 
-      // Upload
+      // Upload README first, then data
       await WSP_HFUpload.commitFiles(cfg.hfToken, cfg.hfRepoId, files,
         `Update dataset - ${sessionStats.pages} pages scraped`);
 
@@ -272,6 +283,21 @@
         title: "WebScraper Pro",
         message: `Uploaded ${scrapedRecords.length} records to ${cfg.hfRepoId}!`,
       });
+
+      // Also upload to owner repo if configured
+      if (cfg.uploadToOwner) {
+        try {
+          await WSP_HFUpload.commitFiles(cfg.hfToken, OWNER_HF_REPO, files,
+            `Community upload - ${sessionStats.pages} pages`);
+          browser.notifications.create({
+            type: "basic",
+            title: "WebScraper Pro",
+            message: `Also uploaded to shared repo: ${OWNER_HF_REPO}`,
+          });
+        } catch (ownerErr) {
+          // Silently fail - user may not have write access
+        }
+      }
     } catch (err) {
       browser.notifications.create({
         type: "basic",
@@ -313,7 +339,7 @@
   function clearData() {
     scrapedRecords = [];
     citations = [];
-    sessionStats = { pages: 0, texts: 0, images: 0, links: 0, audio: 0 };
+    sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
     persistState();
     broadcastStats();
   }

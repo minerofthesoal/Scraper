@@ -1,5 +1,5 @@
-/* ── Auto-Scan Module ── */
-/* Detects "next page" buttons and auto-scrolls for infinite-scroll pages. */
+/* ── Auto-Scan Module v0.5b ── */
+/* Scroll-first approach: checks page length, scrapes viewport by viewport, then chases pages. */
 (function () {
   "use strict";
 
@@ -36,14 +36,11 @@
     const candidates = document.querySelectorAll('a, button, [role="button"], [class*="next"], [class*="pag"]');
     for (const el of candidates) {
       const text = (el.textContent || "").trim();
-      if (text.length > 50) continue; // Skip elements with lots of text
+      if (text.length > 50) continue;
 
       for (const pattern of NEXT_PATTERNS) {
         if (pattern.test(text)) {
-          // Skip if it's just a number and not the "next" number
           if (/^\d+$/.test(text)) continue;
-
-          // Verify it's visible
           const r = el.getBoundingClientRect();
           if (r.width > 0 && r.height > 0) return el;
         }
@@ -89,7 +86,7 @@
     if (bar) bar.remove();
   }
 
-  /* ── Main auto-scan loop ── */
+  /* ── Main auto-scan loop (scroll-first approach) ── */
   async function autoScanStep() {
     if (!active) return;
 
@@ -102,8 +99,13 @@
 
     showProgress(Math.min((pageCount / MAX_PAGES) * 100, 100));
 
-    // Scrape current view
-    if (typeof WSP_Scraper !== "undefined") {
+    // SCROLL-FIRST: Before chasing pages, scroll down to check if page is longer
+    // and scrape viewport by viewport
+    if (typeof WSP_Scraper !== "undefined" && WSP_Scraper.scrapeWithScroll) {
+      if (typeof WSP_Toast !== "undefined") WSP_Toast.show("Scrolling to check page length...");
+      await WSP_Scraper.scrapeWithScroll();
+    } else if (typeof WSP_Scraper !== "undefined") {
+      // Fallback to legacy full page scrape
       WSP_Scraper.scrapeFullPage();
     }
 
@@ -117,14 +119,20 @@
     const doScroll = cfg.autoScroll !== false;
     const doNext = cfg.autoNext !== false;
 
+    // NOW chase pages (after scrolling the current page)
+
     // Strategy 1: Find and click a "next" button
     if (doNext) {
       const nextBtn = findNextButton();
       if (nextBtn) {
         if (typeof WSP_Toast !== "undefined") WSP_Toast.show("Auto-scan: clicking next page...");
 
+        // Reset scroll position for the new page
+        if (typeof WSP_Scraper !== "undefined" && WSP_Scraper.resetScrollPosition) {
+          WSP_Scraper.resetScrollPosition();
+        }
+
         if (nextBtn.tagName === "A" && nextBtn.href) {
-          // Navigate to the link
           browser.runtime.sendMessage({
             action: "AUTO_NAVIGATE",
             url: nextBtn.href
@@ -139,7 +147,7 @@
       }
     }
 
-    // Strategy 2: Scroll down for infinite-scroll pages
+    // Strategy 2: Check for dynamically loaded content by scrolling more
     if (doScroll) {
       const prevHeight = document.documentElement.scrollHeight;
       scrollDown();
@@ -149,14 +157,12 @@
 
       const newHeight = document.documentElement.scrollHeight;
       if (newHeight > prevHeight) {
-        // Page grew — more content loaded
         if (typeof WSP_Toast !== "undefined") WSP_Toast.show("Auto-scan: new content detected, continuing...");
         autoScanStep();
         return;
       }
 
       if (!isNearBottom()) {
-        // Still scrollable
         autoScanStep();
         return;
       }
@@ -176,9 +182,15 @@
     if (active) return;
     active = true;
     pageCount = 0;
+
+    // Reset scroll tracking for fresh session
+    if (typeof WSP_Scraper !== "undefined" && WSP_Scraper.resetScrollPosition) {
+      WSP_Scraper.resetScrollPosition();
+    }
+
     browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "scraping" });
     browser.storage.local.set({ scrapeActive: true });
-    if (typeof WSP_Toast !== "undefined") WSP_Toast.show("Auto-scan started");
+    if (typeof WSP_Toast !== "undefined") WSP_Toast.show("Auto-scan started (scroll-first mode)");
     autoScanStep();
   }
 
@@ -195,7 +207,6 @@
     if (msg.action === "START_AUTO_SCAN") start();
     if (msg.action === "STOP_SCRAPE") stop();
     if (msg.action === "CONTINUE_AUTO_SCAN") {
-      // Called by background after page navigation
       active = true;
       autoScanStep();
     }
