@@ -8,16 +8,28 @@
 
   /**
    * Collect all elements whose bounding rect intersects with the given selection rect.
+   * selRect coordinates are relative to the viewport by default.
+   * If useDocumentCoords is true, selRect is in document (absolute) coordinates.
    */
-  function getElementsInRect(selRect) {
+  function getElementsInRect(selRect, useDocumentCoords) {
     const all = document.querySelectorAll("body *");
     const hits = [];
+    const scrollX = useDocumentCoords ? window.scrollX : 0;
+    const scrollY = useDocumentCoords ? window.scrollY : 0;
+
     for (const el of all) {
       const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+
+      // Convert viewport-relative bounding rect to document coords if needed
+      const elLeft = r.left + scrollX;
+      const elRight = r.right + scrollX;
+      const elTop = r.top + scrollY;
+      const elBottom = r.bottom + scrollY;
+
       if (
-        r.width > 0 && r.height > 0 &&
-        r.left < selRect.right && r.right > selRect.left &&
-        r.top < selRect.bottom && r.bottom > selRect.top
+        elLeft < selRect.right && elRight > selRect.left &&
+        elTop < selRect.bottom && elBottom > selRect.top
       ) {
         hits.push(el);
       }
@@ -540,16 +552,42 @@
   }
 
   /**
-   * Scrape the entire visible page.
+   * Scrape the entire page (full document, not just visible viewport).
    */
   async function scrapeFullPage() {
+    const docWidth = Math.max(
+      document.documentElement.scrollWidth,
+      document.body ? document.body.scrollWidth : 0,
+      window.innerWidth
+    );
+    const docHeight = Math.max(
+      document.documentElement.scrollHeight,
+      document.body ? document.body.scrollHeight : 0,
+      window.innerHeight
+    );
+
+    // Use document coordinates so we capture everything below the fold
     const selRect = {
       left: 0,
       top: 0,
-      right: window.innerWidth,
-      bottom: window.innerHeight,
+      right: docWidth,
+      bottom: docHeight,
     };
-    return scrapeRect(selRect);
+
+    const elements = getElementsInRect(selRect, true);
+    const data = await extractData(elements);
+    const meta = pageMeta();
+    const result = { meta, ...data, scrapedAt: new Date().toISOString() };
+
+    // Highlight scraped elements briefly
+    elements.forEach((el) => el.classList.add("wsp-scraped-highlight"));
+    setTimeout(() => elements.forEach((el) => el.classList.remove("wsp-scraped-highlight")), 2000);
+
+    browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
+    if (typeof WSP_Toast !== "undefined") {
+      WSP_Toast.show(`Scraped full page: ${data.totalWords} words, ${data.images.length} images, ${data.links.length} links`);
+    }
+    return result;
   }
 
   /**
@@ -593,7 +631,7 @@
       WSP_Toast.show(`Page is ${Math.round(totalHeight / viewportHeight)} viewports tall. Scraping...`);
     }
 
-    // Step 3: Scrape viewport by viewport
+    // Step 3: Scrape viewport by viewport using document coordinates
     let currentY = startY;
     let allResults = { texts: [], images: [], links: [], audio: [], jsContent: [], totalWords: 0 };
     const seenText = new Set();
@@ -604,14 +642,15 @@
       window.scrollTo(0, currentY);
       await sleep(400); // Wait for rendering
 
+      // Use document (absolute) coordinates for the viewport slice
       const selRect = {
         left: 0,
-        top: 0,
+        top: currentY,
         right: window.innerWidth,
-        bottom: viewportHeight,
+        bottom: currentY + viewportHeight,
       };
 
-      const elements = getElementsInRect(selRect);
+      const elements = getElementsInRect(selRect, true);
       const data = await extractData(elements);
 
       // Deduplicate across viewports
@@ -671,17 +710,13 @@
   }
 
   /**
-   * Scrape the entire document (legacy - for backward compat).
+   * Scrape the entire document (all visible elements regardless of scroll position).
    */
   async function scrapeEntireDocument() {
-    const all = document.querySelectorAll("body *");
-    const elements = [];
-    for (const el of all) {
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) {
-        elements.push(el);
-      }
-    }
+    const docHeight = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+    const docWidth = Math.max(document.documentElement.scrollWidth, window.innerWidth);
+    const selRect = { left: 0, top: 0, right: docWidth, bottom: docHeight };
+    const elements = getElementsInRect(selRect, true);
     const data = await extractData(elements);
     const meta = pageMeta();
     const result = { meta, ...data, scrapedAt: new Date().toISOString() };

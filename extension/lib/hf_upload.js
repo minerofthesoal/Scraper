@@ -395,16 +395,17 @@ ${citations.length > 0 ? WSP_Citation.generateReadmeCitations(citations) : "## S
 
 ## Licensing
 
-### Uni-S License (Universal Scraping License)
+### Uni-S License v2.0 (Universal Scraping License)
 
-This dataset and the tool that collected it are governed by the **[Uni-S License](https://github.com/minerofthesoal/Scraper/blob/main/LICENSE)**.
+This dataset and the tool that collected it are governed by the **[Uni-S License v2.0](https://github.com/minerofthesoal/Scraper/blob/main/LICENSE)**.
 
 **Key points:**
 
 1. **We do NOT own any of this data.** All rights to scraped content belong to the original authors, creators, publishers, and rights holders.
-2. **The Software (WebScraper Pro) is open source forever.** It must remain open source and cannot be re-licensed as proprietary.
-3. **Users are solely responsible** for ensuring they have the legal right to scrape, store, and redistribute any content they collect.
-4. **Citations are provided to assist attribution**, not to grant permission to use content.
+2. **The Software (WebScraper Pro) is open source.** Standalone scraper forks must stay open source. Library use in other projects is unrestricted.
+3. **Compatible with MIT, Apache 2.0, BSD, ISC, and MPL 2.0** — other projects can freely use this code.
+4. **Users are solely responsible** for ensuring they have the legal right to scrape, store, and redistribute any content they collect.
+5. **Citations are provided to assist attribution**, not to grant permission to use content.
 
 ### Source Content Licenses
 
