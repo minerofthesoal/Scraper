@@ -8,8 +8,11 @@
 <body>
   <div class="options-container">
     <header>
-      <h1>WebScraper Pro Settings</h1>
-      <p class="subtitle">Configure scraping, storage, and upload options</p>
+      <div>
+        <h1>WebScraper Pro Settings</h1>
+        <p class="subtitle">Configure scraping, storage, and upload options</p>
+      </div>
+      <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
     </header>
 
     <!-- Scraping Settings -->
@@ -47,6 +50,7 @@
           <option value="jsonl">JSONL (recommended)</option>
           <option value="json">JSON</option>
           <option value="csv">CSV</option>
+          <option value="xml">XML</option>
         </select>
       </div>
 
@@ -68,6 +72,53 @@
       </label>
     </section>
 
+    <!-- Rate Limiting -->
+    <section class="card">
+      <h2>Rate Limiting</h2>
+      <small class="card-hint">Prevent getting blocked by sites with per-domain rate limiting.</small>
+
+      <div class="field">
+        <label for="inp-rate-max">Max requests per window:</label>
+        <input type="number" id="inp-rate-max" value="5" min="1" max="100">
+      </div>
+
+      <div class="field">
+        <label for="inp-rate-window">Window duration (seconds):</label>
+        <input type="number" id="inp-rate-window" value="10" min="1" max="300">
+      </div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-rate-enabled" checked>
+        <span>Enable rate limiting</span>
+      </label>
+    </section>
+
+    <!-- Domain Filtering -->
+    <section class="card">
+      <h2>Domain Filtering</h2>
+      <small class="card-hint">Control which sites can be scraped. Leave both empty to allow all sites.</small>
+
+      <div class="field">
+        <label for="txt-allowlist">Allowlist (only scrape these domains, one per line):</label>
+        <textarea id="txt-allowlist" class="field-textarea" rows="3" placeholder="example.com&#10;docs.example.com"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="txt-blocklist">Blocklist (never scrape these domains, one per line):</label>
+        <textarea id="txt-blocklist" class="field-textarea" rows="3" placeholder="ads.example.com&#10;tracking.example.com"></textarea>
+      </div>
+    </section>
+
+    <!-- Custom Extraction Rules -->
+    <section class="card">
+      <h2>Custom Extraction Rules</h2>
+      <small class="card-hint">Define regex patterns for custom content extraction. JSON array of objects with "name", "pattern", "flags" fields.</small>
+
+      <div class="field">
+        <textarea id="txt-regex-rules" class="field-textarea code-textarea" rows="5" placeholder='[&#10;  {"name": "ISBN", "pattern": "\\d{3}-\\d{10}", "flags": "g"},&#10;  {"name": "Price", "pattern": "\\$[\\d,]+\\.\\d{2}", "flags": "g"}&#10;]'></textarea>
+      </div>
+    </section>
+
     <!-- Local Storage -->
     <section class="card">
       <h2>Local Storage</h2>
@@ -75,7 +126,7 @@
       <div class="field">
         <label for="inp-save-path">Save directory:</label>
         <input type="text" id="inp-save-path" placeholder="webscraper-pro/" value="webscraper-pro/">
-        <small>Relative to your downloads folder. Works on Linux (Arch, Ubuntu, etc.) and Windows 10/11.</small>
+        <small>Relative to your downloads folder.</small>
       </div>
 
       <label class="toggle-row">
@@ -129,7 +180,7 @@
       <div class="field">
         <label for="inp-hf-owner-repo">Extension owner's shared dataset:</label>
         <input type="text" id="inp-hf-owner-repo" value="ray0rf1re/Site.scraped" readonly>
-        <small>Community dataset at <a href="https://huggingface.co/datasets/ray0rf1re/Site.scraped" target="_blank" style="color:#7c83ff">huggingface.co/datasets/ray0rf1re/Site.scraped</a></small>
+        <small>Community dataset at <a href="https://huggingface.co/datasets/ray0rf1re/Site.scraped" target="_blank" style="color:var(--accent)">huggingface.co/datasets/ray0rf1re/Site.scraped</a></small>
       </div>
 
       <label class="toggle-row">

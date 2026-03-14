@@ -1,4 +1,4 @@
-/* ── Auto-Scan Module v0.5b ── */
+/* ── Auto-Scan Module v0.6b ── */
 /* Scroll-first approach: checks page length, scrapes viewport by viewport, then chases pages. */
 (function () {
   "use strict";

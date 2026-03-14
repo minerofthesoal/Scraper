@@ -1,8 +1,29 @@
-/* ── Options Page Controller ── */
+/* ── Options Page Controller v0.6b ── */
 (function () {
   "use strict";
 
   const $ = (sel) => document.querySelector(sel);
+
+  /* ── Theme ── */
+  const btnTheme = $("#btn-theme");
+  browser.storage.local.get(["theme"]).then(cfg => {
+    if (cfg.theme === "light") {
+      document.body.setAttribute("data-theme", "light");
+      btnTheme.textContent = "\u2600";
+    }
+  });
+  btnTheme.addEventListener("click", () => {
+    const isLight = document.body.getAttribute("data-theme") === "light";
+    if (isLight) {
+      document.body.removeAttribute("data-theme");
+      btnTheme.textContent = "\u263E";
+      browser.storage.local.set({ theme: "dark" });
+    } else {
+      document.body.setAttribute("data-theme", "light");
+      btnTheme.textContent = "\u2600";
+      browser.storage.local.set({ theme: "light" });
+    }
+  });
 
   /* ── Elements ── */
   const elements = {
@@ -33,6 +54,13 @@
     tokenStatus: $("#token-status"),
     saveStatus: $("#save-status"),
     dataStats: $("#data-stats"),
+    // New v0.6b
+    rateMax: $("#inp-rate-max"),
+    rateWindow: $("#inp-rate-window"),
+    rateEnabled: $("#chk-rate-enabled"),
+    allowlist: $("#txt-allowlist"),
+    blocklist: $("#txt-blocklist"),
+    regexRules: $("#txt-regex-rules"),
   };
 
   /* ── Load settings ── */
@@ -42,6 +70,8 @@
     "hfToken", "hfRepoId", "hfCreateRepo", "hfPrivate", "hfAutoUpload", "hfOwnerRepo",
     "autoCite", "citeReadme", "citeLinks", "uploadToOwner",
     "scrapeJS", "citationFormat", "respectRobots", "minTextLength",
+    "rateLimitConfig", "domainAllowlist", "domainBlocklist", "regexPatterns",
+    "rateEnabled",
   ]).then((cfg) => {
     elements.autoStart.checked = !!cfg.autoStart;
     elements.autoScroll.checked = cfg.autoScroll !== false;
@@ -63,16 +93,33 @@
     elements.autoCite.checked = cfg.autoCite !== false;
     elements.citeReadme.checked = cfg.citeReadme !== false;
     elements.citeLinks.checked = cfg.citeLinks !== false;
-    const uploadOwnerEl = document.getElementById("chk-upload-owner");
+
+    const uploadOwnerEl = $("#chk-upload-owner");
     if (uploadOwnerEl) uploadOwnerEl.checked = !!cfg.uploadToOwner;
-    const scrapeJSEl = document.getElementById("chk-scrape-js");
+    const scrapeJSEl = $("#chk-scrape-js");
     if (scrapeJSEl) scrapeJSEl.checked = !!cfg.scrapeJS;
-    const citeFmtEl = document.getElementById("sel-citation-format");
+    const citeFmtEl = $("#sel-citation-format");
     if (citeFmtEl) citeFmtEl.value = cfg.citationFormat || "mla";
-    const robotsEl = document.getElementById("chk-respect-robots");
+    const robotsEl = $("#chk-respect-robots");
     if (robotsEl) robotsEl.checked = cfg.respectRobots !== false;
-    const minTextEl = document.getElementById("inp-min-text");
+    const minTextEl = $("#inp-min-text");
     if (minTextEl) minTextEl.value = cfg.minTextLength || 3;
+
+    // Rate limiting
+    const rateConfig = cfg.rateLimitConfig || {};
+    const rateDefaults = rateConfig.defaults || {};
+    if (elements.rateMax) elements.rateMax.value = rateDefaults.maxRequests || 5;
+    if (elements.rateWindow) elements.rateWindow.value = (rateDefaults.windowMs || 10000) / 1000;
+    if (elements.rateEnabled) elements.rateEnabled.checked = cfg.rateEnabled !== false;
+
+    // Domain filtering
+    if (elements.allowlist) elements.allowlist.value = (cfg.domainAllowlist || []).join("\n");
+    if (elements.blocklist) elements.blocklist.value = (cfg.domainBlocklist || []).join("\n");
+
+    // Regex rules
+    if (elements.regexRules && cfg.regexPatterns) {
+      elements.regexRules.value = JSON.stringify(cfg.regexPatterns, null, 2);
+    }
   });
 
   /* ── Load stats ── */
@@ -92,10 +139,8 @@
   /* ── Parse HF repo from URL or ID ── */
   function parseRepoId(input) {
     if (!input) return "";
-    // Handle full URLs like https://huggingface.co/datasets/user/name
     const urlMatch = input.match(/huggingface\.co\/datasets\/([^/]+\/[^/\s]+)/);
     if (urlMatch) return urlMatch[1];
-    // Handle user/name format
     if (input.includes("/")) return input.trim();
     return input.trim();
   }
@@ -103,9 +148,8 @@
   /* ── Save ── */
   elements.btnSave.addEventListener("click", () => {
     const repoId = parseRepoId(elements.hfRepo.value);
-    elements.hfRepo.value = repoId; // normalize
+    elements.hfRepo.value = repoId;
 
-    // Get the raw token value - preserve exactly as entered, only trim whitespace
     const rawToken = elements.hfToken.value.trim();
 
     const settings = {
@@ -124,25 +168,47 @@
       hfPrivate: elements.hfPrivate.checked,
       hfAutoUpload: elements.hfAutoUpload.checked,
       hfOwnerRepo: elements.hfOwnerRepo.value,
-      uploadToOwner: document.getElementById("chk-upload-owner") ? document.getElementById("chk-upload-owner").checked : false,
+      uploadToOwner: $("#chk-upload-owner") ? $("#chk-upload-owner").checked : false,
       autoCite: elements.autoCite.checked,
       citeReadme: elements.citeReadme.checked,
       citeLinks: elements.citeLinks.checked,
-      scrapeJS: document.getElementById("chk-scrape-js") ? document.getElementById("chk-scrape-js").checked : false,
-      citationFormat: document.getElementById("sel-citation-format") ? document.getElementById("sel-citation-format").value : "mla",
-      respectRobots: document.getElementById("chk-respect-robots") ? document.getElementById("chk-respect-robots").checked : true,
-      minTextLength: parseInt((document.getElementById("inp-min-text") || {}).value || "3", 10),
+      scrapeJS: $("#chk-scrape-js") ? $("#chk-scrape-js").checked : false,
+      citationFormat: $("#sel-citation-format") ? $("#sel-citation-format").value : "mla",
+      respectRobots: $("#chk-respect-robots") ? $("#chk-respect-robots").checked : true,
+      minTextLength: parseInt(($("#inp-min-text") || {}).value || "3", 10),
+      // Rate limiting
+      rateEnabled: elements.rateEnabled ? elements.rateEnabled.checked : true,
+      rateLimitConfig: {
+        defaults: {
+          maxRequests: parseInt((elements.rateMax || {}).value || "5", 10),
+          windowMs: parseInt((elements.rateWindow || {}).value || "10", 10) * 1000,
+        }
+      },
+      // Domain filtering
+      domainAllowlist: (elements.allowlist ? elements.allowlist.value : "")
+        .split("\n").map(d => d.trim()).filter(d => d),
+      domainBlocklist: (elements.blocklist ? elements.blocklist.value : "")
+        .split("\n").map(d => d.trim()).filter(d => d),
     };
 
-    // Only update token if user actually typed something (not the masked *** from password field)
-    // This prevents the save from overwriting a valid token with empty/masked value
+    // Regex patterns
+    if (elements.regexRules && elements.regexRules.value.trim()) {
+      try {
+        settings.regexPatterns = JSON.parse(elements.regexRules.value.trim());
+      } catch {
+        elements.saveStatus.textContent = "Invalid regex JSON - fix syntax and try again";
+        elements.saveStatus.className = "status error";
+        return;
+      }
+    } else {
+      settings.regexPatterns = [];
+    }
+
+    // Token handling
     if (rawToken) {
       settings.hfToken = rawToken;
     }
-    // If token field is empty, explicitly check: did user clear it on purpose?
-    // We preserve existing token unless user deliberately empties the field
     if (rawToken === "" && elements.hfToken.dataset.hadToken === "true") {
-      // User cleared the token field - respect that
       settings.hfToken = "";
     }
 
@@ -173,7 +239,6 @@
         const data = await resp.json();
         elements.tokenStatus.textContent = `Valid! User: ${data.name}`;
         elements.tokenStatus.className = "status success";
-        // Token is valid - make sure it stays saved as-is (don't trim/modify)
       } else if (resp.status === 401) {
         elements.tokenStatus.textContent = "Invalid token - check your HF token";
         elements.tokenStatus.className = "status error";

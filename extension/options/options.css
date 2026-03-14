@@ -1,10 +1,43 @@
-/* ── Options Page Styles ── */
+/* ── Options Page Styles v0.6b ── */
+:root {
+  --bg-primary: #0f0f23;
+  --bg-card: #1a1a2e;
+  --bg-input: #2d3748;
+  --bg-hover: #3d4758;
+  --border: #2a2a4a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #aaa;
+  --text-muted: #888;
+  --text-hint: #666;
+  --accent: #7c83ff;
+  --accent-hover: #6a71e0;
+  --orange: #e67e22;
+  --orange-hover: #cf6d17;
+  --red: #e74c3c;
+  --red-hover: #c0392b;
+  --green: #27ae60;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f0f0f5;
+  --bg-card: #ffffff;
+  --bg-input: #f5f5fa;
+  --bg-hover: #e8e8f0;
+  --border: #d0d0e0;
+  --text-primary: #1a1a2e;
+  --text-secondary: #555;
+  --text-muted: #888;
+  --text-hint: #999;
+  --accent: #5a60e0;
+  --accent-hover: #4a50d0;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #0f0f23;
-  color: #e0e0e0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   min-height: 100vh;
 }
 
@@ -14,14 +47,16 @@ body {
   padding: 30px 20px;
 }
 
-header { margin-bottom: 24px; }
-header h1 { font-size: 24px; color: #7c83ff; }
-header .subtitle { color: #888; font-size: 14px; margin-top: 4px; }
+header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+header h1 { font-size: 24px; color: var(--accent); }
+header .subtitle { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+.btn-icon { background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 6px; }
+.btn-icon:hover { background: var(--bg-input); color: var(--text-primary); }
 
 /* ── Card sections ── */
 .card {
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px;
   margin-bottom: 16px;
@@ -29,20 +64,25 @@ header .subtitle { color: #888; font-size: 14px; margin-top: 4px; }
 
 .card h2 {
   font-size: 16px;
-  color: #7c83ff;
+  color: var(--accent);
   margin-bottom: 14px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #2a2a4a;
+  border-bottom: 1px solid var(--border);
 }
 
-/* ── Fields ── */
-.field {
+.card-hint {
+  display: block;
+  color: var(--text-hint);
+  font-size: 12px;
   margin-bottom: 12px;
 }
 
+/* ── Fields ── */
+.field { margin-bottom: 12px; }
+
 .field label {
   display: block;
-  color: #aaa;
+  color: var(--text-secondary);
   font-size: 13px;
   margin-bottom: 4px;
 }
@@ -51,35 +91,52 @@ header .subtitle { color: #888; font-size: 14px; margin-top: 4px; }
 .field input[type="password"],
 .field input[type="number"] {
   width: 100%;
-  background: #2d3748;
-  border: 1px solid #444;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 12px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 14px;
 }
 
-.field input:focus {
+.field input:focus, .field select:focus, .field-textarea:focus {
   outline: none;
-  border-color: #7c83ff;
+  border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(124, 131, 255, 0.2);
 }
 
 .field select {
   width: 100%;
-  background: #2d3748;
-  border: 1px solid #444;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 12px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 14px;
 }
 
 .field small {
   display: block;
-  color: #666;
+  color: var(--text-hint);
   font-size: 11px;
   margin-top: 3px;
+}
+
+.field-textarea {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.code-textarea {
+  font-family: "Fira Code", "Consolas", "Monaco", monospace;
+  font-size: 12px;
 }
 
 /* ── Toggle rows ── */
@@ -93,7 +150,7 @@ header .subtitle { color: #888; font-size: 14px; margin-top: 4px; }
 }
 
 .toggle-row input[type="checkbox"] {
-  accent-color: #7c83ff;
+  accent-color: var(--accent);
   width: 16px;
   height: 16px;
 }
@@ -109,14 +166,14 @@ header .subtitle { color: #888; font-size: 14px; margin-top: 4px; }
   transition: background 0.15s;
 }
 
-.btn-primary { background: #7c83ff; color: #fff; }
-.btn-primary:hover { background: #6a71e0; }
-.btn-accent { background: #e67e22; color: #fff; }
-.btn-accent:hover { background: #cf6d17; }
-.btn-danger { background: #e74c3c; color: #fff; }
-.btn-danger:hover { background: #c0392b; }
-.btn-small { padding: 5px 10px; font-size: 12px; background: #2d3748; color: #ccc; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-left: 8px; }
-.btn-small:hover { background: #3d4758; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-accent { background: var(--orange); color: #fff; }
+.btn-accent:hover { background: var(--orange-hover); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-danger:hover { background: var(--red-hover); }
+.btn-small { padding: 5px 10px; font-size: 12px; background: var(--bg-input); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; margin-left: 8px; }
+.btn-small:hover { background: var(--bg-hover); }
 
 .btn-row {
   display: flex;
@@ -126,20 +183,17 @@ header .subtitle { color: #888; font-size: 14px; margin-top: 4px; }
 }
 
 /* ── Status indicators ── */
-.status {
-  font-size: 12px;
-  margin-left: 8px;
-}
-.status.success { color: #27ae60; }
-.status.error { color: #e74c3c; }
+.status { font-size: 12px; margin-left: 8px; }
+.status.success { color: var(--green); }
+.status.error { color: var(--red); }
 
 /* ── Stats display ── */
 .stats-display {
-  background: #2d3748;
+  background: var(--bg-input);
   border-radius: 6px;
   padding: 12px;
   font-size: 13px;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 /* ── Save bar ── */
@@ -149,6 +203,6 @@ header .subtitle { color: #888; font-size: 14px; margin-top: 4px; }
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 0;
-  border-top: 1px solid #2a2a4a;
+  border-top: 1px solid var(--border);
   margin-top: 8px;
 }

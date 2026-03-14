@@ -7,84 +7,143 @@
 <body>
   <div class="popup-container">
     <header>
-      <h1>WebScraper Pro</h1>
-      <span id="status-badge" class="badge badge-idle">Idle</span>
+      <div class="header-left">
+        <h1>WebScraper Pro</h1>
+        <span id="version-tag" class="version">v0.6b</span>
+      </div>
+      <div class="header-right">
+        <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
+        <span id="status-badge" class="badge badge-idle">Idle</span>
+      </div>
     </header>
 
-    <section class="controls">
-      <button id="btn-select-area" class="btn btn-primary" title="Click then drag to select an area on the page">
-        Select Area
-      </button>
-      <button id="btn-scrape-page" class="btn btn-secondary" title="Scrape the entire visible page">
-        Scrape Full Page
-      </button>
-      <button id="btn-scroll-scrape" class="btn btn-secondary" title="Scroll page first to check length, then scrape viewport by viewport">
-        Scroll &amp; Scrape
-      </button>
-      <button id="btn-start-auto" class="btn btn-accent" title="Auto-scan: scroll first, scrape, then find next page">
-        Auto-Scan
-      </button>
-      <button id="btn-stop" class="btn btn-danger hidden" title="Stop current operation">
-        Stop
-      </button>
-    </section>
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="scrape">Scrape</button>
+      <button class="tab-btn" data-tab="queue">Queue</button>
+      <button class="tab-btn" data-tab="data">Data</button>
+      <button class="tab-btn" data-tab="sessions">Sessions</button>
+    </nav>
 
-    <section class="quick-config">
-      <h2>Quick Settings</h2>
+    <!-- Scrape Tab -->
+    <div id="tab-scrape" class="tab-content active">
+      <section class="controls">
+        <button id="btn-select-area" class="btn btn-primary" title="Click then drag to select an area">
+          Select Area
+        </button>
+        <div class="btn-row-2">
+          <button id="btn-scrape-page" class="btn btn-secondary" title="Scrape the visible page">
+            Full Page
+          </button>
+          <button id="btn-scroll-scrape" class="btn btn-secondary" title="Scroll-first scraping">
+            Scroll &amp; Scrape
+          </button>
+        </div>
+        <div class="btn-row-2">
+          <button id="btn-start-auto" class="btn btn-accent" title="Auto-scan with pagination">
+            Auto-Scan
+          </button>
+          <button id="btn-smart-extract" class="btn btn-secondary" title="Extract article body intelligently">
+            Smart Extract
+          </button>
+        </div>
+        <button id="btn-stop" class="btn btn-danger hidden" title="Stop current operation">
+          Stop
+        </button>
+      </section>
 
-      <label class="toggle-row">
-        <input type="checkbox" id="chk-auto-start">
-        <span>Auto-start on new page</span>
-      </label>
+      <section class="quick-config">
+        <h2>Quick Settings</h2>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-auto-scroll">
+          <span>Auto-scroll</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-auto-next">
+          <span>Auto-next page</span>
+        </label>
+        <div class="field-row">
+          <label for="sel-format">Format:</label>
+          <select id="sel-format">
+            <option value="jsonl">JSONL</option>
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+            <option value="xml">XML</option>
+          </select>
+        </div>
+      </section>
 
-      <label class="toggle-row">
-        <input type="checkbox" id="chk-auto-scroll">
-        <span>Auto-scroll for more content</span>
-      </label>
+      <section class="stats">
+        <h2>Session <span id="session-timer" class="session-timer"></span></h2>
+        <div class="stat-grid">
+          <div class="stat"><span id="stat-words">0</span><small>Words</small></div>
+          <div class="stat"><span id="stat-pages">0</span><small>Pages</small></div>
+          <div class="stat"><span id="stat-images">0</span><small>Images</small></div>
+          <div class="stat"><span id="stat-links">0</span><small>Links</small></div>
+          <div class="stat"><span id="stat-audio">0</span><small>Audio</small></div>
+        </div>
+        <div class="stat-meta">
+          <span id="stat-records">0 records</span>
+          <span id="stat-size">~0 B</span>
+        </div>
+      </section>
 
-      <label class="toggle-row">
-        <input type="checkbox" id="chk-auto-next">
-        <span>Auto-click next page</span>
-      </label>
+      <section class="actions">
+        <button id="btn-export" class="btn btn-small">Export</button>
+        <button id="btn-upload-hf" class="btn btn-small">Upload HF</button>
+        <button id="btn-options" class="btn btn-small">Settings</button>
+      </section>
+    </div>
 
-      <div class="field-row">
-        <label for="sel-save-mode">Save to:</label>
-        <select id="sel-save-mode">
-          <option value="local">Local Disk</option>
-          <option value="hf">HuggingFace</option>
-          <option value="both">Both</option>
+    <!-- Queue Tab -->
+    <div id="tab-queue" class="tab-content">
+      <section class="queue-controls">
+        <textarea id="queue-urls" class="queue-input" placeholder="Paste URLs here (one per line)..." rows="4"></textarea>
+        <div class="btn-row-2">
+          <button id="btn-queue-add" class="btn btn-primary">Add to Queue</button>
+          <button id="btn-queue-start" class="btn btn-accent">Start Queue</button>
+        </div>
+        <button id="btn-queue-stop" class="btn btn-danger hidden">Stop Queue</button>
+      </section>
+      <section class="queue-stats">
+        <div id="queue-progress" class="progress-bar"><div class="progress-fill"></div></div>
+        <span id="queue-status-text">No items in queue</span>
+      </section>
+      <div id="queue-list" class="queue-list"></div>
+      <button id="btn-queue-clear" class="btn btn-small btn-danger-small">Clear Queue</button>
+    </div>
+
+    <!-- Data Tab -->
+    <div id="tab-data" class="tab-content">
+      <div class="data-toolbar">
+        <input type="text" id="data-search" class="data-search" placeholder="Search records...">
+        <select id="data-filter" class="data-filter">
+          <option value="all">All</option>
+          <option value="text">Text</option>
+          <option value="image">Images</option>
+          <option value="link">Links</option>
+          <option value="audio">Audio</option>
         </select>
       </div>
-
-      <div class="field-row">
-        <label for="sel-format">Format:</label>
-        <select id="sel-format">
-          <option value="jsonl">JSONL</option>
-          <option value="json">JSON</option>
-          <option value="csv">CSV</option>
-        </select>
+      <div id="data-preview" class="data-preview">
+        <div class="data-empty">No data yet. Start scraping!</div>
       </div>
-    </section>
+      <div id="data-pagination" class="data-pagination"></div>
+    </div>
 
-    <section class="stats">
-      <h2>Session Stats</h2>
-      <div class="stat-grid">
-        <div class="stat"><span id="stat-words">0</span><small>Words</small></div>
-        <div class="stat"><span id="stat-pages">0</span><small>Pages</small></div>
-        <div class="stat"><span id="stat-images">0</span><small>Images</small></div>
-        <div class="stat"><span id="stat-links">0</span><small>Links</small></div>
-        <div class="stat"><span id="stat-audio">0</span><small>Audio</small></div>
+    <!-- Sessions Tab -->
+    <div id="tab-sessions" class="tab-content">
+      <div class="session-save">
+        <input type="text" id="session-name" class="session-input" placeholder="Session name...">
+        <button id="btn-session-save" class="btn btn-primary">Save</button>
       </div>
-    </section>
-
-    <section class="actions">
-      <button id="btn-export" class="btn btn-small">Export Data</button>
-      <button id="btn-upload-hf" class="btn btn-small">Upload to HF</button>
-      <button id="btn-options" class="btn btn-small">Full Options</button>
-    </section>
+      <div id="session-list" class="session-list">
+        <div class="data-empty">No saved sessions</div>
+      </div>
+    </div>
 
     <footer>
-      <small>v0.5.5b | <a id="link-options" href="#">Settings</a></small>
+      <small>v0.6b | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
     </footer>
   </div>
   <script src="popup.js"></script>

@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.5.5b ── */
+/* ── WebScraper Pro Background Script v0.6b ── */
 /* eslint-env browser, webextensions */
 (function () {
   "use strict";
@@ -7,7 +7,7 @@
   let scrapedRecords = [];
   let citations = [];
   let sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
-  let lastUploadRecordCount = 0; // Track for incremental uploads
+  let lastUploadRecordCount = 0;
 
   // Load persisted data on startup
   browser.storage.local.get(["scrapedRecords", "citations", "sessionStats", "lastUploadRecordCount"]).then((data) => {
@@ -24,7 +24,11 @@
 
   /* ── Broadcast stats to popup ── */
   function broadcastStats() {
-    browser.runtime.sendMessage({ action: "STATS_UPDATE", stats: sessionStats }).catch(() => {});
+    browser.runtime.sendMessage({
+      action: "STATS_UPDATE",
+      stats: sessionStats,
+      recordCount: scrapedRecords.length,
+    }).catch(() => {});
   }
 
   /* ── Notify helper ── */
@@ -72,6 +76,76 @@
       case "STATUS_CHANGE":
         browser.runtime.sendMessage(msg).catch(() => {});
         break;
+
+      // ── Queue actions ──
+      case "QUEUE_ADD":
+        if (typeof WSP_Queue !== "undefined") WSP_Queue.add(msg.urls || []);
+        break;
+
+      case "QUEUE_START":
+        if (typeof WSP_Queue !== "undefined") WSP_Queue.start();
+        break;
+
+      case "QUEUE_STOP":
+        if (typeof WSP_Queue !== "undefined") WSP_Queue.stop();
+        break;
+
+      case "QUEUE_CLEAR":
+        if (typeof WSP_Queue !== "undefined") WSP_Queue.clear();
+        break;
+
+      case "QUEUE_GET":
+        if (typeof WSP_Queue !== "undefined") {
+          return Promise.resolve({ queue: WSP_Queue.getAll(), stats: WSP_Queue.stats() });
+        }
+        return Promise.resolve({ queue: [], stats: {} });
+
+      // ── Session actions ──
+      case "SESSION_SAVE":
+        if (typeof WSP_Session !== "undefined") {
+          WSP_Session.save(msg.name).then(() => notify("WebScraper Pro", `Session "${msg.name}" saved`));
+        }
+        break;
+
+      case "SESSION_LIST":
+        if (typeof WSP_Session !== "undefined") {
+          return WSP_Session.list().then(sessions => ({ sessions }));
+        }
+        return Promise.resolve({ sessions: [] });
+
+      case "SESSION_RESTORE":
+        if (typeof WSP_Session !== "undefined") {
+          WSP_Session.restore(msg.name).then(session => {
+            scrapedRecords = session.records;
+            citations = session.citations;
+            sessionStats = session.stats;
+            lastUploadRecordCount = session.lastUploadRecordCount;
+            broadcastStats();
+            notify("WebScraper Pro", `Session "${msg.name}" restored (${session.records.length} records)`);
+          });
+        }
+        break;
+
+      case "SESSION_MERGE":
+        if (typeof WSP_Session !== "undefined") {
+          WSP_Session.merge(msg.name).then(result => {
+            // Reload from storage after merge
+            browser.storage.local.get(["scrapedRecords", "citations", "sessionStats"]).then(data => {
+              scrapedRecords = data.scrapedRecords || [];
+              citations = data.citations || [];
+              sessionStats = data.sessionStats || sessionStats;
+              broadcastStats();
+              notify("WebScraper Pro", `Merged "${msg.name}": now ${result.recordCount} records`);
+            });
+          });
+        }
+        break;
+
+      case "SESSION_DELETE":
+        if (typeof WSP_Session !== "undefined") {
+          WSP_Session.remove(msg.name).then(() => notify("WebScraper Pro", `Session "${msg.name}" deleted`));
+        }
+        break;
     }
   });
 
@@ -98,7 +172,7 @@
     if (data.texts) {
       for (const t of data.texts) {
         const fp = _fingerprint(t.text);
-        if (seenFingerprints.has(fp)) continue; // Skip dupe
+        if (seenFingerprints.has(fp)) continue;
         seenFingerprints.add(fp);
 
         scrapedRecords.push({
@@ -189,6 +263,30 @@
       sessionStats.audio += data.audio.length;
     }
 
+    // Process smart extract article data
+    if (data.article) {
+      const fp = _fingerprint(data.article.fullText);
+      if (!seenFingerprints.has(fp)) {
+        seenFingerprints.add(fp);
+        scrapedRecords.push({
+          id: WSP_Utils.uid(),
+          _fp: fp,
+          type: "text",
+          text: data.article.fullText,
+          tag: "article",
+          source_url: meta.url,
+          source_title: meta.title,
+          author: meta.author || "Unknown",
+          site_name: meta.siteName || WSP_Utils.extractDomain(meta.url),
+          scraped_at: data.scrapedAt,
+          citation_mla: citation.mla,
+          citation_apa: citation.apa || "",
+          headings: data.article.headings,
+        });
+        sessionStats.words += data.article.wordCount || 0;
+      }
+    }
+
     sessionStats.pages += 1;
     persistState();
     broadcastStats();
@@ -197,7 +295,6 @@
   /* ── Simple content fingerprint for dedup ── */
   function _fingerprint(str) {
     if (!str) return null;
-    // djb2 hash — fast, good enough for dedup
     let hash = 5381;
     for (let i = 0; i < str.length; i++) {
       hash = ((hash << 5) + hash + str.charCodeAt(i)) & 0xFFFFFFFF;
@@ -213,8 +310,6 @@
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-
-    // Separate by type — strip internal _fp field from exports
     const clean = (r) => { const c = { ...r }; delete c._fp; return c; };
     const texts = scrapedRecords.filter((r) => r.type === "text").map(clean);
     const images = scrapedRecords.filter((r) => r.type === "image").map(clean);
@@ -232,9 +327,75 @@
         `webscraper-pro/data/full_export_${timestamp}.json`);
     } else if (format === "csv") {
       if (texts.length > 0) WSP_Utils.downloadText(WSP_Utils.toCSV(texts), `webscraper-pro/data/text_data_${timestamp}.csv`, "text/csv");
+      if (images.length > 0) WSP_Utils.downloadText(WSP_Utils.toCSV(images), `webscraper-pro/data/images_${timestamp}.csv`, "text/csv");
+      if (links.length > 0) WSP_Utils.downloadText(WSP_Utils.toCSV(links), `webscraper-pro/data/links_${timestamp}.csv`, "text/csv");
+    } else if (format === "xml") {
+      const xml = toXML(texts, images, links, audioRecs, citations);
+      WSP_Utils.downloadText(xml, `webscraper-pro/data/export_${timestamp}.xml`, "application/xml");
     }
 
     notify("WebScraper Pro", `Exported ${scrapedRecords.length} records in ${format.toUpperCase()} format.`);
+  }
+
+  /* ── XML export ── */
+  function toXML(texts, images, links, audio, citations) {
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
+    xml += `    <generator>WebScraper Pro v0.6b</generator>\n`;
+    xml += `    <exported>${new Date().toISOString()}</exported>\n`;
+    xml += `    <stats words="${sessionStats.words}" pages="${sessionStats.pages}" images="${sessionStats.images}" links="${sessionStats.links}" audio="${sessionStats.audio}"/>\n`;
+    xml += '  </metadata>\n';
+
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    if (texts.length > 0) {
+      xml += '  <texts>\n';
+      for (const t of texts) {
+        xml += `    <text id="${esc(t.id)}" tag="${esc(t.tag)}" source="${esc(t.source_url)}" author="${esc(t.author)}" scraped="${esc(t.scraped_at)}">\n`;
+        xml += `      <content>${esc(t.text)}</content>\n`;
+        xml += `      <citation format="mla">${esc(t.citation_mla)}</citation>\n`;
+        if (t.citation_apa) xml += `      <citation format="apa">${esc(t.citation_apa)}</citation>\n`;
+        xml += '    </text>\n';
+      }
+      xml += '  </texts>\n';
+    }
+
+    if (images.length > 0) {
+      xml += '  <images>\n';
+      for (const img of images) {
+        xml += `    <image id="${esc(img.id)}" src="${esc(img.src)}" alt="${esc(img.alt)}" width="${img.width || 0}" height="${img.height || 0}" source="${esc(img.source_url)}"/>\n`;
+      }
+      xml += '  </images>\n';
+    }
+
+    if (links.length > 0) {
+      xml += '  <links>\n';
+      for (const l of links) {
+        xml += `    <link id="${esc(l.id)}" href="${esc(l.href)}" text="${esc(l.text)}" source="${esc(l.source_url)}"/>\n`;
+      }
+      xml += '  </links>\n';
+    }
+
+    if (audio.length > 0) {
+      xml += '  <audio_files>\n';
+      for (const a of audio) {
+        xml += `    <audio id="${esc(a.id)}" src="${esc(a.src)}" type="${esc(a.media_type)}" source="${esc(a.source_url)}"/>\n`;
+      }
+      xml += '  </audio_files>\n';
+    }
+
+    if (citations.length > 0) {
+      xml += '  <citations>\n';
+      for (const c of citations) {
+        xml += `    <citation url="${esc(c.url)}" title="${esc(c.title)}" author="${esc(c.author)}">\n`;
+        xml += `      <mla>${esc(c.mla)}</mla>\n`;
+        xml += `      <apa>${esc(c.apa)}</apa>\n`;
+        xml += '    </citation>\n';
+      }
+      xml += '  </citations>\n';
+    }
+
+    xml += '</dataset>\n';
+    return xml;
   }
 
   const OWNER_HF_REPO = "ray0rf1re/Site.scraped";
@@ -248,78 +409,58 @@
       notify("WebScraper Pro", "HuggingFace token not configured. Open settings to add it.");
       return;
     }
-
     if (!cfg.hfRepoId) {
       notify("WebScraper Pro", "HuggingFace repo ID not configured. Open settings to add it.");
       return;
     }
-
     if (scrapedRecords.length === 0) {
       notify("WebScraper Pro", "No data to upload. Start scraping first!");
       return;
     }
 
     try {
-      // Step 1: Validate token
       notify("WebScraper Pro", "Validating token...");
       await WSP_HFUpload.validateToken(cfg.hfToken);
 
-      // Step 2: Create repo if needed
       if (cfg.hfCreateRepo) {
         notify("WebScraper Pro", "Checking repository...");
         await WSP_HFUpload.createRepo(cfg.hfToken, cfg.hfRepoId, !!cfg.hfPrivate);
       }
 
-      // Step 3: Prepare files — strip _fp from all records
       notify("WebScraper Pro", "Preparing files...");
-      const clean = (r) => { const c = { ...r }; delete c._fp; return c; };
+      const clean = (r) => { const c = { ...r }; delete c._fp; delete c.headings; return c; };
       const texts = scrapedRecords.filter((r) => r.type === "text").map(clean);
       const images = scrapedRecords.filter((r) => r.type === "image").map(clean);
       const links = scrapedRecords.filter((r) => r.type === "link").map(clean);
       const audioRecs = scrapedRecords.filter((r) => r.type === "audio").map(clean);
 
-      // Build the upload stats for README
-      const uploadStats = {
-        ...sessionStats,
-        totalRecords: scrapedRecords.length,
-      };
-
+      const uploadStats = { ...sessionStats, totalRecords: scrapedRecords.length };
       const files = [];
 
-      // README always first
       const readme = WSP_HFUpload.generateReadme(cfg, citations, uploadStats);
       files.push({ path: "README.md", content: readme });
 
-      // Data files
       if (texts.length > 0) files.push({ path: "data/text_data.jsonl", content: WSP_Utils.toJSONL(texts) });
       if (images.length > 0) files.push({ path: "data/images.jsonl", content: WSP_Utils.toJSONL(images) });
       if (links.length > 0) files.push({ path: "data/links.jsonl", content: WSP_Utils.toJSONL(links) });
       if (audioRecs.length > 0) files.push({ path: "data/audio.jsonl", content: WSP_Utils.toJSONL(audioRecs) });
       files.push({ path: "data/citations.jsonl", content: WSP_Utils.toJSONL(citations) });
 
-      // Step 4: Upload with retry
       notify("WebScraper Pro", `Uploading ${files.length} files to ${cfg.hfRepoId}...`);
       await WSP_HFUpload.commitFilesWithRetry(
         cfg.hfToken, cfg.hfRepoId, files,
         `Update dataset - ${scrapedRecords.length} records, ${sessionStats.words} words, ${sessionStats.pages} pages`,
-        3 // max retries
+        3
       );
 
-      // Track for incremental
       lastUploadRecordCount = scrapedRecords.length;
       persistState();
-
       notify("WebScraper Pro", `Uploaded ${scrapedRecords.length} records to ${cfg.hfRepoId}!`);
 
-      // Step 5: Also upload to owner repo if configured
       if (cfg.uploadToOwner) {
         try {
           notify("WebScraper Pro", `Uploading to shared repo ${OWNER_HF_REPO}...`);
-          await WSP_HFUpload.commitFilesWithRetry(
-            cfg.hfToken, OWNER_HF_REPO, files,
-            `Community upload - ${scrapedRecords.length} records`,
-            2
-          );
+          await WSP_HFUpload.commitFilesWithRetry(cfg.hfToken, OWNER_HF_REPO, files, `Community upload - ${scrapedRecords.length} records`, 2);
           notify("WebScraper Pro", `Also uploaded to shared repo: ${OWNER_HF_REPO}`);
         } catch (ownerErr) {
           notify("WebScraper Pro", `Owner repo upload skipped: ${ownerErr.message}`);
@@ -350,6 +491,7 @@
   /* ── Stop everything ── */
   function stopAll() {
     browser.storage.local.set({ scrapeActive: false });
+    if (typeof WSP_Queue !== "undefined") WSP_Queue.stop();
     browser.tabs.query({}).then((tabs) => {
       for (const tab of tabs) {
         browser.tabs.sendMessage(tab.id, { action: "STOP_SCRAPE" }).catch(() => {});
@@ -412,6 +554,12 @@
     contexts: ["page"],
   });
 
+  browser.contextMenus.create({
+    id: "wsp-smart-extract",
+    title: "Smart Extract Article",
+    contexts: ["page"],
+  });
+
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab) return;
     switch (info.menuItemId) {
@@ -423,6 +571,9 @@
         break;
       case "wsp-scroll-scrape":
         browser.tabs.sendMessage(tab.id, { action: "SCRAPE_WITH_SCROLL" });
+        break;
+      case "wsp-smart-extract":
+        browser.tabs.sendMessage(tab.id, { action: "SMART_EXTRACT_ARTICLE" });
         break;
     }
   });
