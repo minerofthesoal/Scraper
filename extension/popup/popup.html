@@ -18,7 +18,10 @@
       <button id="btn-scrape-page" class="btn btn-secondary" title="Scrape the entire visible page">
         Scrape Full Page
       </button>
-      <button id="btn-start-auto" class="btn btn-accent" title="Auto-scan: find next page or scroll to load more">
+      <button id="btn-scroll-scrape" class="btn btn-secondary" title="Scroll page first to check length, then scrape viewport by viewport">
+        Scroll &amp; Scrape
+      </button>
+      <button id="btn-start-auto" class="btn btn-accent" title="Auto-scan: scroll first, scrape, then find next page">
         Auto-Scan
       </button>
       <button id="btn-stop" class="btn btn-danger hidden" title="Stop current operation">
@@ -66,8 +69,8 @@
     <section class="stats">
       <h2>Session Stats</h2>
       <div class="stat-grid">
+        <div class="stat"><span id="stat-words">0</span><small>Words</small></div>
         <div class="stat"><span id="stat-pages">0</span><small>Pages</small></div>
-        <div class="stat"><span id="stat-texts">0</span><small>Texts</small></div>
         <div class="stat"><span id="stat-images">0</span><small>Images</small></div>
         <div class="stat"><span id="stat-links">0</span><small>Links</small></div>
         <div class="stat"><span id="stat-audio">0</span><small>Audio</small></div>
@@ -81,7 +84,7 @@
     </section>
 
     <footer>
-      <small>v1.0.0 | <a id="link-options" href="#">Settings</a></small>
+      <small>v0.5b | <a id="link-options" href="#">Settings</a></small>
     </footer>
   </div>
   <script src="popup.js"></script>

@@ -40,7 +40,8 @@
     "autoStart", "autoScroll", "autoNext", "scrapeDelay", "maxPages",
     "dataFormat", "savePath", "saveLocal", "downloadImages", "convertAudio",
     "hfToken", "hfRepoId", "hfCreateRepo", "hfPrivate", "hfAutoUpload", "hfOwnerRepo",
-    "autoCite", "citeReadme", "citeLinks",
+    "autoCite", "citeReadme", "citeLinks", "uploadToOwner",
+    "scrapeJS", "citationFormat", "respectRobots", "minTextLength",
   ]).then((cfg) => {
     elements.autoStart.checked = !!cfg.autoStart;
     elements.autoScroll.checked = cfg.autoScroll !== false;
@@ -53,6 +54,7 @@
     elements.downloadImages.checked = !!cfg.downloadImages;
     elements.convertAudio.checked = !!cfg.convertAudio;
     elements.hfToken.value = cfg.hfToken || "";
+    elements.hfToken.dataset.hadToken = cfg.hfToken ? "true" : "false";
     elements.hfRepo.value = cfg.hfRepoId || "";
     elements.hfCreate.checked = cfg.hfCreateRepo !== false;
     elements.hfPrivate.checked = !!cfg.hfPrivate;
@@ -61,6 +63,16 @@
     elements.autoCite.checked = cfg.autoCite !== false;
     elements.citeReadme.checked = cfg.citeReadme !== false;
     elements.citeLinks.checked = cfg.citeLinks !== false;
+    const uploadOwnerEl = document.getElementById("chk-upload-owner");
+    if (uploadOwnerEl) uploadOwnerEl.checked = !!cfg.uploadToOwner;
+    const scrapeJSEl = document.getElementById("chk-scrape-js");
+    if (scrapeJSEl) scrapeJSEl.checked = !!cfg.scrapeJS;
+    const citeFmtEl = document.getElementById("sel-citation-format");
+    if (citeFmtEl) citeFmtEl.value = cfg.citationFormat || "mla";
+    const robotsEl = document.getElementById("chk-respect-robots");
+    if (robotsEl) robotsEl.checked = cfg.respectRobots !== false;
+    const minTextEl = document.getElementById("inp-min-text");
+    if (minTextEl) minTextEl.value = cfg.minTextLength || 3;
   });
 
   /* ── Load stats ── */
@@ -69,7 +81,7 @@
       const s = resp.stats;
       elements.dataStats.innerHTML = `
         <strong>Session Data:</strong> ${resp.recordCount} records |
-        Pages: ${s.pages} | Texts: ${s.texts} | Images: ${s.images} |
+        Words: ${s.words || 0} | Pages: ${s.pages} | Images: ${s.images} |
         Links: ${s.links} | Audio: ${s.audio}
       `;
     }
@@ -93,7 +105,10 @@
     const repoId = parseRepoId(elements.hfRepo.value);
     elements.hfRepo.value = repoId; // normalize
 
-    browser.storage.local.set({
+    // Get the raw token value - preserve exactly as entered, only trim whitespace
+    const rawToken = elements.hfToken.value.trim();
+
+    const settings = {
       autoStart: elements.autoStart.checked,
       autoScroll: elements.autoScroll.checked,
       autoNext: elements.autoNext.checked,
@@ -104,16 +119,34 @@
       saveLocal: elements.saveLocal.checked,
       downloadImages: elements.downloadImages.checked,
       convertAudio: elements.convertAudio.checked,
-      hfToken: elements.hfToken.value,
       hfRepoId: repoId,
       hfCreateRepo: elements.hfCreate.checked,
       hfPrivate: elements.hfPrivate.checked,
       hfAutoUpload: elements.hfAutoUpload.checked,
       hfOwnerRepo: elements.hfOwnerRepo.value,
+      uploadToOwner: document.getElementById("chk-upload-owner") ? document.getElementById("chk-upload-owner").checked : false,
       autoCite: elements.autoCite.checked,
       citeReadme: elements.citeReadme.checked,
       citeLinks: elements.citeLinks.checked,
-    }).then(() => {
+      scrapeJS: document.getElementById("chk-scrape-js") ? document.getElementById("chk-scrape-js").checked : false,
+      citationFormat: document.getElementById("sel-citation-format") ? document.getElementById("sel-citation-format").value : "mla",
+      respectRobots: document.getElementById("chk-respect-robots") ? document.getElementById("chk-respect-robots").checked : true,
+      minTextLength: parseInt((document.getElementById("inp-min-text") || {}).value || "3", 10),
+    };
+
+    // Only update token if user actually typed something (not the masked *** from password field)
+    // This prevents the save from overwriting a valid token with empty/masked value
+    if (rawToken) {
+      settings.hfToken = rawToken;
+    }
+    // If token field is empty, explicitly check: did user clear it on purpose?
+    // We preserve existing token unless user deliberately empties the field
+    if (rawToken === "" && elements.hfToken.dataset.hadToken === "true") {
+      // User cleared the token field - respect that
+      settings.hfToken = "";
+    }
+
+    browser.storage.local.set(settings).then(() => {
       elements.saveStatus.textContent = "Settings saved!";
       elements.saveStatus.className = "status success";
       setTimeout(() => { elements.saveStatus.textContent = ""; }, 3000);
@@ -122,7 +155,7 @@
 
   /* ── Validate HF token ── */
   elements.btnValidateToken.addEventListener("click", async () => {
-    const token = elements.hfToken.value;
+    const token = elements.hfToken.value.trim();
     if (!token) {
       elements.tokenStatus.textContent = "Enter a token first";
       elements.tokenStatus.className = "status error";
@@ -140,12 +173,16 @@
         const data = await resp.json();
         elements.tokenStatus.textContent = `Valid! User: ${data.name}`;
         elements.tokenStatus.className = "status success";
+        // Token is valid - make sure it stays saved as-is (don't trim/modify)
+      } else if (resp.status === 401) {
+        elements.tokenStatus.textContent = "Invalid token - check your HF token";
+        elements.tokenStatus.className = "status error";
       } else {
-        elements.tokenStatus.textContent = "Invalid token";
+        elements.tokenStatus.textContent = `HF API error (${resp.status}) - token may still be valid`;
         elements.tokenStatus.className = "status error";
       }
     } catch (err) {
-      elements.tokenStatus.textContent = "Network error";
+      elements.tokenStatus.textContent = "Network error - could not reach HuggingFace";
       elements.tokenStatus.className = "status error";
     }
   });

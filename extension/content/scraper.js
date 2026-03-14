@@ -1,6 +1,10 @@
-/* ── Scraper Module ── */
+/* ── Scraper Module v0.5b ── */
+/* Universal text/image/link/audio extraction that works on ANY site */
 (function () {
   "use strict";
+
+  /* ── Track last scrape viewport position ── */
+  let lastScrapeBottomY = 0;
 
   /**
    * Collect all elements whose bounding rect intersects with the given selection rect.
@@ -22,86 +26,405 @@
   }
 
   /**
-   * Scrape data from a list of DOM elements.
+   * Universal text extraction - works on sites like Shelf.it, SPAs, shadow DOM, etc.
+   * Falls back through multiple strategies to find ALL text content.
    */
-  function extractData(elements) {
+  function extractTextUniversal(elements) {
     const texts = [];
-    const images = [];
-    const links = [];
-    const audio = [];
     const seenText = new Set();
-    const seenSrc = new Set();
+    let totalWords = 0;
+
+    // Strategy 1: Standard semantic elements
+    const semanticTags = "p, h1, h2, h3, h4, h5, h6, li, td, th, span, blockquote, pre, code, figcaption, dt, dd, label, summary, article, section, caption, address, cite, em, strong, b, i, mark, small, sub, sup, details, time";
 
     for (const el of elements) {
-      // Text
-      if (el.matches("p, h1, h2, h3, h4, h5, h6, li, td, th, span, blockquote, pre, code, figcaption, dt, dd, label, summary")) {
-        const txt = el.innerText.trim();
-        if (txt && !seenText.has(txt)) {
+      if (el.matches(semanticTags)) {
+        const txt = getDeepText(el);
+        if (txt && txt.length > 2 && !seenText.has(txt)) {
           seenText.add(txt);
-          texts.push({
-            tag: el.tagName.toLowerCase(),
-            text: txt,
-          });
-        }
-      }
-
-      // Images
-      if (el.tagName === "IMG" && el.src && !seenSrc.has(el.src)) {
-        seenSrc.add(el.src);
-        images.push({
-          src: el.src,
-          alt: el.alt || "",
-          width: el.naturalWidth || el.width,
-          height: el.naturalHeight || el.height,
-        });
-      }
-
-      // Picture > source
-      if (el.tagName === "SOURCE" && el.parentElement && el.parentElement.tagName === "PICTURE") {
-        const srcset = el.srcset;
-        if (srcset && !seenSrc.has(srcset)) {
-          seenSrc.add(srcset);
-          images.push({ src: srcset.split(",")[0].trim().split(" ")[0], alt: "", width: 0, height: 0 });
-        }
-      }
-
-      // Background images
-      const bg = getComputedStyle(el).backgroundImage;
-      if (bg && bg !== "none") {
-        const match = bg.match(/url\(["']?(.*?)["']?\)/);
-        if (match && match[1] && !seenSrc.has(match[1])) {
-          seenSrc.add(match[1]);
-          images.push({ src: match[1], alt: "background-image", width: 0, height: 0 });
-        }
-      }
-
-      // Links
-      if (el.tagName === "A" && el.href) {
-        const href = el.href;
-        if (!seenSrc.has(href)) {
-          seenSrc.add(href);
-          links.push({
-            href,
-            text: el.innerText.trim() || el.title || "",
-          });
-        }
-      }
-
-      // Audio / Video
-      if (el.tagName === "AUDIO" || el.tagName === "VIDEO") {
-        const src = el.src || (el.querySelector("source") && el.querySelector("source").src);
-        if (src && !seenSrc.has(src)) {
-          seenSrc.add(src);
-          audio.push({ src, type: el.tagName.toLowerCase() });
+          totalWords += countWords(txt);
+          texts.push({ tag: el.tagName.toLowerCase(), text: txt });
         }
       }
     }
 
-    return { texts, images, links, audio };
+    // Strategy 2: Divs and custom elements that are leaf text nodes
+    // (catches Shelf.it, React/Vue rendered text, web components)
+    for (const el of elements) {
+      if (texts.length > 0 && el.matches(semanticTags)) continue; // Already got it
+
+      const txt = getDirectText(el);
+      if (txt && txt.length > 2 && !seenText.has(txt)) {
+        // Make sure this element primarily contains text (not a layout container)
+        const childElements = el.children.length;
+        const textRatio = txt.length / (el.innerHTML || "x").length;
+
+        if (childElements <= 3 || textRatio > 0.3) {
+          seenText.add(txt);
+          totalWords += countWords(txt);
+          texts.push({ tag: el.tagName.toLowerCase(), text: txt });
+        }
+      }
+    }
+
+    // Strategy 3: TreeWalker for text nodes not inside any captured element
+    // This catches text in unusual DOM structures
+    if (texts.length === 0) {
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode(node) {
+            const txt = node.textContent.trim();
+            if (!txt || txt.length < 3) return NodeFilter.FILTER_REJECT;
+            // Skip script/style
+            const parent = node.parentElement;
+            if (!parent) return NodeFilter.FILTER_REJECT;
+            const tag = parent.tagName;
+            if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT") return NodeFilter.FILTER_REJECT;
+            // Check if visible
+            const style = getComputedStyle(parent);
+            if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        }
+      );
+
+      let node;
+      while ((node = walker.nextNode())) {
+        const txt = node.textContent.trim();
+        if (txt.length > 2 && !seenText.has(txt)) {
+          seenText.add(txt);
+          totalWords += countWords(txt);
+          texts.push({ tag: node.parentElement.tagName.toLowerCase(), text: txt });
+        }
+      }
+    }
+
+    // Strategy 4: Shadow DOM traversal
+    for (const el of elements) {
+      if (el.shadowRoot) {
+        const shadowTexts = extractFromShadow(el.shadowRoot, seenText);
+        for (const st of shadowTexts) {
+          totalWords += countWords(st.text);
+          texts.push(st);
+        }
+      }
+    }
+
+    return { texts, totalWords };
   }
 
   /**
-   * Build page metadata.
+   * Extract text from shadow DOM
+   */
+  function extractFromShadow(shadowRoot, seenText) {
+    const texts = [];
+    const els = shadowRoot.querySelectorAll("*");
+    for (const el of els) {
+      const txt = getDeepText(el);
+      if (txt && txt.length > 2 && !seenText.has(txt)) {
+        seenText.add(txt);
+        texts.push({ tag: el.tagName.toLowerCase(), text: txt });
+      }
+      if (el.shadowRoot) {
+        texts.push(...extractFromShadow(el.shadowRoot, seenText));
+      }
+    }
+    return texts;
+  }
+
+  /**
+   * Get deep text content, handling innerText properly.
+   */
+  function getDeepText(el) {
+    // innerText respects CSS visibility and layout, textContent doesn't
+    // Use innerText when available as it gives rendered text
+    try {
+      const txt = (el.innerText || el.textContent || "").trim();
+      // Clean up excessive whitespace
+      return txt.replace(/\s+/g, " ");
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * Get only the direct text of an element (not children).
+   */
+  function getDirectText(el) {
+    let text = "";
+    for (const child of el.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += child.textContent;
+      }
+    }
+    return text.trim().replace(/\s+/g, " ");
+  }
+
+  /**
+   * Count words in text.
+   */
+  function countWords(text) {
+    if (!text) return 0;
+    return text.split(/\s+/).filter(w => w.length > 0).length;
+  }
+
+  /**
+   * Universal image extraction - finds images everywhere.
+   */
+  function extractImagesUniversal(elements) {
+    const images = [];
+    const seenSrc = new Set();
+
+    for (const el of elements) {
+      // Standard <img>
+      if (el.tagName === "IMG") {
+        const src = el.currentSrc || el.src;
+        if (src && !seenSrc.has(src) && !src.startsWith("data:image/svg")) {
+          seenSrc.add(src);
+          images.push({
+            src,
+            alt: el.alt || el.title || "",
+            width: el.naturalWidth || el.width || 0,
+            height: el.naturalHeight || el.height || 0,
+          });
+        }
+      }
+
+      // <picture> > <source>
+      if (el.tagName === "SOURCE" && el.parentElement && el.parentElement.tagName === "PICTURE") {
+        const srcset = el.srcset;
+        if (srcset) {
+          // Parse srcset - get highest resolution
+          const candidates = srcset.split(",").map(s => s.trim().split(" ")[0]);
+          for (const src of candidates) {
+            if (src && !seenSrc.has(src)) {
+              seenSrc.add(src);
+              images.push({ src, alt: "", width: 0, height: 0 });
+            }
+          }
+        }
+      }
+
+      // <svg> elements (capture as data URL if small enough)
+      if (el.tagName === "svg" || el.tagName === "SVG") {
+        try {
+          const svgStr = new XMLSerializer().serializeToString(el);
+          if (svgStr.length < 50000) { // Only small SVGs
+            const src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgStr)));
+            if (!seenSrc.has(src)) {
+              seenSrc.add(src);
+              images.push({ src, alt: "svg", width: el.clientWidth || 0, height: el.clientHeight || 0 });
+            }
+          }
+        } catch { /* skip */ }
+      }
+
+      // Background images (CSS)
+      try {
+        const bg = getComputedStyle(el).backgroundImage;
+        if (bg && bg !== "none") {
+          const matches = bg.matchAll(/url\(["']?(.*?)["']?\)/g);
+          for (const match of matches) {
+            const src = match[1];
+            if (src && !seenSrc.has(src) && !src.startsWith("data:image/svg")) {
+              seenSrc.add(src);
+              images.push({ src, alt: "background-image", width: 0, height: 0 });
+            }
+          }
+        }
+      } catch { /* skip */ }
+
+      // data-src, data-lazy-src, data-original (lazy loading)
+      for (const attr of ["data-src", "data-lazy-src", "data-original", "data-bg", "data-image"]) {
+        const src = el.getAttribute(attr);
+        if (src && src.startsWith("http") && !seenSrc.has(src)) {
+          seenSrc.add(src);
+          images.push({ src, alt: el.alt || el.title || "lazy-loaded", width: 0, height: 0 });
+        }
+      }
+
+      // <video> poster
+      if (el.tagName === "VIDEO" && el.poster) {
+        const src = el.poster;
+        if (!seenSrc.has(src)) {
+          seenSrc.add(src);
+          images.push({ src, alt: "video-poster", width: el.videoWidth || 0, height: el.videoHeight || 0 });
+        }
+      }
+
+      // <canvas> (grab as image if it has content)
+      if (el.tagName === "CANVAS" && el.width > 10 && el.height > 10) {
+        try {
+          const src = el.toDataURL("image/png");
+          if (src && !seenSrc.has(src)) {
+            seenSrc.add(src);
+            images.push({ src, alt: "canvas", width: el.width, height: el.height });
+          }
+        } catch { /* CORS blocked */ }
+      }
+    }
+
+    return images;
+  }
+
+  /**
+   * Universal link extraction.
+   */
+  function extractLinksUniversal(elements) {
+    const links = [];
+    const seenHref = new Set();
+
+    for (const el of elements) {
+      // Standard <a>
+      if (el.tagName === "A" && el.href) {
+        const href = el.href;
+        if (!seenHref.has(href) && href.startsWith("http")) {
+          seenHref.add(href);
+          links.push({
+            href,
+            text: getDeepText(el) || el.title || "",
+            rel: el.rel || "",
+          });
+        }
+      }
+
+      // Elements with onclick navigation
+      if (el.getAttribute("onclick")) {
+        const onclick = el.getAttribute("onclick");
+        const urlMatch = onclick.match(/(?:location\.href|window\.open)\s*[=(]\s*['"]([^'"]+)['"]/);
+        if (urlMatch && urlMatch[1] && !seenHref.has(urlMatch[1])) {
+          seenHref.add(urlMatch[1]);
+          links.push({ href: urlMatch[1], text: getDeepText(el), rel: "onclick" });
+        }
+      }
+
+      // data-href, data-url attributes
+      for (const attr of ["data-href", "data-url", "data-link"]) {
+        const href = el.getAttribute(attr);
+        if (href && href.startsWith("http") && !seenHref.has(href)) {
+          seenHref.add(href);
+          links.push({ href, text: getDeepText(el), rel: "data-attr" });
+        }
+      }
+
+      // [role="link"] elements
+      if (el.getAttribute("role") === "link") {
+        const href = el.getAttribute("href") || el.getAttribute("data-href");
+        if (href && !seenHref.has(href)) {
+          seenHref.add(href);
+          links.push({ href, text: getDeepText(el), rel: "role-link" });
+        }
+      }
+    }
+
+    return links;
+  }
+
+  /**
+   * Universal audio/video extraction.
+   */
+  function extractAudioUniversal(elements) {
+    const audio = [];
+    const seenSrc = new Set();
+
+    for (const el of elements) {
+      if (el.tagName === "AUDIO" || el.tagName === "VIDEO") {
+        // Direct src
+        let src = el.currentSrc || el.src;
+
+        // Check <source> children
+        if (!src) {
+          const source = el.querySelector("source");
+          if (source) src = source.src;
+        }
+
+        if (src && !seenSrc.has(src)) {
+          seenSrc.add(src);
+          audio.push({ src, type: el.tagName.toLowerCase() });
+        }
+
+        // Also grab all <source> alternatives
+        for (const source of el.querySelectorAll("source")) {
+          if (source.src && !seenSrc.has(source.src)) {
+            seenSrc.add(source.src);
+            audio.push({ src: source.src, type: source.type || el.tagName.toLowerCase() });
+          }
+        }
+      }
+
+      // <embed> and <object> audio
+      if (el.tagName === "EMBED" || el.tagName === "OBJECT") {
+        const src = el.src || el.data;
+        const type = el.type || "";
+        if (src && (type.includes("audio") || type.includes("video")) && !seenSrc.has(src)) {
+          seenSrc.add(src);
+          audio.push({ src, type });
+        }
+      }
+    }
+
+    return audio;
+  }
+
+  /**
+   * Extract JavaScript-rendered content (toggled by user, off by default).
+   */
+  async function extractJSContent(elements) {
+    const jsData = [];
+    const seenSrc = new Set();
+
+    for (const el of elements) {
+      // Script tags with structured data
+      if (el.tagName === "SCRIPT") {
+        const type = el.type || "";
+        if (type === "application/ld+json" || type === "application/json") {
+          try {
+            const data = JSON.parse(el.textContent);
+            jsData.push({ type: "structured-data", format: type, data });
+          } catch { /* skip */ }
+        }
+      }
+
+      // Iframes (same-origin only)
+      if (el.tagName === "IFRAME") {
+        try {
+          const iframeDoc = el.contentDocument || el.contentWindow.document;
+          if (iframeDoc) {
+            const iframeText = iframeDoc.body ? iframeDoc.body.innerText : "";
+            if (iframeText && iframeText.length > 10) {
+              jsData.push({ type: "iframe-text", text: iframeText.trim(), src: el.src });
+            }
+          }
+        } catch { /* cross-origin blocked */ }
+      }
+
+      // Data attributes that might contain content
+      if (el.dataset) {
+        for (const [key, value] of Object.entries(el.dataset)) {
+          if (value && value.length > 20 && value.length < 10000) {
+            try {
+              const parsed = JSON.parse(value);
+              if (typeof parsed === "object") {
+                jsData.push({ type: "data-attr", key, data: parsed });
+              }
+            } catch {
+              // Not JSON, check if it's meaningful text
+              if (/^[a-zA-Z]/.test(value) && value.split(" ").length > 3) {
+                jsData.push({ type: "data-text", key, text: value });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return jsData;
+  }
+
+  /**
+   * Build page metadata (enhanced).
    */
   function pageMeta() {
     const meta = {};
@@ -109,35 +432,98 @@
     meta.title = document.title;
     meta.timestamp = new Date().toISOString();
 
-    // Author detection
+    // Author detection (multiple strategies)
     const authorMeta = document.querySelector('meta[name="author"]');
     if (authorMeta) meta.author = authorMeta.content;
 
-    const ldJson = document.querySelector('script[type="application/ld+json"]');
-    if (ldJson) {
+    // JSON-LD
+    const ldJsonScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of ldJsonScripts) {
       try {
-        const ld = JSON.parse(ldJson.textContent);
-        if (ld.author) meta.author = typeof ld.author === "string" ? ld.author : ld.author.name || "";
-        if (ld.publisher) meta.publisher = typeof ld.publisher === "string" ? ld.publisher : ld.publisher.name || "";
-        if (ld.datePublished) meta.datePublished = ld.datePublished;
-      } catch (_) { /* ignore */ }
+        const ld = JSON.parse(script.textContent);
+        const ldItems = Array.isArray(ld) ? ld : [ld];
+        for (const item of ldItems) {
+          if (item.author && !meta.author) {
+            meta.author = typeof item.author === "string" ? item.author :
+                          Array.isArray(item.author) ? item.author.map(a => a.name || a).join(", ") :
+                          item.author.name || "";
+          }
+          if (item.publisher && !meta.publisher) {
+            meta.publisher = typeof item.publisher === "string" ? item.publisher : item.publisher.name || "";
+          }
+          if (item.datePublished) meta.datePublished = item.datePublished;
+          if (item.dateModified) meta.dateModified = item.dateModified;
+          if (item.description) meta.description = item.description;
+          if (item.license) meta.license = item.license;
+          if (item["@type"]) meta.contentType = item["@type"];
+          if (item.isbn) meta.isbn = item.isbn;
+        }
+      } catch { /* ignore */ }
     }
 
+    // Open Graph
     const ogSiteName = document.querySelector('meta[property="og:site_name"]');
     if (ogSiteName) meta.siteName = ogSiteName.content;
 
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc && !meta.description) meta.description = ogDesc.content;
+
+    const ogType = document.querySelector('meta[property="og:type"]');
+    if (ogType) meta.ogType = ogType.content;
+
+    // Publish date
     const pubDate = document.querySelector('meta[name="date"], meta[property="article:published_time"], time[datetime]');
     if (pubDate) meta.datePublished = meta.datePublished || pubDate.content || pubDate.getAttribute("datetime");
+
+    // Copyright / license
+    const copyright = document.querySelector('meta[name="copyright"], meta[name="rights"]');
+    if (copyright) meta.copyright = copyright.content;
+
+    // Description
+    const descMeta = document.querySelector('meta[name="description"]');
+    if (descMeta && !meta.description) meta.description = descMeta.content;
+
+    // Language
+    meta.lang = document.documentElement.lang || "en";
 
     return meta;
   }
 
   /**
+   * Main extraction pipeline.
+   */
+  async function extractData(elements) {
+    const cfg = await browser.storage.local.get(["scrapeJS", "minTextLength"]);
+    const minLen = cfg.minTextLength || 3;
+
+    // Universal text extraction
+    const { texts: rawTexts, totalWords } = extractTextUniversal(elements);
+    const texts = rawTexts.filter(t => t.text.length >= minLen);
+
+    // Universal image extraction
+    const images = extractImagesUniversal(elements);
+
+    // Universal link extraction
+    const links = extractLinksUniversal(elements);
+
+    // Universal audio extraction
+    const audio = extractAudioUniversal(elements);
+
+    // Optional JS content extraction
+    let jsContent = [];
+    if (cfg.scrapeJS) {
+      jsContent = await extractJSContent(elements);
+    }
+
+    return { texts, images, links, audio, jsContent, totalWords };
+  }
+
+  /**
    * Scrape a selected rectangle area.
    */
-  function scrapeRect(selRect) {
+  async function scrapeRect(selRect) {
     const elements = getElementsInRect(selRect);
-    const data = extractData(elements);
+    const data = await extractData(elements);
     const meta = pageMeta();
     const result = { meta, ...data, scrapedAt: new Date().toISOString() };
 
@@ -147,14 +533,16 @@
 
     // Send to background
     browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
-    if (typeof WSP_Toast !== "undefined") WSP_Toast.show(`Scraped: ${data.texts.length} texts, ${data.images.length} images, ${data.links.length} links`);
+    if (typeof WSP_Toast !== "undefined") {
+      WSP_Toast.show(`Scraped: ${data.totalWords} words, ${data.images.length} images, ${data.links.length} links`);
+    }
     return result;
   }
 
   /**
    * Scrape the entire visible page.
    */
-  function scrapeFullPage() {
+  async function scrapeFullPage() {
     const selRect = {
       left: 0,
       top: 0,
@@ -165,32 +553,154 @@
   }
 
   /**
-   * Scrape the entire document (scrolled content too).
+   * Scroll-first full document scraping.
+   * 1. First scrolls down to determine full page length
+   * 2. Then scrolls back to where last scrape ended
+   * 3. Scrapes viewport by viewport, scrolling down
+   * 4. Tracks position so next call continues where it left off
    */
-  function scrapeEntireDocument() {
-    const selRect = {
-      left: 0,
-      top: 0,
-      right: document.documentElement.scrollWidth,
-      bottom: document.documentElement.scrollHeight,
-    };
-    // Need to get elements based on their page position, not viewport
+  async function scrapeWithScroll() {
+    // Step 1: Scroll to bottom to trigger lazy loading and measure full height
+    const originalScroll = window.scrollY;
+    const viewportHeight = window.innerHeight;
+
+    if (typeof WSP_Toast !== "undefined") {
+      WSP_Toast.show("Checking page length...");
+    }
+
+    // Quick scroll to bottom to trigger lazy-load content
+    let prevHeight = document.documentElement.scrollHeight;
+    let scrollAttempts = 0;
+    const maxScrollAttempts = 20;
+
+    while (scrollAttempts < maxScrollAttempts) {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      await sleep(500);
+      const newHeight = document.documentElement.scrollHeight;
+      if (newHeight === prevHeight) break;
+      prevHeight = newHeight;
+      scrollAttempts++;
+    }
+
+    const totalHeight = document.documentElement.scrollHeight;
+
+    // Step 2: Go back to where we last scraped (or top)
+    const startY = lastScrapeBottomY || 0;
+    window.scrollTo(0, startY);
+    await sleep(300);
+
+    if (typeof WSP_Toast !== "undefined") {
+      WSP_Toast.show(`Page is ${Math.round(totalHeight / viewportHeight)} viewports tall. Scraping...`);
+    }
+
+    // Step 3: Scrape viewport by viewport
+    let currentY = startY;
+    let allResults = { texts: [], images: [], links: [], audio: [], jsContent: [], totalWords: 0 };
+    const seenText = new Set();
+    const seenSrc = new Set();
+    let viewportCount = 0;
+
+    while (currentY < totalHeight) {
+      window.scrollTo(0, currentY);
+      await sleep(400); // Wait for rendering
+
+      const selRect = {
+        left: 0,
+        top: 0,
+        right: window.innerWidth,
+        bottom: viewportHeight,
+      };
+
+      const elements = getElementsInRect(selRect);
+      const data = await extractData(elements);
+
+      // Deduplicate across viewports
+      for (const t of data.texts) {
+        if (!seenText.has(t.text)) {
+          seenText.add(t.text);
+          allResults.texts.push(t);
+          allResults.totalWords += countWords(t.text);
+        }
+      }
+      for (const img of data.images) {
+        if (!seenSrc.has(img.src)) {
+          seenSrc.add(img.src);
+          allResults.images.push(img);
+        }
+      }
+      for (const link of data.links) {
+        if (!seenSrc.has(link.href)) {
+          seenSrc.add(link.href);
+          allResults.links.push(link);
+        }
+      }
+      for (const a of data.audio) {
+        if (!seenSrc.has(a.src)) {
+          seenSrc.add(a.src);
+          allResults.audio.push(a);
+        }
+      }
+      if (data.jsContent) {
+        allResults.jsContent.push(...data.jsContent);
+      }
+
+      currentY += viewportHeight * 0.85; // Overlap slightly to not miss content
+      viewportCount++;
+
+      // Highlight progress
+      elements.forEach((el) => el.classList.add("wsp-scraped-highlight"));
+      setTimeout(() => elements.forEach((el) => el.classList.remove("wsp-scraped-highlight")), 1500);
+    }
+
+    // Step 4: Track position for next call
+    lastScrapeBottomY = totalHeight;
+
+    // Scroll back to original position
+    window.scrollTo(0, originalScroll);
+
+    // Send combined results
+    const meta = pageMeta();
+    const result = { meta, ...allResults, scrapedAt: new Date().toISOString() };
+    browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
+
+    if (typeof WSP_Toast !== "undefined") {
+      WSP_Toast.show(`Scroll-scraped ${viewportCount} viewports: ${allResults.totalWords} words, ${allResults.images.length} images, ${allResults.links.length} links`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Scrape the entire document (legacy - for backward compat).
+   */
+  async function scrapeEntireDocument() {
     const all = document.querySelectorAll("body *");
     const elements = [];
     for (const el of all) {
       const r = el.getBoundingClientRect();
-      const absTop = r.top + window.scrollY;
-      const absLeft = r.left + window.scrollX;
       if (r.width > 0 && r.height > 0) {
         elements.push(el);
       }
     }
-    const data = extractData(elements);
+    const data = await extractData(elements);
     const meta = pageMeta();
     const result = { meta, ...data, scrapedAt: new Date().toISOString() };
     browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
-    if (typeof WSP_Toast !== "undefined") WSP_Toast.show(`Full scrape: ${data.texts.length} texts, ${data.images.length} images`);
+    if (typeof WSP_Toast !== "undefined") {
+      WSP_Toast.show(`Full scrape: ${data.totalWords} words, ${data.images.length} images`);
+    }
     return result;
+  }
+
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  /**
+   * Reset the scroll tracking (for new sessions).
+   */
+  function resetScrollPosition() {
+    lastScrapeBottomY = 0;
   }
 
   /* ── Message listener ── */
@@ -201,7 +711,13 @@
     if (msg.action === "SCRAPE_DOCUMENT") {
       scrapeEntireDocument();
     }
+    if (msg.action === "SCRAPE_WITH_SCROLL") {
+      scrapeWithScroll();
+    }
+    if (msg.action === "RESET_SCROLL") {
+      resetScrollPosition();
+    }
   });
 
-  window.WSP_Scraper = { scrapeRect, scrapeFullPage, scrapeEntireDocument };
+  window.WSP_Scraper = { scrapeRect, scrapeFullPage, scrapeEntireDocument, scrapeWithScroll, resetScrollPosition };
 })();

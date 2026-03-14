@@ -1,0 +1,106 @@
+# Maintainer: WebScraper Pro <https://github.com/minerofthesoal/Scraper>
+pkgname=webscraper-pro
+pkgver=0.5b
+pkgrel=1
+pkgdesc="Firefox extension + CLI for web scraping with HuggingFace upload and MLA citations"
+arch=('any')
+url="https://github.com/minerofthesoal/Scraper"
+license=('MIT')
+depends=(
+    'python>=3.8'
+    'python-click'
+    'python-requests'
+    'python-beautifulsoup4'
+    'python-pillow'
+    'python-tqdm'
+    'tk'
+)
+optdepends=(
+    'python-huggingface-hub: HuggingFace upload support'
+    'python-pydub: Audio conversion to .wav'
+    'ffmpeg: Audio conversion backend'
+    'firefox: Firefox extension support'
+    'python-rich: Enhanced terminal output'
+)
+makedepends=('python-build' 'python-setuptools' 'python-wheel' 'zip')
+source=()
+# When building from local source, no checksums needed
+sha256sums=()
+
+# Build from the repo source (already present during makepkg)
+build() {
+    cd "$startdir"
+
+    # Build the Python package
+    cd cli
+    python -m build --wheel --no-isolation 2>/dev/null || python setup.py bdist_wheel 2>/dev/null || true
+    cd ..
+
+    # Build the Firefox extension .xpi
+    if [ ! -f webscraper-pro.xpi ]; then
+        cd extension
+        zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc"
+        cd ..
+    fi
+}
+
+package() {
+    cd "$startdir"
+
+    # Install CLI
+    install -dm755 "$pkgdir/usr/lib/$pkgname"
+    install -Dm755 cli/scrape.py "$pkgdir/usr/lib/$pkgname/scrape.py"
+    install -Dm644 cli/gui.py "$pkgdir/usr/lib/$pkgname/gui.py"
+    install -Dm644 cli/setup.py "$pkgdir/usr/lib/$pkgname/setup.py"
+
+    # Create CLI wrapper
+    install -dm755 "$pkgdir/usr/bin"
+    cat > "$pkgdir/usr/bin/scrape" << 'WRAPPER'
+#!/bin/bash
+exec python /usr/lib/webscraper-pro/scrape.py "$@"
+WRAPPER
+    chmod 755 "$pkgdir/usr/bin/scrape"
+
+    # Install Firefox extension
+    install -dm755 "$pkgdir/usr/lib/$pkgname/extension"
+    cp -r extension/* "$pkgdir/usr/lib/$pkgname/extension/"
+    # Remove Python files from extension dir
+    find "$pkgdir/usr/lib/$pkgname/extension" -name "*.py" -delete 2>/dev/null || true
+    find "$pkgdir/usr/lib/$pkgname/extension" -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+    # Install .xpi for easy access
+    if [ -f webscraper-pro.xpi ]; then
+        install -Dm644 webscraper-pro.xpi "$pkgdir/usr/lib/$pkgname/webscraper-pro.xpi"
+    fi
+
+    # Install native messaging manifest for Firefox (auto-connect CLI to extension)
+    install -dm755 "$pkgdir/usr/lib/mozilla/native-messaging-hosts"
+    cat > "$pkgdir/usr/lib/mozilla/native-messaging-hosts/webscraper_pro.json" << 'NMHOST'
+{
+    "name": "webscraper_pro",
+    "description": "WebScraper Pro native messaging host",
+    "path": "/usr/bin/scrape",
+    "type": "stdio",
+    "allowed_extensions": ["webscraper-pro@minerofthesoal"]
+}
+NMHOST
+
+    # Desktop entry
+    install -dm755 "$pkgdir/usr/share/applications"
+    cat > "$pkgdir/usr/share/applications/webscraper-pro.desktop" << 'DESKTOP'
+[Desktop Entry]
+Name=WebScraper Pro
+Comment=Web scraping tool with HuggingFace upload
+Exec=/usr/bin/scrape gui.start
+Terminal=false
+Type=Application
+Categories=Development;Network;WebDevelopment;
+Keywords=scraper;web;huggingface;dataset;
+DESKTOP
+
+    # License
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Documentation
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
