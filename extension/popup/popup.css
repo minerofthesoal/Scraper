@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Popup v0.6.1b ── */
+/* ── WebScraper Pro Popup v0.6.2b ── */
 /* Dark-first theme with light mode toggle */
 
 :root {
@@ -302,6 +302,25 @@ header h1 { font-size: 15px; color: var(--accent); }
 }
 .session-item .si-actions button:hover { background: var(--accent); color: #fff; }
 .session-item .si-actions .si-delete:hover { background: var(--red); }
+
+/* ── Image Export ── */
+.image-export-section, .ai-section { margin-bottom: 8px; }
+.image-export-section h2, .ai-section h2 { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.img-format-select {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+.export-status { font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; }
+
+/* ── AI Status Dot ── */
+.ai-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.ai-dot-off { background: var(--text-muted); }
+.ai-dot-on { background: var(--green); }
+.ai-dot-connecting { background: var(--orange); animation: pulse 1s infinite; }
 
 /* ── Data Type Counts ── */
 .data-type-counts {

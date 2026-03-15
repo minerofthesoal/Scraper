@@ -1,4 +1,4 @@
-/* ── Auto-Scan Module v0.6.1b ── */
+/* ── Auto-Scan Module v0.6.2b ── */
 /* Scroll-first approach: fully scrapes current page, THEN finds next page. */
 (function () {
   "use strict";

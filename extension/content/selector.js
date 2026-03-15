@@ -1,4 +1,4 @@
-/* ── Area Selection Module v0.6.1b ── */
+/* ── Area Selection Module v0.6.2b ── */
 /* global WSP_Scraper */
 (function () {
   "use strict";

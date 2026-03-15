@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.1b ── */
+/* ── Popup Controller v0.6.2b ── */
 (function () {
   "use strict";
 
@@ -218,6 +218,43 @@
     linkShortcuts.addEventListener("click", (e) => {
       e.preventDefault();
       sendToTab("SHOW_SHORTCUTS");
+    });
+  }
+
+  /* ── Image Export ── */
+  const btnExportImages = $("#btn-export-images");
+  if (btnExportImages) {
+    btnExportImages.addEventListener("click", () => {
+      const format = ($("#sel-img-format") || {}).value || "png";
+      const statusEl = $("#img-export-status");
+      if (statusEl) statusEl.textContent = "Exporting images...";
+      sendToBackground("EXPORT_IMAGES", { format });
+      setTimeout(() => {
+        if (statusEl) statusEl.textContent = "";
+      }, 5000);
+    });
+  }
+
+  /* ── AI Extract ── */
+  const aiDot = $("#ai-status-dot");
+  const btnAIExtract = $("#btn-ai-extract");
+
+  // Check AI server status on load
+  browser.runtime.sendMessage({ action: "AI_STATUS" }).then(resp => {
+    if (resp && resp.status === "ready") {
+      if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI server ready"; }
+    }
+  }).catch(() => {});
+
+  if (btnAIExtract) {
+    btnAIExtract.addEventListener("click", () => {
+      const template = ($("#sel-ai-template") || {}).value || "article";
+      const statusEl = $("#ai-extract-status");
+      if (statusEl) statusEl.textContent = "Running AI extraction...";
+      sendToTab("AI_EXTRACT_PAGE", { template });
+      setTimeout(() => {
+        if (statusEl) statusEl.textContent = "";
+      }, 10000);
     });
   }
 

@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.6.1b ── */
+/* ── WebScraper Pro Background Script v0.6.2b ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -74,6 +74,26 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
 
     case "STATUS_CHANGE":
       browser.runtime.sendMessage(msg).catch(function () {});
+      break;
+
+    // ── Image export ──
+    case "EXPORT_IMAGES":
+      exportImages(msg.format || "png", msg.imageIds);
+      break;
+
+    // ── AI extraction ──
+    case "AI_STATUS":
+      if (typeof WSP_AI !== "undefined") {
+        return WSP_AI.checkServer();
+      }
+      return Promise.resolve({ status: "disabled", message: "AI module not loaded" });
+
+    case "AI_EXTRACT_RESULT":
+      handleAIExtractResult(msg.data);
+      break;
+
+    case "AI_EXTRACT_REQUEST":
+      handleAIExtractRequest(msg);
       break;
 
     // ── Queue actions ──
@@ -361,7 +381,7 @@ function exportData(format) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.1b</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.6.2b</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
@@ -506,6 +526,85 @@ function uploadToHF() {
       console.error("[WSP] Upload failed:", err);
       notify("WebScraper Pro - Error", "Upload failed: " + err.message);
     });
+  });
+}
+
+/* ── Export images in various formats ── */
+function exportImages(format, imageIds) {
+  if (typeof WSP_ImageExport === "undefined") {
+    notify("WebScraper Pro - Error", "Image export module not loaded. Try reloading the extension.");
+    return;
+  }
+
+  var imageRecords = scrapedRecords.filter(function (r) { return r.type === "image"; });
+
+  // Filter by specific IDs if provided
+  if (imageIds && imageIds.length > 0) {
+    var idSet = new Set(imageIds);
+    imageRecords = imageRecords.filter(function (r) { return idSet.has(r.id); });
+  }
+
+  if (imageRecords.length === 0) {
+    notify("WebScraper Pro", "No images to export. Scrape some pages first!");
+    return;
+  }
+
+  notify("WebScraper Pro", "Exporting " + imageRecords.length + " images as " + format.toUpperCase() + "...");
+
+  WSP_ImageExport.exportBatch(imageRecords, format, 0.92, function (done, total) {
+    if (done === total) {
+      notify("WebScraper Pro", "Exported " + done + " images as " + format.toUpperCase());
+    }
+  }).catch(function (err) {
+    notify("WebScraper Pro - Error", "Image export failed: " + err.message);
+  });
+}
+
+/* ── Handle AI extraction results ── */
+function handleAIExtractResult(data) {
+  if (!data) return;
+
+  function uid() {
+    return typeof WSP_Utils !== "undefined" ? WSP_Utils.uid() : Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  scrapedRecords.push({
+    id: uid(),
+    type: "ai_extract",
+    template: data.template || "unknown",
+    extracted: data.result || {},
+    source_url: data.source_url || "",
+    source_title: data.source_title || "",
+    scraped_at: new Date().toISOString(),
+  });
+
+  persistState();
+  broadcastStats();
+  notify("WebScraper Pro", "AI extraction complete for " + (data.source_url || "page"));
+}
+
+/* ── Handle AI extraction request from content script ── */
+function handleAIExtractRequest(msg) {
+  if (typeof WSP_AI === "undefined") {
+    notify("WebScraper Pro", "AI module not loaded. Reload the extension.");
+    return;
+  }
+  if (!WSP_AI._enabled) {
+    notify("WebScraper Pro", "AI extraction is disabled. Enable it in Settings.");
+    return;
+  }
+
+  var template = WSP_AI.getTemplate(msg.template || "article");
+
+  WSP_AI.extract(msg.text, template).then(function (result) {
+    handleAIExtractResult({
+      template: msg.template,
+      result: result,
+      source_url: msg.source_url,
+      source_title: msg.source_title,
+    });
+  }).catch(function (err) {
+    notify("WebScraper Pro - Error", "AI extraction failed: " + err.message);
   });
 }
 
