@@ -9,7 +9,7 @@
     <header>
       <div class="header-left">
         <h1>WebScraper Pro</h1>
-        <span id="version-tag" class="version">v0.6b</span>
+        <span id="version-tag" class="version">v0.6.1b</span>
       </div>
       <div class="header-right">
         <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
@@ -125,10 +125,15 @@
           <option value="audio">Audio</option>
         </select>
       </div>
+      <div id="data-type-counts" class="data-type-counts"></div>
       <div id="data-preview" class="data-preview">
         <div class="data-empty">No data yet. Start scraping!</div>
       </div>
       <div id="data-pagination" class="data-pagination"></div>
+      <div class="data-actions">
+        <button id="btn-data-clear" class="btn btn-small btn-danger-small">Clear All Data</button>
+        <span id="data-storage-usage" class="storage-usage"></span>
+      </div>
     </div>
 
     <!-- Sessions Tab -->
@@ -143,7 +148,7 @@
     </div>
 
     <footer>
-      <small>v0.6b | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
+      <small>v0.6.1b | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
     </footer>
   </div>
   <script src="popup.js"></script>

@@ -1,4 +1,4 @@
-/* ── Options Page Controller v0.6b ── */
+/* ── Options Page Controller v0.6.1b ── */
 (function () {
   "use strict";
 
@@ -54,7 +54,7 @@
     tokenStatus: $("#token-status"),
     saveStatus: $("#save-status"),
     dataStats: $("#data-stats"),
-    // New v0.6b
+    // New v0.6.1b
     rateMax: $("#inp-rate-max"),
     rateWindow: $("#inp-rate-window"),
     rateEnabled: $("#chk-rate-enabled"),

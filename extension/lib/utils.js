@@ -1,134 +1,106 @@
-/* ── WebScraper Pro Utilities ── */
+/* ── WebScraper Pro Utilities v0.6.1b ── */
 /* eslint-env browser, webextensions */
-(function () {
-  "use strict";
+/* Exported as: window.WSP_Utils */
+var WSP_Utils = {
 
-  const WSP_Utils = {
+  uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  },
 
-    /**
-     * Generate a short unique ID.
-     */
-    uid() {
-      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    },
+  now() {
+    return new Date().toISOString();
+  },
 
-    /**
-     * Get current ISO timestamp.
-     */
-    now() {
-      return new Date().toISOString();
-    },
+  sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+  },
 
-    /**
-     * Sanitize a filename.
-     */
-    sanitizeFilename(name) {
-      return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
-    },
+  async urlToBlob(url) {
+    const resp = await fetch(url);
+    return resp.blob();
+  },
 
-    /**
-     * Convert a data URL or blob URL to a Blob for download.
-     */
-    async urlToBlob(url) {
-      const resp = await fetch(url);
-      return resp.blob();
-    },
+  downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    return browser.downloads.download({ url, filename, saveAs: false }).then((id) => {
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      return id;
+    });
+  },
 
-    /**
-     * Download a blob as a file using browser.downloads.
-     */
-    downloadBlob(blob, filename) {
-      const url = URL.createObjectURL(blob);
-      return browser.downloads.download({ url, filename, saveAs: false }).then((id) => {
-        // Revoke after a delay
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
-        return id;
-      });
-    },
+  downloadText(text, filename, mimeType) {
+    mimeType = mimeType || "application/json";
+    const blob = new Blob([text], { type: mimeType });
+    return this.downloadBlob(blob, filename);
+  },
 
-    /**
-     * Download a text string as a file.
-     */
-    downloadText(text, filename, mimeType = "application/json") {
-      const blob = new Blob([text], { type: mimeType });
-      return this.downloadBlob(blob, filename);
-    },
+  formatBytes(bytes) {
+    if (bytes === 0) return "0 B";
+    var k = 1024;
+    var sizes = ["B", "KB", "MB", "GB"];
+    var i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  },
 
-    /**
-     * Format bytes to human-readable.
-     */
-    formatBytes(bytes) {
-      if (bytes === 0) return "0 B";
-      const k = 1024;
-      const sizes = ["B", "KB", "MB", "GB"];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-    },
+  debounce(fn, ms) {
+    var timer;
+    return function () {
+      var args = arguments;
+      var self = this;
+      clearTimeout(timer);
+      timer = setTimeout(function () { fn.apply(self, args); }, ms);
+    };
+  },
 
-    /**
-     * Debounce helper.
-     */
-    debounce(fn, ms) {
-      let timer;
-      return function (...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn.apply(this, args), ms);
-      };
-    },
+  extractDomain(url) {
+    try { return new URL(url).hostname; }
+    catch (e) { return url; }
+  },
 
-    /**
-     * Extract domain from URL.
-     */
-    extractDomain(url) {
-      try {
-        return new URL(url).hostname;
-      } catch {
-        return url;
-      }
-    },
+  parseDate(str) {
+    if (!str) return null;
+    var d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+    return null;
+  },
 
-    /**
-     * Parse date string to Date object, trying multiple formats.
-     */
-    parseDate(str) {
-      if (!str) return null;
-      const d = new Date(str);
-      if (!isNaN(d.getTime())) return d;
-      return null;
-    },
+  formatMLADate(date) {
+    if (!date) date = new Date();
+    var months = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "June",
+      "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."];
+    return date.getDate() + " " + months[date.getMonth()] + " " + date.getFullYear();
+  },
 
-    /**
-     * Format date for MLA citation (Day Month Year).
-     */
-    formatMLADate(date) {
-      if (!date) date = new Date();
-      const months = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "June",
-        "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."];
-      return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
-    },
+  toJSONL(dataArray) {
+    return dataArray.map(function (d) { return JSON.stringify(d); }).join("\n") + "\n";
+  },
 
-    /**
-     * Convert JSONL array to different formats.
-     */
-    toJSONL(dataArray) {
-      return dataArray.map((d) => JSON.stringify(d)).join("\n") + "\n";
-    },
+  toCSV(dataArray) {
+    if (dataArray.length === 0) return "";
+    var keys = Object.keys(dataArray[0]);
+    var header = keys.join(",");
+    var rows = dataArray.map(function (d) {
+      return keys.map(function (k) {
+        var val = typeof d[k] === "object" ? JSON.stringify(d[k]) : String(d[k] || "");
+        return '"' + val.replace(/"/g, '""') + '"';
+      }).join(",");
+    });
+    return header + "\n" + rows.join("\n") + "\n";
+  },
 
-    toCSV(dataArray) {
-      if (dataArray.length === 0) return "";
-      const keys = Object.keys(dataArray[0]);
-      const header = keys.join(",");
-      const rows = dataArray.map((d) =>
-        keys.map((k) => {
-          const val = typeof d[k] === "object" ? JSON.stringify(d[k]) : String(d[k] || "");
-          return '"' + val.replace(/"/g, '""') + '"';
-        }).join(",")
-      );
-      return header + "\n" + rows.join("\n") + "\n";
-    }
-  };
+  /**
+   * Truncate text to maxLen with ellipsis.
+   */
+  truncate(text, maxLen) {
+    if (!text) return "";
+    if (text.length <= maxLen) return text;
+    return text.slice(0, maxLen - 3) + "...";
+  },
 
-  // Export globally for background and content scripts
-  if (typeof window !== "undefined") window.WSP_Utils = WSP_Utils;
-  if (typeof globalThis !== "undefined") globalThis.WSP_Utils = WSP_Utils;
-})();
+  /**
+   * Deep clone an object (JSON-safe only).
+   */
+  clone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+};

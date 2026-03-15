@@ -1,17 +1,17 @@
-/* ── Session Manager v0.6b ── */
+/* ── Session Manager v0.6.1b ── */
 /* Named session save/restore, batch URL queue, domain filtering */
-(function () {
-  "use strict";
+/* eslint-env browser, webextensions */
+/* Exported as: window.WSP_Session, window.WSP_DomainFilter, window.WSP_Queue */
 
-  const WSP_Session = {
+var WSP_Session = {
 
-    /**
-     * Save current session with a name.
-     */
-    async save(name) {
-      const data = await browser.storage.local.get(["scrapedRecords", "citations", "sessionStats", "lastUploadRecordCount"]);
-      const session = {
-        name,
+  /**
+   * Save current session with a name.
+   */
+  save(name) {
+    return browser.storage.local.get(["scrapedRecords", "citations", "sessionStats", "lastUploadRecordCount"]).then(function (data) {
+      var session = {
+        name: name,
         savedAt: new Date().toISOString(),
         records: data.scrapedRecords || [],
         citations: data.citations || [],
@@ -19,337 +19,356 @@
         lastUploadRecordCount: data.lastUploadRecordCount || 0,
       };
 
-      const sessions = await this.list();
-      const existingIdx = sessions.findIndex(s => s.name === name);
-      if (existingIdx >= 0) {
-        sessions[existingIdx] = session;
-      } else {
-        sessions.push(session);
-      }
+      return WSP_Session.list().then(function (sessions) {
+        var existingIdx = sessions.findIndex(function (s) { return s.name === name; });
+        if (existingIdx >= 0) {
+          sessions[existingIdx] = session;
+        } else {
+          sessions.push(session);
+        }
+        return browser.storage.local.set({ savedSessions: sessions }).then(function () {
+          return session;
+        });
+      });
+    });
+  },
 
-      await browser.storage.local.set({ savedSessions: sessions });
-      return session;
-    },
-
-    /**
-     * List all saved sessions (metadata only).
-     */
-    async list() {
-      const data = await browser.storage.local.get(["savedSessions"]);
+  /**
+   * List all saved sessions (metadata only).
+   */
+  list() {
+    return browser.storage.local.get(["savedSessions"]).then(function (data) {
       return data.savedSessions || [];
-    },
+    });
+  },
 
-    /**
-     * Restore a session by name.
-     */
-    async restore(name) {
-      const sessions = await this.list();
-      const session = sessions.find(s => s.name === name);
-      if (!session) throw new Error(`Session "${name}" not found`);
+  /**
+   * Restore a session by name.
+   */
+  restore(name) {
+    return this.list().then(function (sessions) {
+      var session = sessions.find(function (s) { return s.name === name; });
+      if (!session) throw new Error('Session "' + name + '" not found');
 
-      await browser.storage.local.set({
+      return browser.storage.local.set({
         scrapedRecords: session.records,
         citations: session.citations,
         sessionStats: session.stats,
         lastUploadRecordCount: session.lastUploadRecordCount,
+      }).then(function () {
+        return session;
       });
-      return session;
-    },
+    });
+  },
 
-    /**
-     * Delete a saved session.
-     */
-    async remove(name) {
-      const sessions = await this.list();
-      const filtered = sessions.filter(s => s.name !== name);
-      await browser.storage.local.set({ savedSessions: filtered });
-    },
+  /**
+   * Delete a saved session.
+   */
+  remove(name) {
+    return this.list().then(function (sessions) {
+      var filtered = sessions.filter(function (s) { return s.name !== name; });
+      return browser.storage.local.set({ savedSessions: filtered });
+    });
+  },
 
-    /**
-     * Merge a saved session into the current one.
-     */
-    async merge(name) {
-      const sessions = await this.list();
-      const session = sessions.find(s => s.name === name);
-      if (!session) throw new Error(`Session "${name}" not found`);
+  /**
+   * Merge a saved session into the current one.
+   */
+  merge(name) {
+    return this.list().then(function (sessions) {
+      var session = sessions.find(function (s) { return s.name === name; });
+      if (!session) throw new Error('Session "' + name + '" not found');
 
-      const current = await browser.storage.local.get(["scrapedRecords", "citations", "sessionStats"]);
-      const records = current.scrapedRecords || [];
-      const citations = current.citations || [];
-      const stats = current.sessionStats || { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
+      return browser.storage.local.get(["scrapedRecords", "citations", "sessionStats"]).then(function (current) {
+        var records = current.scrapedRecords || [];
+        var citations = current.citations || [];
+        var stats = current.sessionStats || { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
 
-      // Merge records (dedup by _fp)
-      const existingFps = new Set(records.map(r => r._fp).filter(Boolean));
-      for (const r of session.records) {
-        if (!r._fp || !existingFps.has(r._fp)) {
-          records.push(r);
-          if (r._fp) existingFps.add(r._fp);
+        // Merge records (dedup by _fp)
+        var existingFps = new Set(records.map(function (r) { return r._fp; }).filter(Boolean));
+        for (var i = 0; i < session.records.length; i++) {
+          var r = session.records[i];
+          if (!r._fp || !existingFps.has(r._fp)) {
+            records.push(r);
+            if (r._fp) existingFps.add(r._fp);
+          }
         }
-      }
 
-      // Merge citations (dedup by URL)
-      const existingUrls = new Set(citations.map(c => c.url));
-      for (const c of session.citations) {
-        if (!existingUrls.has(c.url)) {
-          citations.push(c);
-          existingUrls.add(c.url);
+        // Merge citations (dedup by URL)
+        var existingUrls = new Set(citations.map(function (c) { return c.url; }));
+        for (var j = 0; j < session.citations.length; j++) {
+          var c = session.citations[j];
+          if (!existingUrls.has(c.url)) {
+            citations.push(c);
+            existingUrls.add(c.url);
+          }
         }
-      }
 
-      // Merge stats
-      stats.words += session.stats.words || 0;
-      stats.pages += session.stats.pages || 0;
-      stats.images += session.stats.images || 0;
-      stats.links += session.stats.links || 0;
-      stats.audio += session.stats.audio || 0;
+        // Merge stats
+        stats.words += session.stats.words || 0;
+        stats.pages += session.stats.pages || 0;
+        stats.images += session.stats.images || 0;
+        stats.links += session.stats.links || 0;
+        stats.audio += session.stats.audio || 0;
 
-      await browser.storage.local.set({
-        scrapedRecords: records,
-        citations,
-        sessionStats: stats,
+        return browser.storage.local.set({
+          scrapedRecords: records,
+          citations: citations,
+          sessionStats: stats,
+        }).then(function () {
+          return { recordCount: records.length, citationCount: citations.length };
+        });
       });
-      return { recordCount: records.length, citationCount: citations.length };
-    }
-  };
+    });
+  }
+};
 
-  /* ── Domain Filter ── */
-  const WSP_DomainFilter = {
+/* ── Domain Filter ── */
+var WSP_DomainFilter = {
 
-    /**
-     * Check if a URL is allowed by domain filters.
-     */
-    async isAllowed(url) {
-      let domain;
-      try { domain = new URL(url).hostname; } catch { return true; }
+  /**
+   * Check if a URL is allowed by domain filters.
+   */
+  isAllowed(url) {
+    var domain;
+    try { domain = new URL(url).hostname; } catch (e) { return Promise.resolve(true); }
 
-      const cfg = await browser.storage.local.get(["domainAllowlist", "domainBlocklist"]);
-      const allowlist = cfg.domainAllowlist || [];
-      const blocklist = cfg.domainBlocklist || [];
+    return browser.storage.local.get(["domainAllowlist", "domainBlocklist"]).then(function (cfg) {
+      var allowlist = cfg.domainAllowlist || [];
+      var blocklist = cfg.domainBlocklist || [];
 
       // If allowlist is set, only allow those domains
       if (allowlist.length > 0) {
-        return allowlist.some(d => domain === d || domain.endsWith("." + d));
+        return allowlist.some(function (d) { return domain === d || domain.endsWith("." + d); });
       }
 
       // If blocklist is set, block those domains
       if (blocklist.length > 0) {
-        return !blocklist.some(d => domain === d || domain.endsWith("." + d));
+        return !blocklist.some(function (d) { return domain === d || domain.endsWith("." + d); });
       }
 
       return true;
-    },
+    });
+  },
 
-    /**
-     * Get current filter configuration.
-     */
-    async getConfig() {
-      const cfg = await browser.storage.local.get(["domainAllowlist", "domainBlocklist"]);
+  /**
+   * Get current filter configuration.
+   */
+  getConfig() {
+    return browser.storage.local.get(["domainAllowlist", "domainBlocklist"]).then(function (cfg) {
       return {
         allowlist: cfg.domainAllowlist || [],
         blocklist: cfg.domainBlocklist || [],
       };
-    },
+    });
+  },
 
-    /**
-     * Update filter configuration.
-     */
-    async setConfig(allowlist, blocklist) {
-      await browser.storage.local.set({
-        domainAllowlist: allowlist || [],
-        domainBlocklist: blocklist || [],
-      });
-    }
-  };
+  /**
+   * Update filter configuration.
+   */
+  setConfig(allowlist, blocklist) {
+    return browser.storage.local.set({
+      domainAllowlist: allowlist || [],
+      domainBlocklist: blocklist || [],
+    });
+  }
+};
 
-  /* ── Scrape Queue ── */
-  const WSP_Queue = {
-    _queue: [],
-    _processing: false,
-    _currentIndex: -1,
+/* ── Scrape Queue ── */
+var WSP_Queue = {
+  _queue: [],
+  _processing: false,
+  _currentIndex: -1,
 
-    /**
-     * Add URLs to the queue.
-     */
-    add(urls) {
-      for (const url of urls) {
-        const trimmed = url.trim();
-        if (trimmed && trimmed.startsWith("http")) {
-          this._queue.push({
-            url: trimmed,
-            status: "pending", // pending, scraping, done, failed, skipped
-            addedAt: Date.now(),
-          });
-        }
+  /**
+   * Add URLs to the queue.
+   */
+  add(urls) {
+    for (var i = 0; i < urls.length; i++) {
+      var trimmed = urls[i].trim();
+      if (trimmed && trimmed.startsWith("http")) {
+        this._queue.push({
+          url: trimmed,
+          status: "pending",
+          addedAt: Date.now(),
+        });
       }
-      this._persist();
-    },
+    }
+    this._persist();
+  },
 
-    /**
-     * Get current queue state.
-     */
-    getAll() {
-      return [...this._queue];
-    },
+  /**
+   * Get current queue state.
+   */
+  getAll() {
+    return this._queue.slice();
+  },
 
-    /**
-     * Clear the queue.
-     */
-    clear() {
-      this._queue = [];
-      this._processing = false;
-      this._currentIndex = -1;
-      this._persist();
-    },
+  /**
+   * Clear the queue.
+   */
+  clear() {
+    this._queue = [];
+    this._processing = false;
+    this._currentIndex = -1;
+    this._persist();
+  },
 
-    /**
-     * Remove a specific URL from the queue.
-     */
-    remove(index) {
-      this._queue.splice(index, 1);
-      this._persist();
-    },
+  /**
+   * Remove a specific URL from the queue.
+   */
+  remove(index) {
+    this._queue.splice(index, 1);
+    this._persist();
+  },
 
-    /**
-     * Start processing the queue.
-     */
-    async start() {
-      if (this._processing) return;
-      this._processing = true;
+  /**
+   * Start processing the queue.
+   */
+  start() {
+    if (this._processing) return;
+    this._processing = true;
+    var self = this;
 
-      for (let i = 0; i < this._queue.length; i++) {
-        if (!this._processing) break;
+    function processNext(i) {
+      if (!self._processing || i >= self._queue.length) {
+        self._processing = false;
+        self._currentIndex = -1;
+        self._persist();
+        return;
+      }
 
-        const item = this._queue[i];
-        if (item.status !== "pending") continue;
+      var item = self._queue[i];
+      if (item.status !== "pending") {
+        processNext(i + 1);
+        return;
+      }
 
-        this._currentIndex = i;
+      self._currentIndex = i;
 
-        // Check domain filter
-        const allowed = await WSP_DomainFilter.isAllowed(item.url);
+      // Check domain filter
+      WSP_DomainFilter.isAllowed(item.url).then(function (allowed) {
         if (!allowed) {
           item.status = "skipped";
           item.reason = "blocked by domain filter";
-          this._persist();
-          continue;
+          self._persist();
+          processNext(i + 1);
+          return;
         }
 
         // Check rate limit
-        if (typeof WSP_RateLimiter !== "undefined") {
-          await WSP_RateLimiter.acquire(item.url);
-        }
+        var rateLimitPromise = (typeof WSP_RateLimiter !== "undefined")
+          ? WSP_RateLimiter.acquire(item.url)
+          : Promise.resolve();
 
-        item.status = "scraping";
-        this._persist();
+        rateLimitPromise.then(function () {
+          item.status = "scraping";
+          self._persist();
 
-        // Navigate to the URL and scrape
-        try {
-          await this._scrapeUrl(item.url);
+          return self._scrapeUrl(item.url);
+        }).then(function () {
           item.status = "done";
           item.completedAt = Date.now();
-        } catch (err) {
+          self._persist();
+          processNext(i + 1);
+        }).catch(function (err) {
           item.status = "failed";
           item.error = err.message;
-        }
-
-        this._persist();
-      }
-
-      this._processing = false;
-      this._currentIndex = -1;
-      this._persist();
-    },
-
-    /**
-     * Stop processing.
-     */
-    stop() {
-      this._processing = false;
-    },
-
-    /**
-     * Navigate to URL and trigger scrape. Returns a promise.
-     */
-    _scrapeUrl(url) {
-      return new Promise((resolve, reject) => {
-        browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
-          if (!tabs[0]) return reject(new Error("No active tab"));
-
-          const tabId = tabs[0].id;
-          browser.tabs.update(tabId, { url }).then(() => {
-            // Wait for page to load
-            const listener = (tid, changeInfo) => {
-              if (tid === tabId && changeInfo.status === "complete") {
-                browser.webNavigation.onCompleted.removeListener(listener);
-                // Wait a bit for content scripts to initialize, then scrape
-                setTimeout(() => {
-                  browser.tabs.sendMessage(tabId, { action: "SCRAPE_WITH_SCROLL" })
-                    .then(() => setTimeout(resolve, 3000))
-                    .catch(reject);
-                }, 2000);
-              }
-            };
-            browser.webNavigation.onCompleted.addListener(listener);
-
-            // Timeout after 30 seconds
-            setTimeout(() => {
-              browser.webNavigation.onCompleted.removeListener(listener);
-              reject(new Error("Page load timeout"));
-            }, 30000);
-          });
+          self._persist();
+          processNext(i + 1);
         });
       });
-    },
-
-    /**
-     * Persist queue state.
-     */
-    _persist() {
-      browser.storage.local.set({
-        scrapeQueue: this._queue,
-        queueProcessing: this._processing,
-        queueCurrentIndex: this._currentIndex,
-      });
-      // Broadcast queue update
-      browser.runtime.sendMessage({
-        action: "QUEUE_UPDATE",
-        queue: this._queue,
-        processing: this._processing,
-        currentIndex: this._currentIndex,
-      }).catch(() => {});
-    },
-
-    /**
-     * Load queue from storage.
-     */
-    async load() {
-      const data = await browser.storage.local.get(["scrapeQueue"]);
-      if (data.scrapeQueue) this._queue = data.scrapeQueue;
-    },
-
-    /**
-     * Get queue stats.
-     */
-    stats() {
-      const total = this._queue.length;
-      const done = this._queue.filter(q => q.status === "done").length;
-      const failed = this._queue.filter(q => q.status === "failed").length;
-      const pending = this._queue.filter(q => q.status === "pending").length;
-      const skipped = this._queue.filter(q => q.status === "skipped").length;
-      return { total, done, failed, pending, skipped, processing: this._processing };
     }
-  };
 
-  // Load queue on init
-  WSP_Queue.load();
+    processNext(0);
+  },
 
-  if (typeof window !== "undefined") {
-    window.WSP_Session = WSP_Session;
-    window.WSP_DomainFilter = WSP_DomainFilter;
-    window.WSP_Queue = WSP_Queue;
+  /**
+   * Stop processing.
+   */
+  stop() {
+    this._processing = false;
+  },
+
+  /**
+   * Navigate to URL and trigger scrape. Returns a promise.
+   */
+  _scrapeUrl(url) {
+    return new Promise(function (resolve, reject) {
+      browser.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
+        if (!tabs[0]) return reject(new Error("No active tab"));
+
+        var tabId = tabs[0].id;
+        browser.tabs.update(tabId, { url: url }).then(function () {
+          // Wait for page to load
+          var listener = function (tid, changeInfo) {
+            if (tid === tabId && changeInfo.status === "complete") {
+              browser.webNavigation.onCompleted.removeListener(listener);
+              // Wait a bit for content scripts to initialize, then scrape
+              setTimeout(function () {
+                browser.tabs.sendMessage(tabId, { action: "SCRAPE_WITH_SCROLL" })
+                  .then(function () { setTimeout(resolve, 3000); })
+                  .catch(reject);
+              }, 2000);
+            }
+          };
+          browser.webNavigation.onCompleted.addListener(listener);
+
+          // Timeout after 30 seconds
+          setTimeout(function () {
+            browser.webNavigation.onCompleted.removeListener(listener);
+            reject(new Error("Page load timeout"));
+          }, 30000);
+        });
+      });
+    });
+  },
+
+  /**
+   * Persist queue state.
+   */
+  _persist() {
+    browser.storage.local.set({
+      scrapeQueue: this._queue,
+      queueProcessing: this._processing,
+      queueCurrentIndex: this._currentIndex,
+    });
+    // Broadcast queue update
+    browser.runtime.sendMessage({
+      action: "QUEUE_UPDATE",
+      queue: this._queue,
+      processing: this._processing,
+      currentIndex: this._currentIndex,
+    }).catch(function () {});
+  },
+
+  /**
+   * Load queue from storage.
+   */
+  load() {
+    try {
+      browser.storage.local.get(["scrapeQueue"]).then(function (data) {
+        if (data.scrapeQueue) WSP_Queue._queue = data.scrapeQueue;
+      }).catch(function (e) {
+        console.warn("[WSP] Queue load failed:", e);
+      });
+    } catch (e) {
+      console.warn("[WSP] Queue load error:", e);
+    }
+  },
+
+  /**
+   * Get queue stats.
+   */
+  stats() {
+    var total = this._queue.length;
+    var done = this._queue.filter(function (q) { return q.status === "done"; }).length;
+    var failed = this._queue.filter(function (q) { return q.status === "failed"; }).length;
+    var pending = this._queue.filter(function (q) { return q.status === "pending"; }).length;
+    var skipped = this._queue.filter(function (q) { return q.status === "skipped"; }).length;
+    return { total: total, done: done, failed: failed, pending: pending, skipped: skipped, processing: this._processing };
   }
-  if (typeof globalThis !== "undefined") {
-    globalThis.WSP_Session = WSP_Session;
-    globalThis.WSP_DomainFilter = WSP_DomainFilter;
-    globalThis.WSP_Queue = WSP_Queue;
-  }
-})();
+};
+
+// Load queue on init (safe — won't break script chain)
+WSP_Queue.load();
