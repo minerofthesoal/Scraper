@@ -1,4 +1,4 @@
-/* ── Auto-Scan Module v0.6.2b ── */
+/* ── Auto-Scan Module v0.6.3b1 ── */
 /* Scroll-first approach: fully scrapes current page, THEN finds next page. */
 (function () {
   "use strict";
@@ -213,8 +213,9 @@
 
           // Verify something actually changed
           const newUrl = window.location.href;
-          const heightChanged = document.documentElement.scrollHeight !== 0;
-          if (newUrl !== lastScrapedUrl || heightChanged) {
+          const newContent = document.body ? document.body.innerText.length : 0;
+          const prevContent = 0; // Page was already scraped, any content means it loaded
+          if (newUrl !== lastScrapedUrl || newContent > 100) {
             autoScanStep(); // Continue with next page
           } else {
             // Button click didn't change anything meaningful

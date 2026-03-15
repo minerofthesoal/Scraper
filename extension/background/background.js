@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.6.2b ── */
+/* ── WebScraper Pro Background Script v0.6.3b1 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -7,13 +7,18 @@ var scrapedRecords = [];
 var citations = [];
 var sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
 var lastUploadRecordCount = 0;
+var dedupSkipped = 0;
 
-// Load persisted data on startup
+// Load persisted data on startup (with validation)
 browser.storage.local.get(["scrapedRecords", "citations", "sessionStats", "lastUploadRecordCount"]).then(function (data) {
-  if (data.scrapedRecords) scrapedRecords = data.scrapedRecords;
-  if (data.citations) citations = data.citations;
-  if (data.sessionStats) sessionStats = data.sessionStats;
-  if (data.lastUploadRecordCount) lastUploadRecordCount = data.lastUploadRecordCount;
+  if (Array.isArray(data.scrapedRecords)) scrapedRecords = data.scrapedRecords;
+  if (Array.isArray(data.citations)) citations = data.citations;
+  if (data.sessionStats && typeof data.sessionStats === "object") {
+    sessionStats = Object.assign({ words: 0, pages: 0, images: 0, links: 0, audio: 0 }, data.sessionStats);
+  }
+  if (typeof data.lastUploadRecordCount === "number") lastUploadRecordCount = data.lastUploadRecordCount;
+}).catch(function (err) {
+  console.error("[WSP] Failed to load persisted data:", err);
 });
 
 /* ── Save state ── */
@@ -27,6 +32,8 @@ function broadcastStats() {
     action: "STATS_UPDATE",
     stats: sessionStats,
     recordCount: scrapedRecords.length,
+    dedupSkipped: dedupSkipped,
+    domains: _getDomainCounts(),
   }).catch(function () {});
 }
 
@@ -67,7 +74,7 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
       break;
 
     case "GET_STATS":
-      return Promise.resolve({ stats: sessionStats, recordCount: scrapedRecords.length });
+      return Promise.resolve({ stats: sessionStats, recordCount: scrapedRecords.length, dedupSkipped: dedupSkipped, domains: _getDomainCounts() });
 
     case "GET_ALL_DATA":
       return Promise.resolve({ records: scrapedRecords, citations: citations, stats: sessionStats });
@@ -170,7 +177,11 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
 
 /* ── Handle scraped data ── */
 function handleScrapedData(data) {
+  if (!data) return;
   var meta = data.meta || {};
+
+  // Mark as actively scraping
+  browser.storage.local.set({ scrapeActive: true });
 
   // Generate citation (MLA + APA) — guard against WSP_Citation not loaded
   if (typeof WSP_Citation === "undefined") {
@@ -191,6 +202,7 @@ function handleScrapedData(data) {
 
   // Content fingerprinting for cross-session dedup
   var seenFingerprints = new Set(scrapedRecords.map(function (r) { return r._fp; }).filter(Boolean));
+  var preCount = scrapedRecords.length;
 
   // Helper: generate uid safely
   function uid() {
@@ -324,8 +336,31 @@ function handleScrapedData(data) {
   }
 
   sessionStats.pages += 1;
+  // Track how many duplicates were skipped this round
+  var expectedNew = (data.texts ? data.texts.length : 0) + (data.images ? data.images.length : 0) + (data.links ? data.links.length : 0) + (data.audio ? data.audio.length : 0);
+  var actualNew = scrapedRecords.length - preCount;
+  dedupSkipped += Math.max(0, expectedNew - actualNew);
+
   persistState();
   broadcastStats();
+}
+
+/* ── Get top domains from scraped records ── */
+function _getDomainCounts() {
+  var counts = {};
+  for (var i = 0; i < scrapedRecords.length; i++) {
+    var url = scrapedRecords[i].source_url;
+    if (!url) continue;
+    try {
+      var domain = new URL(url).hostname;
+      counts[domain] = (counts[domain] || 0) + 1;
+    } catch (e) { /* skip */ }
+  }
+  // Return top 5
+  return Object.entries(counts)
+    .sort(function (a, b) { return b[1] - a[1]; })
+    .slice(0, 5)
+    .map(function (e) { return { domain: e[0], count: e[1] }; });
 }
 
 /* ── Simple content fingerprint for dedup ── */
@@ -381,7 +416,7 @@ function exportData(format) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.2b</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.6.3b1</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';

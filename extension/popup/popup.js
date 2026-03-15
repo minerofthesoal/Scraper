@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.2b ── */
+/* ── Popup Controller v0.6.3b1 ── */
 (function () {
   "use strict";
 
@@ -13,7 +13,6 @@
       btn.classList.add("active");
       const tab = $("#tab-" + btn.dataset.tab);
       if (tab) tab.classList.add("active");
-      // Load data for the tab
       if (btn.dataset.tab === "data") loadDataPreview();
       if (btn.dataset.tab === "sessions") loadSessions();
       if (btn.dataset.tab === "queue") loadQueue();
@@ -25,21 +24,23 @@
   browser.storage.local.get(["theme"]).then(cfg => {
     if (cfg.theme === "light") {
       document.body.setAttribute("data-theme", "light");
-      btnTheme.textContent = "\u2600"; // sun
+      if (btnTheme) btnTheme.textContent = "\u2600";
     }
   });
-  btnTheme.addEventListener("click", () => {
-    const isLight = document.body.getAttribute("data-theme") === "light";
-    if (isLight) {
-      document.body.removeAttribute("data-theme");
-      btnTheme.textContent = "\u263E"; // moon
-      browser.storage.local.set({ theme: "dark" });
-    } else {
-      document.body.setAttribute("data-theme", "light");
-      btnTheme.textContent = "\u2600"; // sun
-      browser.storage.local.set({ theme: "light" });
-    }
-  });
+  if (btnTheme) {
+    btnTheme.addEventListener("click", () => {
+      const isLight = document.body.getAttribute("data-theme") === "light";
+      if (isLight) {
+        document.body.removeAttribute("data-theme");
+        btnTheme.textContent = "\u263E";
+        browser.storage.local.set({ theme: "dark" });
+      } else {
+        document.body.setAttribute("data-theme", "light");
+        btnTheme.textContent = "\u2600";
+        browser.storage.local.set({ theme: "light" });
+      }
+    });
+  }
 
   /* ── Elements ── */
   const statusBadge = $("#status-badge");
@@ -63,12 +64,14 @@
     const el = $("#session-timer");
     if (!el || !sessionStartTime) return;
     const elapsed = Date.now() - sessionStartTime;
-    const mins = Math.floor(elapsed / 60000);
+    const hrs = Math.floor(elapsed / 3600000);
+    const mins = Math.floor((elapsed % 3600000) / 60000);
     const secs = Math.floor((elapsed % 60000) / 1000);
-    el.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+    el.textContent = hrs > 0
+      ? `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+      : `${mins}:${secs.toString().padStart(2, "0")}`;
   }
 
-  // Resume timer from storage
   browser.storage.local.get(["sessionStartTime"]).then(cfg => {
     if (cfg.sessionStartTime) {
       sessionStartTime = cfg.sessionStartTime;
@@ -81,48 +84,49 @@
   browser.storage.local.get([
     "autoScroll", "autoNext", "dataFormat", "sessionStats", "scrapeActive"
   ]).then((cfg) => {
-    chkAutoScroll.checked = cfg.autoScroll !== false;
-    chkAutoNext.checked = cfg.autoNext !== false;
-    selFormat.value = cfg.dataFormat || "jsonl";
+    if (chkAutoScroll) chkAutoScroll.checked = cfg.autoScroll !== false;
+    if (chkAutoNext) chkAutoNext.checked = cfg.autoNext !== false;
+    if (selFormat) selFormat.value = cfg.dataFormat || "jsonl";
     updateStats(cfg.sessionStats || {});
     updateStatus(cfg.scrapeActive ? "scraping" : "idle");
-    btnStop.classList.toggle("hidden", !cfg.scrapeActive);
+    if (btnStop) btnStop.classList.toggle("hidden", !cfg.scrapeActive);
   });
 
   /* ── Persist quick settings ── */
   function saveQuickSettings() {
     browser.storage.local.set({
-      autoScroll: chkAutoScroll.checked,
-      autoNext: chkAutoNext.checked,
-      dataFormat: selFormat.value,
+      autoScroll: chkAutoScroll ? chkAutoScroll.checked : true,
+      autoNext: chkAutoNext ? chkAutoNext.checked : true,
+      dataFormat: selFormat ? selFormat.value : "jsonl",
     });
   }
-  [chkAutoScroll, chkAutoNext, selFormat].forEach(el => el.addEventListener("change", saveQuickSettings));
+  [chkAutoScroll, chkAutoNext, selFormat].forEach(el => {
+    if (el) el.addEventListener("change", saveQuickSettings);
+  });
 
   /* ── Helpers ── */
   function updateStatus(state) {
+    if (!statusBadge) return;
     statusBadge.textContent = state.charAt(0).toUpperCase() + state.slice(1);
     statusBadge.className = "badge badge-" + state;
     if (state === "scraping") startSessionTimer();
   }
 
   function updateStats(s) {
-    $("#stat-words").textContent = formatNum(s.words || 0);
-    $("#stat-pages").textContent = formatNum(s.pages || 0);
-    $("#stat-images").textContent = formatNum(s.images || 0);
-    $("#stat-links").textContent = formatNum(s.links || 0);
-    $("#stat-audio").textContent = formatNum(s.audio || 0);
+    if (!s) return;
+    const set = (id, val) => { const el = $(id); if (el) el.textContent = formatNum(val); };
+    set("#stat-words", s.words || 0);
+    set("#stat-pages", s.pages || 0);
+    set("#stat-images", s.images || 0);
+    set("#stat-links", s.links || 0);
+    set("#stat-audio", s.audio || 0);
   }
 
   function updateRecordMeta(count, stats) {
     const el = $("#stat-records");
     if (el) el.textContent = formatNum(count) + " records";
     const sizeEl = $("#stat-size");
-    if (sizeEl) {
-      // Rough estimate: ~200 bytes per record average
-      const bytes = count * 200;
-      sizeEl.textContent = "~" + formatBytes(bytes);
-    }
+    if (sizeEl) sizeEl.textContent = "~" + formatBytes(count * 200);
   }
 
   function formatNum(n) {
@@ -132,21 +136,110 @@
   }
 
   function formatBytes(bytes) {
-    if (bytes === 0) return "0 B";
+    if (bytes <= 0) return "0 B";
     const k = 1024;
     const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   }
 
   function sendToTab(action, extra) {
     browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
-      if (tabs[0]) browser.tabs.sendMessage(tabs[0].id, { action, ...extra });
+      if (tabs[0]) {
+        browser.tabs.sendMessage(tabs[0].id, Object.assign({ action: action }, extra || {}))
+          .catch(function (err) { console.warn("[WSP] sendToTab failed:", err.message); });
+      }
     });
   }
 
   function sendToBackground(action, extra) {
-    browser.runtime.sendMessage({ action, ...extra });
+    browser.runtime.sendMessage(Object.assign({ action: action }, extra || {}))
+      .catch(function (err) { console.warn("[WSP] sendToBackground failed:", err.message); });
+  }
+
+  function escapeHtml(str) {
+    if (!str) return "";
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function safeDomain(url) {
+    if (!url) return "";
+    try { return new URL(url).hostname; } catch (e) { return ""; }
+  }
+
+  /* ── Helpers: bindClick ── */
+  const bindClick = (sel, fn) => { const el = $(sel); if (el) el.addEventListener("click", fn); };
+
+  /* ── Record Detail Modal ── */
+  const modal = $("#record-modal");
+  const modalBackdrop = modal ? modal.querySelector(".modal-backdrop") : null;
+  let modalRecord = null; // currently displayed record
+
+  function openModal(record) {
+    if (!modal) return;
+    modalRecord = record;
+    const typeEl = $("#modal-type");
+    const sourceEl = $("#modal-source");
+    const bodyEl = $("#modal-body");
+    if (typeEl) { typeEl.textContent = record.type || "unknown"; typeEl.className = "dr-type dr-type-" + (record.type || "text"); }
+    if (sourceEl) sourceEl.textContent = safeDomain(record.source_url);
+
+    if (bodyEl) {
+      const clean = Object.assign({}, record);
+      delete clean._fp;
+      const entries = Object.entries(clean);
+      bodyEl.innerHTML = entries.map(([k, v]) => {
+        let val = v;
+        if (typeof v === "object" && v !== null) val = JSON.stringify(v, null, 2);
+        if (typeof val === "string" && val.length > 500) val = val.slice(0, 500) + "…";
+        return '<div class="modal-field"><strong>' + escapeHtml(k) + ':</strong> <span>' + escapeHtml(String(val)) + '</span></div>';
+      }).join("");
+    }
+    modal.classList.remove("hidden");
+  }
+
+  function closeModal() {
+    if (modal) modal.classList.add("hidden");
+    modalRecord = null;
+  }
+
+  bindClick("#modal-close", closeModal);
+  if (modalBackdrop) modalBackdrop.addEventListener("click", closeModal);
+
+  bindClick("#modal-copy", () => {
+    if (!modalRecord) return;
+    const clean = Object.assign({}, modalRecord);
+    delete clean._fp;
+    navigator.clipboard.writeText(JSON.stringify(clean, null, 2)).then(() => {
+      const btn = $("#modal-copy");
+      if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy JSON"; }, 1200); }
+    }).catch(() => {});
+  });
+
+  bindClick("#modal-copy-text", () => {
+    if (!modalRecord) return;
+    const text = modalRecord.text || modalRecord.src || modalRecord.href || modalRecord.content || "";
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = $("#modal-copy-text");
+      if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy Text"; }, 1200); }
+    }).catch(() => {});
+  });
+
+  /* ── Domain Stats & Dedup Display ── */
+  function renderDomainStats(domains) {
+    const el = $("#domain-stats");
+    if (!el || !domains || domains.length === 0) { if (el) el.innerHTML = ""; return; }
+    el.innerHTML = domains.map(d =>
+      '<span class="domain-pill">' + escapeHtml(d.domain) + ' <b>' + d.count + '</b></span>'
+    ).join("");
+  }
+
+  function renderDedupStat(count) {
+    const el = $("#stat-dedup");
+    if (!el) return;
+    el.textContent = count > 0 ? count + " dupes skipped" : "";
   }
 
   /* ── Get full stats ── */
@@ -154,64 +247,65 @@
     if (resp) {
       updateStats(resp.stats || {});
       updateRecordMeta(resp.recordCount || 0, resp.stats);
+      renderDomainStats(resp.domains || []);
+      renderDedupStat(resp.dedupSkipped || 0);
     }
   }).catch(() => {});
 
   /* ── Scrape Tab Buttons ── */
-  $("#btn-select-area").addEventListener("click", () => {
+  bindClick("#btn-select-area", () => {
     sendToTab("START_SELECTION");
     updateStatus("active");
+    browser.storage.local.set({ scrapeActive: true });
     window.close();
   });
 
-  $("#btn-scrape-page").addEventListener("click", () => {
+  bindClick("#btn-scrape-page", () => {
     sendToTab("SCRAPE_FULL_PAGE");
     updateStatus("scraping");
-    btnStop.classList.remove("hidden");
+    browser.storage.local.set({ scrapeActive: true });
+    if (btnStop) btnStop.classList.remove("hidden");
   });
 
-  $("#btn-scroll-scrape").addEventListener("click", () => {
+  bindClick("#btn-scroll-scrape", () => {
     sendToTab("SCRAPE_WITH_SCROLL");
     updateStatus("scraping");
-    btnStop.classList.remove("hidden");
+    browser.storage.local.set({ scrapeActive: true });
+    if (btnStop) btnStop.classList.remove("hidden");
     window.close();
   });
 
-  $("#btn-start-auto").addEventListener("click", () => {
+  bindClick("#btn-start-auto", () => {
     sendToTab("START_AUTO_SCAN");
     updateStatus("scraping");
-    btnStop.classList.remove("hidden");
+    browser.storage.local.set({ scrapeActive: true });
+    if (btnStop) btnStop.classList.remove("hidden");
     window.close();
   });
 
-  $("#btn-smart-extract").addEventListener("click", () => {
+  bindClick("#btn-smart-extract", () => {
     sendToTab("SMART_EXTRACT_ARTICLE");
     updateStatus("scraping");
   });
 
-  btnStop.addEventListener("click", () => {
-    sendToTab("STOP_SCRAPE");
-    sendToBackground("STOP_ALL");
-    updateStatus("idle");
-    btnStop.classList.add("hidden");
+  if (btnStop) {
+    btnStop.addEventListener("click", () => {
+      sendToTab("STOP_SCRAPE");
+      sendToBackground("STOP_ALL");
+      updateStatus("idle");
+      btnStop.classList.add("hidden");
+    });
+  }
+
+  bindClick("#btn-export", () => {
+    sendToBackground("EXPORT_DATA", { format: selFormat ? selFormat.value : "jsonl" });
   });
 
-  $("#btn-export").addEventListener("click", () => {
-    sendToBackground("EXPORT_DATA", { format: selFormat.value });
-  });
+  bindClick("#btn-upload-hf", () => { sendToBackground("UPLOAD_HF"); });
 
-  $("#btn-upload-hf").addEventListener("click", () => {
-    sendToBackground("UPLOAD_HF");
-  });
+  bindClick("#btn-options", () => { browser.runtime.openOptionsPage(); });
 
-  $("#btn-options").addEventListener("click", () => {
-    browser.runtime.openOptionsPage();
-  });
-
-  $("#link-options").addEventListener("click", (e) => {
-    e.preventDefault();
-    browser.runtime.openOptionsPage();
-  });
+  bindClick("#link-options", (e) => { e.preventDefault(); browser.runtime.openOptionsPage(); });
 
   const linkShortcuts = $("#link-shortcuts");
   if (linkShortcuts) {
@@ -222,66 +316,61 @@
   }
 
   /* ── Image Export ── */
-  const btnExportImages = $("#btn-export-images");
-  if (btnExportImages) {
-    btnExportImages.addEventListener("click", () => {
-      const format = ($("#sel-img-format") || {}).value || "png";
-      const statusEl = $("#img-export-status");
-      if (statusEl) statusEl.textContent = "Exporting images...";
-      sendToBackground("EXPORT_IMAGES", { format });
-      setTimeout(() => {
-        if (statusEl) statusEl.textContent = "";
-      }, 5000);
-    });
-  }
+  bindClick("#btn-export-images", () => {
+    const format = ($("#sel-img-format") || {}).value || "png";
+    const statusEl = $("#img-export-status");
+    if (statusEl) statusEl.textContent = "Exporting images...";
+    sendToBackground("EXPORT_IMAGES", { format });
+    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 8000);
+  });
 
   /* ── AI Extract ── */
   const aiDot = $("#ai-status-dot");
-  const btnAIExtract = $("#btn-ai-extract");
 
-  // Check AI server status on load
   browser.runtime.sendMessage({ action: "AI_STATUS" }).then(resp => {
     if (resp && resp.status === "ready") {
-      if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI server ready"; }
+      if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI server ready (" + (resp.device || "?") + ")"; }
     }
   }).catch(() => {});
 
-  if (btnAIExtract) {
-    btnAIExtract.addEventListener("click", () => {
-      const template = ($("#sel-ai-template") || {}).value || "article";
-      const statusEl = $("#ai-extract-status");
-      if (statusEl) statusEl.textContent = "Running AI extraction...";
-      sendToTab("AI_EXTRACT_PAGE", { template });
-      setTimeout(() => {
-        if (statusEl) statusEl.textContent = "";
-      }, 10000);
-    });
-  }
+  bindClick("#btn-ai-extract", () => {
+    const template = ($("#sel-ai-template") || {}).value || "article";
+    const statusEl = $("#ai-extract-status");
+    if (statusEl) statusEl.textContent = "Running AI extraction...";
+    sendToTab("AI_EXTRACT_PAGE", { template });
+    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 15000);
+  });
 
   /* ── Queue Tab ── */
-  $("#btn-queue-add").addEventListener("click", () => {
+  bindClick("#btn-queue-add", () => {
     const textarea = $("#queue-urls");
-    const urls = textarea.value.split("\n").map(u => u.trim()).filter(u => u);
+    if (!textarea) return;
+    const urls = textarea.value.split("\n").map(u => u.trim()).filter(u => u && u.startsWith("http"));
     if (urls.length === 0) return;
     sendToBackground("QUEUE_ADD", { urls });
     textarea.value = "";
     setTimeout(loadQueue, 300);
   });
 
-  $("#btn-queue-start").addEventListener("click", () => {
+  bindClick("#btn-queue-start", () => {
     sendToBackground("QUEUE_START");
-    $("#btn-queue-stop").classList.remove("hidden");
+    const stopBtn = $("#btn-queue-stop");
+    if (stopBtn) stopBtn.classList.remove("hidden");
     updateStatus("scraping");
+    browser.storage.local.set({ scrapeActive: true });
   });
 
-  $("#btn-queue-stop").addEventListener("click", () => {
+  bindClick("#btn-queue-stop", () => {
     sendToBackground("QUEUE_STOP");
-    $("#btn-queue-stop").classList.add("hidden");
+    const stopBtn = $("#btn-queue-stop");
+    if (stopBtn) stopBtn.classList.add("hidden");
   });
 
-  $("#btn-queue-clear").addEventListener("click", () => {
-    sendToBackground("QUEUE_CLEAR");
-    setTimeout(loadQueue, 200);
+  bindClick("#btn-queue-clear", () => {
+    if (confirm("Clear all queue items?")) {
+      sendToBackground("QUEUE_CLEAR");
+      setTimeout(loadQueue, 200);
+    }
   });
 
   function loadQueue() {
@@ -290,31 +379,36 @@
       const queue = resp.queue || [];
       const stats = resp.stats || {};
       const list = $("#queue-list");
+      if (!list) return;
 
       if (queue.length === 0) {
         list.innerHTML = '<div class="data-empty">No items in queue</div>';
-        $("#queue-status-text").textContent = "No items in queue";
+        const statusText = $("#queue-status-text");
+        if (statusText) statusText.textContent = "No items in queue";
         return;
       }
 
-      list.innerHTML = queue.map((item, i) => `
-        <div class="queue-item">
-          <span class="qi-status qi-${item.status}"></span>
-          <span class="qi-url" title="${item.url}">${item.url}</span>
-        </div>
-      `).join("");
+      list.innerHTML = queue.map((item) => {
+        const domain = safeDomain(item.url);
+        return '<div class="queue-item">'
+          + '<span class="qi-status qi-' + item.status + '"></span>'
+          + '<span class="qi-url" title="' + escapeHtml(item.url) + '">' + escapeHtml(domain || item.url) + '</span>'
+          + '</div>';
+      }).join("");
 
-      // Update progress
       const total = stats.total || 1;
       const done = stats.done || 0;
       const pct = Math.round((done / total) * 100);
-      $(".progress-fill").style.width = pct + "%";
-      $("#queue-status-text").textContent = `${done}/${total} done, ${stats.failed || 0} failed, ${stats.pending || 0} pending`;
+      const fill = $(".progress-fill");
+      if (fill) fill.style.width = pct + "%";
+      const statusText = $("#queue-status-text");
+      if (statusText) statusText.textContent = done + "/" + total + " done, " + (stats.failed || 0) + " failed, " + (stats.pending || 0) + " pending";
 
       if (stats.processing) {
-        $("#btn-queue-stop").classList.remove("hidden");
+        const stopBtn = $("#btn-queue-stop");
+        if (stopBtn) stopBtn.classList.remove("hidden");
       }
-    }).catch(() => {});
+    }).catch(err => console.warn("[WSP] loadQueue failed:", err));
   }
 
   /* ── Data Preview Tab ── */
@@ -325,8 +419,9 @@
     browser.runtime.sendMessage({ action: "GET_ALL_DATA" }).then(resp => {
       if (!resp) return;
       const records = resp.records || [];
-      const search = ($("#data-search").value || "").toLowerCase();
-      const filter = $("#data-filter").value;
+      const search = ($("#data-search") ? $("#data-search").value : "").toLowerCase();
+      const filterEl = $("#data-filter");
+      const filter = filterEl ? filterEl.value : "all";
 
       let filtered = records;
       if (filter !== "all") {
@@ -334,9 +429,10 @@
       }
       if (search) {
         filtered = filtered.filter(r => {
-          const text = (r.text || r.src || r.href || "").toLowerCase();
-          const source = (r.source_url || "").toLowerCase();
-          return text.includes(search) || source.includes(search);
+          var text = (r.text || r.src || r.href || "").toLowerCase();
+          var source = (r.source_url || "").toLowerCase();
+          var title = (r.source_title || "").toLowerCase();
+          return text.includes(search) || source.includes(search) || title.includes(search);
         });
       }
 
@@ -349,74 +445,87 @@
       const pageRecords = filtered.slice(start, start + PAGE_SIZE);
 
       const preview = $("#data-preview");
+      if (!preview) return;
+
       if (pageRecords.length === 0) {
         preview.innerHTML = '<div class="data-empty">No matching records</div>';
       } else {
-        preview.innerHTML = pageRecords.map(r => {
-          const typeClass = "dr-type-" + r.type;
-          const content = r.text || r.src || r.href || "";
-          const source = r.source_url ? new URL(r.source_url).hostname : "";
-          return `
-            <div class="data-record">
-              <span class="dr-type ${typeClass}">${r.type}</span>
-              <span class="dr-source">${source}</span>
-              <div class="dr-content">${escapeHtml(content.slice(0, 120))}</div>
-            </div>`;
+        preview.innerHTML = pageRecords.map((r, idx) => {
+          const typeClass = "dr-type-" + (r.type || "text");
+          const content = r.text || r.src || r.href || r.template || "";
+          const source = safeDomain(r.source_url);
+          return '<div class="data-record" data-idx="' + (start + idx) + '" title="Click to copy">'
+            + '<span class="dr-type ' + typeClass + '">' + (r.type || "?") + '</span>'
+            + '<span class="dr-source">' + escapeHtml(source) + '</span>'
+            + '<div class="dr-content">' + escapeHtml(content.slice(0, 150)) + '</div>'
+            + '</div>';
         }).join("");
+
+        // Click to open record detail modal
+        for (const rec of preview.querySelectorAll(".data-record")) {
+          rec.addEventListener("click", () => {
+            const idx = parseInt(rec.dataset.idx);
+            if (records[idx]) openModal(records[idx]);
+          });
+        }
       }
 
       // Pagination
       const pagEl = $("#data-pagination");
-      if (totalPages > 1) {
-        let btns = "";
-        const maxBtns = Math.min(totalPages, 5);
-        let startPage = Math.max(0, dataPage - 2);
-        for (let i = startPage; i < startPage + maxBtns && i < totalPages; i++) {
-          btns += `<button data-page="${i}" class="${i === dataPage ? 'active' : ''}">${i + 1}</button>`;
+      if (pagEl) {
+        if (totalPages > 1) {
+          let btns = "";
+          const maxBtns = Math.min(totalPages, 7);
+          let startPage = Math.max(0, Math.min(dataPage - 3, totalPages - maxBtns));
+          for (let i = startPage; i < startPage + maxBtns && i < totalPages; i++) {
+            btns += '<button data-page="' + i + '" class="' + (i === dataPage ? 'active' : '') + '">' + (i + 1) + '</button>';
+          }
+          pagEl.innerHTML = btns;
+          for (const btn of pagEl.querySelectorAll("button")) {
+            btn.addEventListener("click", () => {
+              dataPage = parseInt(btn.dataset.page);
+              loadDataPreview();
+            });
+          }
+        } else {
+          pagEl.innerHTML = "";
         }
-        pagEl.innerHTML = btns;
-        for (const btn of pagEl.querySelectorAll("button")) {
-          btn.addEventListener("click", () => {
-            dataPage = parseInt(btn.dataset.page);
-            loadDataPreview();
-          });
-        }
-      } else {
-        pagEl.innerHTML = "";
       }
 
-      // Type counts
+      // Type counts (always count from all records, not filtered)
       const typeCounts = $("#data-type-counts");
       if (typeCounts) {
-        const types = { text: 0, image: 0, link: 0, audio: 0 };
+        const types = { text: 0, image: 0, link: 0, audio: 0, ai_extract: 0 };
         records.forEach(r => { if (types[r.type] !== undefined) types[r.type]++; });
         typeCounts.innerHTML = Object.entries(types)
           .filter(([, v]) => v > 0)
-          .map(([k, v]) => `<span class="dtc-pill dtc-${k}">${k}: ${formatNum(v)}</span>`)
+          .map(([k, v]) => '<span class="dtc-pill dtc-' + k + '">' + k + ': ' + formatNum(v) + '</span>')
           .join("");
       }
 
-      // Storage usage estimate
+      // Storage usage
       const storageEl = $("#data-storage-usage");
       if (storageEl) {
-        const jsonSize = JSON.stringify(records).length;
+        var jsonSize = JSON.stringify(records).length;
         storageEl.textContent = "Storage: ~" + formatBytes(jsonSize);
       }
 
       updateRecordMeta(records.length, resp.stats);
-    }).catch(() => {});
+    }).catch(err => console.warn("[WSP] loadDataPreview failed:", err));
   }
 
   // Clear data button
-  const btnDataClear = $("#btn-data-clear");
-  if (btnDataClear) {
-    btnDataClear.addEventListener("click", () => {
-      if (confirm("Clear all scraped data? This cannot be undone.")) {
-        sendToBackground("CLEAR_DATA");
-        setTimeout(loadDataPreview, 300);
-      }
-    });
-  }
+  bindClick("#btn-data-clear", () => {
+    if (confirm("Clear all scraped data? This cannot be undone.")) {
+      sendToBackground("CLEAR_DATA");
+      sessionStartTime = null;
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      browser.storage.local.remove(["sessionStartTime"]);
+      updateStats({});
+      updateRecordMeta(0, {});
+      setTimeout(loadDataPreview, 300);
+    }
+  });
 
   // Search/filter listeners
   let searchTimer;
@@ -432,19 +541,15 @@
     dataFilter.addEventListener("change", () => { dataPage = 0; loadDataPreview(); });
   }
 
-  function escapeHtml(str) {
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
   /* ── Sessions Tab ── */
-  $("#btn-session-save").addEventListener("click", () => {
-    const name = $("#session-name").value.trim();
+  bindClick("#btn-session-save", () => {
+    const nameEl = $("#session-name");
+    if (!nameEl) return;
+    const name = nameEl.value.trim();
     if (!name) return;
     sendToBackground("SESSION_SAVE", { name });
-    $("#session-name").value = "";
-    setTimeout(loadSessions, 300);
+    nameEl.value = "";
+    setTimeout(loadSessions, 500);
   });
 
   function loadSessions() {
@@ -452,45 +557,54 @@
       if (!resp) return;
       const sessions = resp.sessions || [];
       const list = $("#session-list");
+      if (!list) return;
 
       if (sessions.length === 0) {
         list.innerHTML = '<div class="data-empty">No saved sessions</div>';
         return;
       }
 
-      list.innerHTML = sessions.map((s, i) => {
+      list.innerHTML = sessions.map((s) => {
         const date = new Date(s.savedAt).toLocaleString();
         const count = (s.records || []).length;
-        return `
-          <div class="session-item">
-            <div class="si-info">
-              <div class="si-name">${escapeHtml(s.name)}</div>
-              <div class="si-meta">${count} records - ${date}</div>
-            </div>
-            <div class="si-actions">
-              <button data-action="restore" data-name="${escapeHtml(s.name)}" title="Restore this session">Load</button>
-              <button data-action="merge" data-name="${escapeHtml(s.name)}" title="Merge into current">Merge</button>
-              <button class="si-delete" data-action="delete" data-name="${escapeHtml(s.name)}" title="Delete">Del</button>
-            </div>
-          </div>`;
+        const safeName = escapeHtml(s.name);
+        return '<div class="session-item">'
+          + '<div class="si-info">'
+          + '<div class="si-name">' + safeName + '</div>'
+          + '<div class="si-meta">' + count + ' records - ' + date + '</div>'
+          + '</div>'
+          + '<div class="si-actions">'
+          + '<button data-action="restore" data-name="' + safeName + '" title="Restore">Load</button>'
+          + '<button data-action="merge" data-name="' + safeName + '" title="Merge into current">Merge</button>'
+          + '<button class="si-delete" data-action="delete" data-name="' + safeName + '" title="Delete">Del</button>'
+          + '</div>'
+          + '</div>';
       }).join("");
 
-      // Attach handlers
       for (const btn of list.querySelectorAll("button")) {
         btn.addEventListener("click", () => {
           const action = btn.dataset.action;
           const name = btn.dataset.name;
           if (action === "restore") {
-            sendToBackground("SESSION_RESTORE", { name });
+            if (confirm('Restore session "' + name + '"? Current data will be replaced.')) {
+              sendToBackground("SESSION_RESTORE", { name });
+              setTimeout(() => {
+                browser.runtime.sendMessage({ action: "GET_STATS" }).then(resp => {
+                  if (resp) { updateStats(resp.stats || {}); updateRecordMeta(resp.recordCount || 0); }
+                }).catch(() => {});
+              }, 500);
+            }
           } else if (action === "merge") {
             sendToBackground("SESSION_MERGE", { name });
           } else if (action === "delete") {
-            sendToBackground("SESSION_DELETE", { name });
-            setTimeout(loadSessions, 200);
+            if (confirm('Delete session "' + name + '"?')) {
+              sendToBackground("SESSION_DELETE", { name });
+              setTimeout(loadSessions, 300);
+            }
           }
         });
       }
-    }).catch(() => {});
+    }).catch(err => console.warn("[WSP] loadSessions failed:", err));
   }
 
   /* ── Listen for stats updates from background ── */
@@ -498,13 +612,43 @@
     if (msg.action === "STATS_UPDATE") {
       updateStats(msg.stats);
       if (msg.recordCount !== undefined) updateRecordMeta(msg.recordCount);
+      if (msg.dedupSkipped !== undefined) renderDedupStat(msg.dedupSkipped);
+      if (msg.domains) renderDomainStats(msg.domains);
     }
     if (msg.action === "STATUS_CHANGE") {
       updateStatus(msg.status);
-      btnStop.classList.toggle("hidden", msg.status === "idle");
+      if (btnStop) btnStop.classList.toggle("hidden", msg.status === "idle");
     }
     if (msg.action === "QUEUE_UPDATE") {
       loadQueue();
+    }
+  });
+
+  /* ── Keyboard Navigation ── */
+  document.addEventListener("keydown", (e) => {
+    // Escape closes modal
+    if (e.key === "Escape") {
+      closeModal();
+      return;
+    }
+    // Arrow keys for data pagination (only when Data tab is active and not in an input)
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+    const dataTab = $("#tab-data");
+    if (!dataTab || !dataTab.classList.contains("active")) return;
+    const pagEl = $("#data-pagination");
+    if (!pagEl || pagEl.children.length === 0) return;
+
+    if (e.key === "ArrowLeft" && dataPage > 0) {
+      dataPage--;
+      loadDataPreview();
+    } else if (e.key === "ArrowRight") {
+      const totalBtns = pagEl.querySelectorAll("button").length;
+      const lastBtn = pagEl.querySelector("button:last-child");
+      const maxPage = lastBtn ? parseInt(lastBtn.dataset.page) : dataPage;
+      if (dataPage < maxPage) {
+        dataPage++;
+        loadDataPreview();
+      }
     }
   });
 })();

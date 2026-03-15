@@ -1,4 +1,4 @@
-/* ── Citation Generator (MLA 9th + APA 7th) v0.6.2b ── */
+/* ── Citation Generator (MLA 9th + APA 7th) v0.6.3b1 ── */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_Citation */
 var WSP_Citation = {

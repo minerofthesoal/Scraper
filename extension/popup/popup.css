@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Popup v0.6.2b ── */
+/* ── WebScraper Pro Popup v0.6.3b1 ── */
 /* Dark-first theme with light mode toggle */
 
 :root {
@@ -261,6 +261,8 @@ header h1 { font-size: 15px; color: var(--accent); }
 .dr-type-audio { background: #9b59b6; color: #fff; }
 .data-record .dr-content { color: var(--text-secondary); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .data-record .dr-source { color: var(--text-muted); font-size: 10px; margin-top: 2px; }
+.data-record { cursor: pointer; transition: outline 0.2s; }
+.data-record:hover { outline: 1px solid var(--accent); }
 .data-pagination { display: flex; justify-content: center; gap: 4px; margin-top: 4px; }
 .data-pagination button { background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-secondary); padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; }
 .data-pagination button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -340,6 +342,8 @@ header h1 { font-size: 15px; color: var(--accent); }
 .dtc-image { background: var(--orange); }
 .dtc-link { background: var(--green); }
 .dtc-audio { background: #9b59b6; }
+.dtc-ai_extract { background: #e91e63; }
+.dr-type-ai_extract { background: #e91e63; color: #fff; }
 
 /* ── Data Actions ── */
 .data-actions {
@@ -354,6 +358,77 @@ header h1 { font-size: 15px; color: var(--accent); }
   font-size: 10px;
   color: var(--text-muted);
 }
+
+/* ── Record Detail Modal ── */
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999; }
+.modal.hidden { display: none !important; }
+.modal-backdrop { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
+.modal-content {
+  position: relative;
+  margin: 20px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: calc(100% - 40px);
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header .btn-icon { margin-left: auto; font-size: 18px; }
+.modal-source { font-size: 11px; color: var(--text-muted); }
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+.modal-body .field-label { color: var(--accent); font-weight: 600; font-family: -apple-system, sans-serif; }
+.modal-body .field-value { color: var(--text-primary); margin-bottom: 6px; display: block; }
+.modal-footer {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.modal-field {
+  padding: 3px 0;
+  font-size: 11px;
+  word-break: break-word;
+  border-bottom: 1px solid var(--border);
+}
+.modal-field:last-child { border-bottom: none; }
+.modal-field strong {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+/* ── Domain Stats ── */
+.domain-stats { margin-top: 4px; }
+.domain-pill {
+  display: inline-block;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  margin: 1px;
+}
+.dedup-stat { font-size: 10px; color: var(--text-muted); margin-top: 2px; display: block; }
 
 /* ── Footer ── */
 footer { text-align: center; color: var(--text-muted); padding-top: 4px; border-top: 1px solid var(--border); }

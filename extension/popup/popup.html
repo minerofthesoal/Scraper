@@ -9,7 +9,7 @@
     <header>
       <div class="header-left">
         <h1>WebScraper Pro</h1>
-        <span id="version-tag" class="version">v0.6.2b</span>
+        <span id="version-tag" class="version">v0.6.3b1</span>
       </div>
       <div class="header-right">
         <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
@@ -84,8 +84,10 @@
         </div>
         <div class="stat-meta">
           <span id="stat-records">0 records</span>
+          <span id="stat-dedup" class="dedup-stat"></span>
           <span id="stat-size">~0 B</span>
         </div>
+        <div id="domain-stats" class="domain-stats"></div>
       </section>
 
       <section class="actions">
@@ -154,6 +156,7 @@
           <option value="image">Images</option>
           <option value="link">Links</option>
           <option value="audio">Audio</option>
+          <option value="ai_extract">AI Extract</option>
         </select>
       </div>
       <div id="data-type-counts" class="data-type-counts"></div>
@@ -178,8 +181,25 @@
       </div>
     </div>
 
+    <!-- Record Detail Modal -->
+    <div id="record-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <span id="modal-type" class="dr-type"></span>
+          <span id="modal-source" class="modal-source"></span>
+          <button id="modal-close" class="btn-icon" title="Close">&times;</button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+        <div class="modal-footer">
+          <button id="modal-copy" class="btn btn-small">Copy JSON</button>
+          <button id="modal-copy-text" class="btn btn-small">Copy Text</button>
+        </div>
+      </div>
+    </div>
+
     <footer>
-      <small>v0.6.2b | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
+      <small>v0.6.3b1 | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
     </footer>
   </div>
   <script src="popup.js"></script>
