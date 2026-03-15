@@ -1,4 +1,4 @@
-/* ── Options Page Controller v0.6.3b4 ── */
+/* ── Options Page Controller v0.6.5 ── */
 (function () {
   "use strict";
 
@@ -6,24 +6,32 @@
 
   /* ── Theme ── */
   const btnTheme = $("#btn-theme");
-  browser.storage.local.get(["theme"]).then(cfg => {
-    if (cfg.theme === "light") {
-      document.body.setAttribute("data-theme", "light");
-      btnTheme.textContent = "\u2600";
-    }
-  });
-  btnTheme.addEventListener("click", () => {
-    const isLight = document.body.getAttribute("data-theme") === "light";
-    if (isLight) {
-      document.body.removeAttribute("data-theme");
-      btnTheme.textContent = "\u263E";
-      browser.storage.local.set({ theme: "dark" });
-    } else {
-      document.body.setAttribute("data-theme", "light");
-      btnTheme.textContent = "\u2600";
-      browser.storage.local.set({ theme: "light" });
-    }
-  });
+  if (btnTheme) {
+    browser.storage.local.get(["theme"]).then(cfg => {
+      if (cfg.theme === "light") {
+        document.body.setAttribute("data-theme", "light");
+        btnTheme.textContent = "\u2600";
+      }
+    });
+    btnTheme.addEventListener("click", () => {
+      const isLight = document.body.getAttribute("data-theme") === "light";
+      if (isLight) {
+        document.body.removeAttribute("data-theme");
+        btnTheme.textContent = "\u263E";
+        browser.storage.local.set({ theme: "dark" });
+      } else {
+        document.body.setAttribute("data-theme", "light");
+        btnTheme.textContent = "\u2600";
+        browser.storage.local.set({ theme: "light" });
+      }
+    });
+  }
+
+  /* ── Safe element helpers ── */
+  function getChecked(el) { return el ? el.checked : false; }
+  function getVal(el, fallback) { return el ? el.value : (fallback || ""); }
+  function setChecked(el, val) { if (el) el.checked = !!val; }
+  function setVal(el, val) { if (el) el.value = val; }
 
   /* ── Elements ── */
   const elements = {
@@ -54,20 +62,17 @@
     tokenStatus: $("#token-status"),
     saveStatus: $("#save-status"),
     dataStats: $("#data-stats"),
-    // New v0.6.3b1
     rateMax: $("#inp-rate-max"),
     rateWindow: $("#inp-rate-window"),
     rateEnabled: $("#chk-rate-enabled"),
     allowlist: $("#txt-allowlist"),
     blocklist: $("#txt-blocklist"),
     regexRules: $("#txt-regex-rules"),
-    // AI extraction
     aiEnabled: $("#chk-ai-enabled"),
     aiAutoDownload: $("#chk-ai-auto-download"),
     aiServer: $("#inp-ai-server"),
     btnAICheck: $("#btn-ai-check"),
     aiServerStatus: $("#ai-server-status"),
-    // v0.6.3b4
     prettyPrint: $("#chk-pretty-print"),
   };
 
@@ -82,44 +87,39 @@
     "rateEnabled",
     "aiEnabled", "aiServerUrl", "aiAutoDownload", "prettyPrint",
   ]).then((cfg) => {
-    elements.autoStart.checked = !!cfg.autoStart;
-    elements.autoScroll.checked = cfg.autoScroll !== false;
-    elements.autoNext.checked = cfg.autoNext !== false;
-    elements.delay.value = cfg.scrapeDelay || 1500;
-    elements.maxPages.value = cfg.maxPages || 200;
-    elements.format.value = cfg.dataFormat || "jsonl";
-    elements.savePath.value = cfg.savePath || "webscraper-pro/";
-    elements.saveLocal.checked = cfg.saveLocal !== false;
-    elements.downloadImages.checked = !!cfg.downloadImages;
-    elements.convertAudio.checked = !!cfg.convertAudio;
-    elements.hfToken.value = cfg.hfToken || "";
-    elements.hfToken.dataset.hadToken = cfg.hfToken ? "true" : "false";
-    elements.hfRepo.value = cfg.hfRepoId || "";
-    elements.hfCreate.checked = cfg.hfCreateRepo !== false;
-    elements.hfPrivate.checked = !!cfg.hfPrivate;
-    elements.hfAutoUpload.checked = !!cfg.hfAutoUpload;
-    elements.hfOwnerRepo.value = cfg.hfOwnerRepo || "";
-    elements.autoCite.checked = cfg.autoCite !== false;
-    elements.citeReadme.checked = cfg.citeReadme !== false;
-    elements.citeLinks.checked = cfg.citeLinks !== false;
+    setChecked(elements.autoStart, cfg.autoStart);
+    setChecked(elements.autoScroll, cfg.autoScroll !== false);
+    setChecked(elements.autoNext, cfg.autoNext !== false);
+    setVal(elements.delay, cfg.scrapeDelay || 1500);
+    setVal(elements.maxPages, cfg.maxPages || 200);
+    setVal(elements.format, cfg.dataFormat || "jsonl");
+    setVal(elements.savePath, cfg.savePath || "webscraper-pro/");
+    setChecked(elements.saveLocal, cfg.saveLocal !== false);
+    setChecked(elements.downloadImages, cfg.downloadImages);
+    setChecked(elements.convertAudio, cfg.convertAudio);
+    setVal(elements.hfToken, cfg.hfToken || "");
+    if (elements.hfToken) elements.hfToken.dataset.hadToken = cfg.hfToken ? "true" : "false";
+    setVal(elements.hfRepo, cfg.hfRepoId || "");
+    setChecked(elements.hfCreate, cfg.hfCreateRepo !== false);
+    setChecked(elements.hfPrivate, cfg.hfPrivate);
+    setChecked(elements.hfAutoUpload, cfg.hfAutoUpload);
+    setVal(elements.hfOwnerRepo, cfg.hfOwnerRepo || "");
+    setChecked(elements.autoCite, cfg.autoCite !== false);
+    setChecked(elements.citeReadme, cfg.citeReadme !== false);
+    setChecked(elements.citeLinks, cfg.citeLinks !== false);
 
-    const uploadOwnerEl = $("#chk-upload-owner");
-    if (uploadOwnerEl) uploadOwnerEl.checked = !!cfg.uploadToOwner;
-    const scrapeJSEl = $("#chk-scrape-js");
-    if (scrapeJSEl) scrapeJSEl.checked = !!cfg.scrapeJS;
-    const citeFmtEl = $("#sel-citation-format");
-    if (citeFmtEl) citeFmtEl.value = cfg.citationFormat || "mla";
-    const robotsEl = $("#chk-respect-robots");
-    if (robotsEl) robotsEl.checked = cfg.respectRobots !== false;
-    const minTextEl = $("#inp-min-text");
-    if (minTextEl) minTextEl.value = cfg.minTextLength || 3;
+    setChecked($("#chk-upload-owner"), cfg.uploadToOwner);
+    setChecked($("#chk-scrape-js"), cfg.scrapeJS);
+    setVal($("#sel-citation-format"), cfg.citationFormat || "mla");
+    setChecked($("#chk-respect-robots"), cfg.respectRobots !== false);
+    setVal($("#inp-min-text"), cfg.minTextLength || 3);
 
     // Rate limiting
     const rateConfig = cfg.rateLimitConfig || {};
     const rateDefaults = rateConfig.defaults || {};
-    if (elements.rateMax) elements.rateMax.value = rateDefaults.maxRequests || 5;
-    if (elements.rateWindow) elements.rateWindow.value = (rateDefaults.windowMs || 10000) / 1000;
-    if (elements.rateEnabled) elements.rateEnabled.checked = cfg.rateEnabled !== false;
+    setVal(elements.rateMax, rateDefaults.maxRequests || 5);
+    setVal(elements.rateWindow, (rateDefaults.windowMs || 10000) / 1000);
+    setChecked(elements.rateEnabled, cfg.rateEnabled !== false);
 
     // Domain filtering
     if (elements.allowlist) elements.allowlist.value = (cfg.domainAllowlist || []).join("\n");
@@ -131,17 +131,19 @@
     }
 
     // AI extraction
-    if (elements.aiEnabled) elements.aiEnabled.checked = !!cfg.aiEnabled;
-    if (elements.aiAutoDownload) elements.aiAutoDownload.checked = !!cfg.aiAutoDownload;
-    if (elements.aiServer) elements.aiServer.value = cfg.aiServerUrl || "http://127.0.0.1:8377";
+    setChecked(elements.aiEnabled, cfg.aiEnabled);
+    setChecked(elements.aiAutoDownload, cfg.aiAutoDownload);
+    setVal(elements.aiServer, cfg.aiServerUrl || "http://127.0.0.1:8377");
 
     // Pretty-print
-    if (elements.prettyPrint) elements.prettyPrint.checked = !!cfg.prettyPrint;
+    setChecked(elements.prettyPrint, cfg.prettyPrint);
+  }).catch((err) => {
+    console.error("[WSP] Failed to load settings:", err);
   });
 
   /* ── Load stats ── */
   browser.runtime.sendMessage({ action: "GET_STATS" }).then((resp) => {
-    if (resp && resp.stats) {
+    if (resp && resp.stats && elements.dataStats) {
       const s = resp.stats;
       elements.dataStats.innerHTML = `
         <strong>Session Data:</strong> ${resp.recordCount} records |
@@ -150,7 +152,7 @@
       `;
     }
   }).catch(() => {
-    elements.dataStats.textContent = "No active session data.";
+    if (elements.dataStats) elements.dataStats.textContent = "No active session data.";
   });
 
   /* ── Parse HF repo from URL or ID ── */
@@ -163,190 +165,243 @@
   }
 
   /* ── Save ── */
-  elements.btnSave.addEventListener("click", () => {
-    const repoId = parseRepoId(elements.hfRepo.value);
-    elements.hfRepo.value = repoId;
-
-    const rawToken = elements.hfToken.value.trim();
-
-    const settings = {
-      autoStart: elements.autoStart.checked,
-      autoScroll: elements.autoScroll.checked,
-      autoNext: elements.autoNext.checked,
-      scrapeDelay: parseInt(elements.delay.value, 10),
-      maxPages: parseInt(elements.maxPages.value, 10),
-      dataFormat: elements.format.value,
-      savePath: elements.savePath.value,
-      saveLocal: elements.saveLocal.checked,
-      downloadImages: elements.downloadImages.checked,
-      convertAudio: elements.convertAudio.checked,
-      hfRepoId: repoId,
-      hfCreateRepo: elements.hfCreate.checked,
-      hfPrivate: elements.hfPrivate.checked,
-      hfAutoUpload: elements.hfAutoUpload.checked,
-      hfOwnerRepo: elements.hfOwnerRepo.value,
-      uploadToOwner: $("#chk-upload-owner") ? $("#chk-upload-owner").checked : false,
-      autoCite: elements.autoCite.checked,
-      citeReadme: elements.citeReadme.checked,
-      citeLinks: elements.citeLinks.checked,
-      scrapeJS: $("#chk-scrape-js") ? $("#chk-scrape-js").checked : false,
-      citationFormat: $("#sel-citation-format") ? $("#sel-citation-format").value : "mla",
-      respectRobots: $("#chk-respect-robots") ? $("#chk-respect-robots").checked : true,
-      minTextLength: parseInt(($("#inp-min-text") || {}).value || "3", 10),
-      // Rate limiting
-      rateEnabled: elements.rateEnabled ? elements.rateEnabled.checked : true,
-      rateLimitConfig: {
-        defaults: {
-          maxRequests: parseInt((elements.rateMax || {}).value || "5", 10),
-          windowMs: parseInt((elements.rateWindow || {}).value || "10", 10) * 1000,
-        }
-      },
-      // Domain filtering
-      domainAllowlist: (elements.allowlist ? elements.allowlist.value : "")
-        .split("\n").map(d => d.trim()).filter(d => d),
-      domainBlocklist: (elements.blocklist ? elements.blocklist.value : "")
-        .split("\n").map(d => d.trim()).filter(d => d),
-    };
-
-    // AI extraction
-    settings.aiEnabled = elements.aiEnabled ? elements.aiEnabled.checked : false;
-    settings.aiAutoDownload = elements.aiAutoDownload ? elements.aiAutoDownload.checked : false;
-    settings.aiServerUrl = elements.aiServer ? elements.aiServer.value.trim() : "http://127.0.0.1:8377";
-
-    // Pretty-print
-    settings.prettyPrint = elements.prettyPrint ? elements.prettyPrint.checked : false;
-
-    // Regex patterns
-    if (elements.regexRules && elements.regexRules.value.trim()) {
+  if (elements.btnSave) {
+    elements.btnSave.addEventListener("click", () => {
       try {
-        settings.regexPatterns = JSON.parse(elements.regexRules.value.trim());
-      } catch {
-        elements.saveStatus.textContent = "Invalid regex JSON - fix syntax and try again";
-        elements.saveStatus.className = "status error";
-        return;
+        const repoId = parseRepoId(getVal(elements.hfRepo));
+        setVal(elements.hfRepo, repoId);
+
+        const rawToken = getVal(elements.hfToken).trim();
+
+        const settings = {
+          autoStart: getChecked(elements.autoStart),
+          autoScroll: getChecked(elements.autoScroll),
+          autoNext: getChecked(elements.autoNext),
+          scrapeDelay: parseInt(getVal(elements.delay, "1500"), 10) || 1500,
+          maxPages: parseInt(getVal(elements.maxPages, "200"), 10) || 200,
+          dataFormat: getVal(elements.format, "jsonl"),
+          savePath: getVal(elements.savePath, "webscraper-pro/"),
+          saveLocal: getChecked(elements.saveLocal),
+          downloadImages: getChecked(elements.downloadImages),
+          convertAudio: getChecked(elements.convertAudio),
+          hfRepoId: repoId,
+          hfCreateRepo: getChecked(elements.hfCreate),
+          hfPrivate: getChecked(elements.hfPrivate),
+          hfAutoUpload: getChecked(elements.hfAutoUpload),
+          hfOwnerRepo: getVal(elements.hfOwnerRepo),
+          uploadToOwner: getChecked($("#chk-upload-owner")),
+          autoCite: getChecked(elements.autoCite),
+          citeReadme: getChecked(elements.citeReadme),
+          citeLinks: getChecked(elements.citeLinks),
+          scrapeJS: getChecked($("#chk-scrape-js")),
+          citationFormat: getVal($("#sel-citation-format"), "mla"),
+          respectRobots: getChecked($("#chk-respect-robots")),
+          minTextLength: parseInt(getVal($("#inp-min-text"), "3"), 10) || 3,
+          // Rate limiting
+          rateEnabled: getChecked(elements.rateEnabled),
+          rateLimitConfig: {
+            defaults: {
+              maxRequests: parseInt(getVal(elements.rateMax, "5"), 10) || 5,
+              windowMs: (parseInt(getVal(elements.rateWindow, "10"), 10) || 10) * 1000,
+            }
+          },
+          // Domain filtering
+          domainAllowlist: getVal(elements.allowlist).split("\n").map(d => d.trim()).filter(d => d),
+          domainBlocklist: getVal(elements.blocklist).split("\n").map(d => d.trim()).filter(d => d),
+          // AI extraction
+          aiEnabled: getChecked(elements.aiEnabled),
+          aiAutoDownload: getChecked(elements.aiAutoDownload),
+          aiServerUrl: getVal(elements.aiServer, "http://127.0.0.1:8377").trim(),
+          // Pretty-print
+          prettyPrint: getChecked(elements.prettyPrint),
+        };
+
+        // Regex patterns
+        const regexVal = getVal(elements.regexRules).trim();
+        if (regexVal) {
+          try {
+            settings.regexPatterns = JSON.parse(regexVal);
+          } catch {
+            if (elements.saveStatus) {
+              elements.saveStatus.textContent = "Invalid regex JSON - fix syntax and try again";
+              elements.saveStatus.className = "status error";
+            }
+            return;
+          }
+        } else {
+          settings.regexPatterns = [];
+        }
+
+        // Token handling
+        if (rawToken) {
+          settings.hfToken = rawToken;
+        } else if (elements.hfToken && elements.hfToken.dataset.hadToken === "true") {
+          settings.hfToken = "";
+        }
+
+        browser.storage.local.set(settings).then(() => {
+          if (elements.saveStatus) {
+            elements.saveStatus.textContent = "Settings saved!";
+            elements.saveStatus.className = "status success";
+            setTimeout(() => { elements.saveStatus.textContent = ""; }, 3000);
+          }
+        }).catch((err) => {
+          console.error("[WSP] Save failed:", err);
+          if (elements.saveStatus) {
+            elements.saveStatus.textContent = "Save failed: " + err.message;
+            elements.saveStatus.className = "status error";
+          }
+        });
+      } catch (err) {
+        console.error("[WSP] Save error:", err);
+        if (elements.saveStatus) {
+          elements.saveStatus.textContent = "Error: " + err.message;
+          elements.saveStatus.className = "status error";
+        }
       }
-    } else {
-      settings.regexPatterns = [];
-    }
-
-    // Token handling
-    if (rawToken) {
-      settings.hfToken = rawToken;
-    }
-    if (rawToken === "" && elements.hfToken.dataset.hadToken === "true") {
-      settings.hfToken = "";
-    }
-
-    browser.storage.local.set(settings).then(() => {
-      elements.saveStatus.textContent = "Settings saved!";
-      elements.saveStatus.className = "status success";
-      setTimeout(() => { elements.saveStatus.textContent = ""; }, 3000);
     });
-  });
+  }
 
   /* ── Validate HF token ── */
-  elements.btnValidateToken.addEventListener("click", async () => {
-    const token = elements.hfToken.value.trim();
-    if (!token) {
-      elements.tokenStatus.textContent = "Enter a token first";
-      elements.tokenStatus.className = "status error";
-      return;
-    }
-
-    elements.tokenStatus.textContent = "Validating...";
-    elements.tokenStatus.className = "status";
-
-    try {
-      /* Try whoami-v2 first, then whoami, then datasets listing */
-      let data = null;
-      let validated = false;
-
-      for (const endpoint of [
-        "https://huggingface.co/api/whoami-v2",
-        "https://huggingface.co/api/whoami"
-      ]) {
-        const resp = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (resp.ok) {
-          data = await resp.json();
-          validated = true;
-          break;
-        }
-        if (resp.status === 401) {
-          elements.tokenStatus.textContent = "Invalid token - check your HF token at huggingface.co/settings/tokens";
+  if (elements.btnValidateToken) {
+    elements.btnValidateToken.addEventListener("click", async () => {
+      const token = getVal(elements.hfToken).trim();
+      if (!token) {
+        if (elements.tokenStatus) {
+          elements.tokenStatus.textContent = "Enter a token first";
           elements.tokenStatus.className = "status error";
-          return;
         }
+        return;
       }
 
-      if (!validated) {
-        /* whoami endpoints returned 404/other - try datasets listing as final check */
-        const resp = await fetch("https://huggingface.co/api/datasets?author=me&limit=1", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (resp.ok) {
-          validated = true;
-          data = { name: "verified-user" };
-        } else if (resp.status === 401) {
-          elements.tokenStatus.textContent = "Invalid token - check your HF token at huggingface.co/settings/tokens";
+      if (elements.tokenStatus) {
+        elements.tokenStatus.textContent = "Validating...";
+        elements.tokenStatus.className = "status";
+      }
+
+      try {
+        /* Try whoami-v2 first, then whoami, then datasets listing.
+         * IMPORTANT: credentials: "omit" prevents browser cookies from leaking
+         * the logged-in HF session — we want to validate the TOKEN, not cookies. */
+        let data = null;
+        let validated = false;
+
+        for (const endpoint of [
+          "https://huggingface.co/api/whoami-v2",
+          "https://huggingface.co/api/whoami"
+        ]) {
+          try {
+            const resp = await fetch(endpoint, {
+              headers: { Authorization: `Bearer ${token}` },
+              credentials: "omit"
+            });
+            if (resp.ok) {
+              data = await resp.json();
+              validated = true;
+              break;
+            }
+            if (resp.status === 401) {
+              if (elements.tokenStatus) {
+                elements.tokenStatus.textContent = "Invalid token - check your HF token at huggingface.co/settings/tokens";
+                elements.tokenStatus.className = "status error";
+              }
+              return;
+            }
+          } catch { /* network error on this endpoint, try next */ }
+        }
+
+        if (!validated) {
+          /* whoami endpoints returned 404/other - try datasets listing as final check */
+          try {
+            const resp = await fetch("https://huggingface.co/api/datasets?author=me&limit=1", {
+              headers: { Authorization: `Bearer ${token}` },
+              credentials: "omit"
+            });
+            if (resp.ok) {
+              validated = true;
+              data = { name: "verified-user" };
+            } else if (resp.status === 401) {
+              if (elements.tokenStatus) {
+                elements.tokenStatus.textContent = "Invalid token - check your HF token at huggingface.co/settings/tokens";
+                elements.tokenStatus.className = "status error";
+              }
+              return;
+            }
+          } catch { /* network error */ }
+        }
+
+        if (elements.tokenStatus) {
+          if (validated && data) {
+            const username = data.user || data.name || data.fullname || "unknown";
+            elements.tokenStatus.textContent = `Valid! User: ${username}`;
+            elements.tokenStatus.className = "status success";
+          } else {
+            elements.tokenStatus.textContent = "Could not verify token - it may still work for uploads";
+            elements.tokenStatus.className = "status success";
+          }
+        }
+      } catch (err) {
+        if (elements.tokenStatus) {
+          elements.tokenStatus.textContent = "Network error - could not reach HuggingFace";
           elements.tokenStatus.className = "status error";
-          return;
         }
       }
-
-      if (validated && data) {
-        elements.tokenStatus.textContent = `Valid! User: ${data.name}`;
-        elements.tokenStatus.className = "status success";
-      } else {
-        elements.tokenStatus.textContent = "Could not verify token - it may still work for uploads";
-        elements.tokenStatus.className = "status success";
-      }
-    } catch (err) {
-      elements.tokenStatus.textContent = "Network error - could not reach HuggingFace";
-      elements.tokenStatus.className = "status error";
-    }
-  });
+    });
+  }
 
   /* ── AI Connection Check ── */
   if (elements.btnAICheck) {
     elements.btnAICheck.addEventListener("click", async () => {
-      const serverUrl = (elements.aiServer ? elements.aiServer.value : "http://127.0.0.1:8377").trim();
-      elements.aiServerStatus.textContent = "Checking...";
-      elements.aiServerStatus.className = "status";
+      const serverUrl = getVal(elements.aiServer, "http://127.0.0.1:8377").trim();
+      if (elements.aiServerStatus) {
+        elements.aiServerStatus.textContent = "Checking...";
+        elements.aiServerStatus.className = "status";
+      }
 
       try {
         const resp = await fetch(serverUrl + "/health", { method: "GET" });
         if (resp.ok) {
           const info = await resp.json();
-          elements.aiServerStatus.textContent = `Connected! Model: ${info.model || "NuExtract"}, Device: ${info.device || "?"}, GPU: ${info.gpu || "N/A"}`;
-          elements.aiServerStatus.className = "status success";
+          if (elements.aiServerStatus) {
+            elements.aiServerStatus.textContent = `Connected! Model: ${info.model || "NuExtract"}, Device: ${info.device || "?"}, GPU: ${info.gpu || "N/A"}`;
+            elements.aiServerStatus.className = "status success";
+          }
         } else {
-          elements.aiServerStatus.textContent = `Server returned status ${resp.status}`;
-          elements.aiServerStatus.className = "status error";
+          if (elements.aiServerStatus) {
+            elements.aiServerStatus.textContent = `Server returned status ${resp.status}`;
+            elements.aiServerStatus.className = "status error";
+          }
         }
       } catch (err) {
-        elements.aiServerStatus.textContent = "Cannot connect. Start server with: scrape ai.serve";
-        elements.aiServerStatus.className = "status error";
+        if (elements.aiServerStatus) {
+          elements.aiServerStatus.textContent = "Cannot connect. Start server with: scrape ai.serve";
+          elements.aiServerStatus.className = "status error";
+        }
       }
     });
   }
 
   /* ── Export ── */
-  elements.btnExport.addEventListener("click", () => {
-    browser.runtime.sendMessage({ action: "EXPORT_DATA", format: elements.format.value });
-  });
+  if (elements.btnExport) {
+    elements.btnExport.addEventListener("click", () => {
+      browser.runtime.sendMessage({ action: "EXPORT_DATA", format: getVal(elements.format, "jsonl") });
+    });
+  }
 
   /* ── Upload to HF ── */
-  elements.btnUploadHF.addEventListener("click", () => {
-    browser.runtime.sendMessage({ action: "UPLOAD_HF" });
-  });
+  if (elements.btnUploadHF) {
+    elements.btnUploadHF.addEventListener("click", () => {
+      browser.runtime.sendMessage({ action: "UPLOAD_HF" });
+    });
+  }
 
   /* ── Clear data ── */
-  elements.btnClear.addEventListener("click", () => {
-    if (confirm("Are you sure you want to clear all scraped data? This cannot be undone.")) {
-      browser.runtime.sendMessage({ action: "CLEAR_DATA" });
-      elements.dataStats.textContent = "All data cleared.";
-    }
-  });
+  if (elements.btnClear) {
+    elements.btnClear.addEventListener("click", () => {
+      if (confirm("Are you sure you want to clear all scraped data? This cannot be undone.")) {
+        browser.runtime.sendMessage({ action: "CLEAR_DATA" });
+        if (elements.dataStats) elements.dataStats.textContent = "All data cleared.";
+      }
+    });
+  }
 })();

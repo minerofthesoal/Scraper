@@ -1,6 +1,6 @@
 # WebScraper Pro
 
-**v0.6.3b4** | Firefox Extension + Python CLI + Full GUI | Android supported
+**v0.6.5** | Firefox Extension + Python CLI + Full GUI | Android supported
 
 A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Now with Android/Fenix support, Markdown export, pretty-print JSON/JSONL, and auto LLM downloading.
 

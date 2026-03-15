@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.6.3b4 ── */
+/* ── WebScraper Pro Background Script v0.6.5 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -426,7 +426,7 @@ function exportData(format, options) {
 function toMarkdown(texts, images, links, audio, citationsList) {
   var md = "# WebScraper Pro Export\n\n";
   md += "**Generated:** " + new Date().toISOString() + "  \n";
-  md += "**Version:** v0.6.3b4  \n";
+  md += "**Version:** v0.6.5  \n";
   md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
   md += "---\n\n";
 
@@ -490,7 +490,7 @@ function toMarkdown(texts, images, links, audio, citationsList) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.3b4</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.6.5</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';

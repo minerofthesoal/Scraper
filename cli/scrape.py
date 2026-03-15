@@ -73,7 +73,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.3b4.2"
+VERSION = "0.6.5"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1277,6 +1277,13 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.5", "2026-03-15", [
+            "Fix settings not saving: null-safe element access, error handling on save",
+            "Fix HF token validation: credentials:omit prevents cookie leak (always showed logged-in user)",
+            "Auto-install Python 3.12: installers now install python3.12 via package manager",
+            "All HF API fetch calls use credentials:omit for proper token-based auth",
+            "Robust options page: try/catch on save, .catch() on storage calls",
+        ]),
         ("0.6.3b4.2", "2026-03-15", [
             "CUDA compute capability 6.1 (Pascal/GTX 1080) support with install guidance",
             "GPU architecture detection: Pascal, Volta, Turing, Ampere, Ada Lovelace, Hopper",
