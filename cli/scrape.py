@@ -73,7 +73,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.3b4"
+VERSION = "0.6.3b4.2"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1277,6 +1277,22 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.3b4.2", "2026-03-15", [
+            "CUDA compute capability 6.1 (Pascal/GTX 1080) support with install guidance",
+            "GPU architecture detection: Pascal, Volta, Turing, Ampere, Ada Lovelace, Hopper",
+            "Auto-detect GPU/PyTorch compatibility and fall back to CPU if incompatible",
+            "Pascal GPUs: recommend PyTorch <=2.4.1 with CUDA 11.8 (sm_61 support)",
+            "scrape doctor: show GPU arch, compute capability, CUDA version, compat check",
+            "ai.serve: runtime GPU compat check, auto-fallback to CPU on kernel mismatch",
+            "ai.setup: per-architecture PyTorch install commands",
+            "Health endpoint: report GPU arch, compute capability, CUDA version",
+        ]),
+        ("0.6.3b4.1", "2026-03-15", [
+            "Force Python 3.10-3.12 in all installers (PyTorch compatibility)",
+            "Improved PyTorch detection in doctor, ai.serve, ai.setup commands",
+            "Show GPU info and CUDA status in scrape doctor",
+            "Better error messages when Python version is incompatible",
+        ]),
         ("0.6.3b4", "2026-03-15", [
             "Android/Fenix support (Firefox for Android 120+)",
             "Markdown (.md) export format for human-readable output",
@@ -1336,6 +1352,105 @@ def format_bytes(n):
             return f"{n:.1f} {unit}"
         n /= 1024
     return f"{n:.1f} TB"
+
+
+# GPU architecture names by compute capability
+_GPU_ARCH_NAMES = {
+    (3, 5): "Kepler", (3, 7): "Kepler",
+    (5, 0): "Maxwell", (5, 2): "Maxwell", (5, 3): "Maxwell",
+    (6, 0): "Pascal", (6, 1): "Pascal", (6, 2): "Pascal",
+    (7, 0): "Volta", (7, 2): "Volta", (7, 5): "Turing",
+    (8, 0): "Ampere", (8, 6): "Ampere", (8, 7): "Ampere", (8, 9): "Ada Lovelace",
+    (9, 0): "Hopper",
+}
+
+# Recommended PyTorch CUDA index URLs per GPU architecture
+_PYTORCH_CUDA_URLS = {
+    "Pascal": "https://download.pytorch.org/whl/cu118",      # CUDA 11.8 has best Pascal support
+    "Volta": "https://download.pytorch.org/whl/cu121",
+    "Turing": "https://download.pytorch.org/whl/cu121",
+    "Ampere": "https://download.pytorch.org/whl/cu124",
+    "Ada Lovelace": "https://download.pytorch.org/whl/cu124",
+    "Hopper": "https://download.pytorch.org/whl/cu124",
+}
+
+# Max PyTorch version known to support each architecture in prebuilt wheels
+_PYTORCH_MAX_VER = {
+    "Pascal": "2.4.1",   # PyTorch 2.5+ dropped sm_61 from cu121/cu124 wheels
+}
+
+
+def get_gpu_info():
+    """Detect GPU details including compute capability and architecture.
+
+    Returns dict with keys: available, name, mem_gb, compute_cap, arch, sm_tag
+    or just {available: False} if no CUDA GPU.
+    """
+    try:
+        import torch
+    except ImportError:
+        return {"available": False, "reason": "pytorch_missing"}
+
+    if not torch.cuda.is_available():
+        return {"available": False, "reason": "no_cuda"}
+
+    props = torch.cuda.get_device_properties(0)
+    cc = (props.major, props.minor)
+    arch = _GPU_ARCH_NAMES.get(cc, f"Unknown (sm_{props.major}{props.minor})")
+    return {
+        "available": True,
+        "name": torch.cuda.get_device_name(0),
+        "mem_gb": round(props.total_mem / (1024**3), 1),
+        "compute_cap": f"{props.major}.{props.minor}",
+        "compute_cap_tuple": cc,
+        "arch": arch,
+        "sm_tag": f"sm_{props.major}{props.minor}",
+        "torch_version": torch.__version__,
+        "cuda_version": torch.version.cuda or "unknown",
+    }
+
+
+def check_gpu_pytorch_compat(gpu_info):
+    """Check if current PyTorch build supports the detected GPU.
+
+    Returns (ok, message) tuple.
+    """
+    if not gpu_info.get("available"):
+        return False, gpu_info.get("reason", "no_cuda")
+
+    arch = gpu_info["arch"]
+    torch_ver = gpu_info["torch_version"].split("+")[0]  # strip +cu121 suffix
+
+    # Check if this architecture has a max supported PyTorch version
+    max_ver = _PYTORCH_MAX_VER.get(arch)
+    if max_ver:
+        from packaging.version import Version
+        try:
+            if Version(torch_ver) > Version(max_ver):
+                return False, (
+                    f"PyTorch {torch_ver} may not include {gpu_info['sm_tag']} ({arch}) support in prebuilt wheels. "
+                    f"Use PyTorch <={max_ver} or install with CUDA 11.8: "
+                    f"pip install torch=={max_ver} --index-url {_PYTORCH_CUDA_URLS.get(arch, _PYTORCH_CUDA_URLS['Pascal'])}"
+                )
+        except Exception:
+            pass  # packaging not available, skip version check
+
+    # Quick runtime check: try a small tensor on GPU
+    try:
+        import torch
+        t = torch.tensor([1.0], device="cuda")
+        _ = t + t
+        del t
+        return True, f"{arch} ({gpu_info['compute_cap']}) - OK"
+    except RuntimeError as e:
+        err_str = str(e)
+        if "no kernel image" in err_str or "CUDA error" in err_str:
+            url = _PYTORCH_CUDA_URLS.get(arch, _PYTORCH_CUDA_URLS["Pascal"])
+            return False, (
+                f"PyTorch was not compiled with {gpu_info['sm_tag']} ({arch}) support. "
+                f"Reinstall with: pip install torch --index-url {url}"
+            )
+        return False, f"CUDA error: {err_str}"
 
 
 def generate_readme_cli(cfg, records):
@@ -2165,7 +2280,14 @@ def doctor():
     table.add_column("Details", style="dim")
 
     # Python
-    table.add_row("Python", "[green]OK[/green]", f"{sys.version.split()[0]}")
+    py_ver = sys.version.split()[0]
+    py_minor = sys.version_info.minor
+    if 10 <= py_minor <= 12:
+        table.add_row("Python", "[green]OK[/green]", f"{py_ver} (PyTorch compatible)")
+    elif py_minor > 12:
+        table.add_row("Python", "[yellow]WARN[/yellow]", f"{py_ver} - PyTorch needs 3.10-3.12")
+    else:
+        table.add_row("Python", "[yellow]WARN[/yellow]", f"{py_ver} - Upgrade to 3.10-3.12")
 
     # Required packages
     packages = [
@@ -2179,6 +2301,44 @@ def doctor():
             table.add_row(name, "[green]OK[/green]", "Installed")
         except ImportError:
             table.add_row(name, "[red]MISSING[/red]", f"pip install {name}")
+
+    # PyTorch (AI extraction)
+    try:
+        import torch
+        torch_ver = torch.__version__
+        cuda_str = ""
+        if torch.cuda.is_available():
+            gpu_info = get_gpu_info()
+            gpu_arch = gpu_info.get("arch", "?")
+            gpu_cc = gpu_info.get("compute_cap", "?")
+            gpu_name = gpu_info.get("name", "?")
+            gpu_mem = gpu_info.get("mem_gb", 0)
+            cuda_ver = gpu_info.get("cuda_version", "?")
+            cuda_str = f" | CUDA {cuda_ver}"
+            table.add_row("PyTorch (AI)", "[green]OK[/green]", f"{torch_ver}{cuda_str}")
+            table.add_row("GPU", "[green]OK[/green]", f"{gpu_name} ({gpu_mem}GB)")
+            table.add_row("GPU Arch", "[green]OK[/green]", f"{gpu_arch} (sm_{gpu_cc.replace('.', '')}, CC {gpu_cc})")
+
+            # Check compat
+            compat_ok, compat_msg = check_gpu_pytorch_compat(gpu_info)
+            if compat_ok:
+                table.add_row("GPU Compat", "[green]OK[/green]", compat_msg)
+            else:
+                table.add_row("GPU Compat", "[red]ISSUE[/red]", compat_msg[:80])
+        else:
+            table.add_row("PyTorch (AI)", "[green]OK[/green]", f"{torch_ver} | CPU only (no CUDA)")
+    except ImportError:
+        if py_minor > 12:
+            table.add_row("PyTorch (AI)", "[red]UNAVAILABLE[/red]", f"Needs Python 3.10-3.12 (have {py_ver})")
+        else:
+            table.add_row("PyTorch (AI)", "[yellow]MISSING[/yellow]", "pip install torch (optional, for AI)")
+
+    # transformers
+    try:
+        import transformers
+        table.add_row("Transformers (AI)", "[green]OK[/green]", transformers.__version__)
+    except ImportError:
+        table.add_row("Transformers (AI)", "[yellow]MISSING[/yellow]", "Optional: pip install transformers")
 
     # tkinter
     try:
@@ -2543,17 +2703,37 @@ def ai_serve(gpu, port, model):
     """Start the NuExtract AI extraction server.
 
     This runs a local HTTP server that the browser extension can connect to
-    for AI-powered structured data extraction. Works on GPU (min GTX 1070)
-    or CPU (any modern Intel/AMD processor).
+    for AI-powered structured data extraction. Works on GPU (min GTX 1070,
+    compute capability 6.1+) or CPU (any modern Intel/AMD processor).
+
+    Supported GPUs: Pascal (GTX 1070/1080/1080 Ti), Volta, Turing (RTX 2000),
+    Ampere (RTX 3000), Ada Lovelace (RTX 4000), Hopper.
 
     Requirements: pip install torch transformers
+    Requires Python 3.10-3.12 (PyTorch does not support 3.13+).
+    Pascal GPUs (GTX 1070/1080): Use PyTorch <=2.4.1 with CUDA 11.8.
     """
+    # Check Python version first
+    py_minor = sys.version_info.minor
+    if py_minor > 12:
+        console.print(f"[red]Python {sys.version_info.major}.{py_minor} detected. PyTorch requires Python 3.10-3.12.[/red]")
+        console.print("[yellow]Install Python 3.10, 3.11, or 3.12 and reinstall:[/yellow]")
+        console.print("  python3.12 -m pip install torch transformers")
+        console.print("  python3.12 -m webscraper_pro ai.serve")
+        return
+    if py_minor < 10:
+        console.print(f"[red]Python {sys.version_info.major}.{py_minor} is too old. PyTorch requires Python 3.10+.[/red]")
+        return
+
     try:
         import torch
     except ImportError:
-        console.print("[red]PyTorch not installed. Run:[/red] pip install torch")
-        console.print("[dim]For GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121[/dim]")
-        console.print("[dim]For CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu[/dim]")
+        console.print("[red]PyTorch not installed.[/red]")
+        console.print(f"[dim]Python {sys.version_info.major}.{py_minor} detected (compatible).[/dim]")
+        console.print("[yellow]Install PyTorch:[/yellow]")
+        console.print("[dim]  Pascal GPU (GTX 1070/1080):  pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu118[/dim]")
+        console.print("[dim]  Turing+ GPU (RTX 2000+):     pip install torch --index-url https://download.pytorch.org/whl/cu121[/dim]")
+        console.print("[dim]  CPU only:                    pip install torch --index-url https://download.pytorch.org/whl/cpu[/dim]")
         return
 
     try:
@@ -2576,10 +2756,24 @@ def ai_serve(gpu, port, model):
     console.print(f"[bold blue]NuExtract AI Server[/bold blue]")
     console.print(f"  Model:  [cyan]{model}[/cyan]")
     console.print(f"  Device: [cyan]{device}[/cyan]")
+
     if device == "cuda":
-        gpu_name = torch.cuda.get_device_name(0)
-        gpu_mem = torch.cuda.get_device_properties(0).total_mem / (1024**3)
-        console.print(f"  GPU:    [cyan]{gpu_name} ({gpu_mem:.1f} GB)[/cyan]")
+        gpu_info = get_gpu_info()
+        gpu_name = gpu_info.get("name", "Unknown")
+        gpu_mem = gpu_info.get("mem_gb", 0)
+        gpu_arch = gpu_info.get("arch", "Unknown")
+        gpu_cc = gpu_info.get("compute_cap", "?")
+        console.print(f"  GPU:    [cyan]{gpu_name} ({gpu_mem} GB)[/cyan]")
+        console.print(f"  Arch:   [cyan]{gpu_arch} (sm_{gpu_cc.replace('.', '')})[/cyan]")
+        console.print(f"  CUDA:   [cyan]{gpu_info.get('cuda_version', '?')}[/cyan]")
+
+        # Check compatibility
+        compat_ok, compat_msg = check_gpu_pytorch_compat(gpu_info)
+        if not compat_ok:
+            console.print(f"\n[red]GPU compatibility issue:[/red] {compat_msg}")
+            console.print("[yellow]Falling back to CPU mode.[/yellow]")
+            device = "cpu"
+
     console.print(f"  Port:   [cyan]{port}[/cyan]")
     console.print()
 
@@ -2587,8 +2781,11 @@ def ai_serve(gpu, port, model):
 
     # Load model with appropriate settings for the device
     if device == "cuda":
-        # Use float16 for GPU — compatible with GTX 1070 (Pascal) and newer
-        # Don't use bfloat16 (requires Ampere+) or flash_attention_2 (requires Ampere+)
+        gpu_info = get_gpu_info()
+        gpu_arch = gpu_info.get("arch", "")
+
+        # Pascal (GTX 1070/1080) and older: use float16, no bfloat16/flash_attn
+        # Ampere+: can use bfloat16 but float16 is universally safe
         model_obj = AutoModelForVision2Seq.from_pretrained(
             model,
             trust_remote_code=True,
@@ -2640,8 +2837,12 @@ def ai_serve(gpu, port, model):
                     "version": VERSION,
                 }
                 if device == "cuda":
-                    info["gpu"] = torch.cuda.get_device_name(0)
-                    info["gpu_memory_gb"] = round(torch.cuda.get_device_properties(0).total_mem / (1024**3), 1)
+                    gi = get_gpu_info()
+                    info["gpu"] = gi.get("name", torch.cuda.get_device_name(0))
+                    info["gpu_memory_gb"] = gi.get("mem_gb", 0)
+                    info["gpu_arch"] = gi.get("arch", "Unknown")
+                    info["compute_capability"] = gi.get("compute_cap", "?")
+                    info["cuda_version"] = gi.get("cuda_version", "?")
                 self.wfile.write(json_mod.dumps(info).encode())
             elif self.path == "/templates":
                 self.send_response(200)
@@ -2908,12 +3109,29 @@ def ai_setup(gpu):
     This will install required dependencies and download the model.
     GPU mode requires CUDA-capable GPU (min GTX 1070 8GB).
     CPU mode works on any modern processor (i7-7660U, i7-7700HQ, etc.).
+    Requires Python 3.10-3.12 (PyTorch does not support 3.13+).
     """
     console.print("[bold blue]NuExtract AI Setup[/bold blue]\n")
 
     # Check Python version
     py_ver = sys.version_info
     console.print(f"  Python: [cyan]{py_ver.major}.{py_ver.minor}.{py_ver.micro}[/cyan]")
+
+    if py_ver.minor > 12:
+        console.print(f"  [red]Python {py_ver.major}.{py_ver.minor} is not supported by PyTorch.[/red]")
+        console.print("  [yellow]PyTorch requires Python 3.10, 3.11, or 3.12.[/yellow]")
+        console.print("  [dim]Install a compatible Python version and try again.[/dim]")
+        console.print("  [dim]  Arch: sudo pacman -S python311[/dim]")
+        console.print("  [dim]  Ubuntu: sudo apt install python3.12[/dim]")
+        console.print("  [dim]  macOS: brew install python@3.12[/dim]")
+        console.print("  [dim]  Windows: https://www.python.org/downloads/release/python-3120/[/dim]")
+        return
+    if py_ver.minor < 10:
+        console.print(f"  [red]Python {py_ver.major}.{py_ver.minor} is too old for PyTorch.[/red]")
+        console.print("  [yellow]Upgrade to Python 3.10-3.12.[/yellow]")
+        return
+
+    console.print(f"  Python compatibility: [green]OK[/green] (3.10-3.12 range)")
 
     # Check PyTorch
     try:
@@ -2922,19 +3140,31 @@ def ai_setup(gpu):
         cuda_available = torch.cuda.is_available()
         console.print(f"  CUDA: [{'green' if cuda_available else 'yellow'}]{cuda_available}[/{'green' if cuda_available else 'yellow'}]")
         if cuda_available:
-            console.print(f"  GPU: [cyan]{torch.cuda.get_device_name(0)}[/cyan]")
-            mem_gb = torch.cuda.get_device_properties(0).total_mem / (1024**3)
-            console.print(f"  GPU Memory: [cyan]{mem_gb:.1f} GB[/cyan]")
-            if mem_gb < 6:
-                console.print("[yellow]  Warning: Less than 6GB VRAM. Model may not fit.[/yellow]")
+            gpu_info = get_gpu_info()
+            gpu_arch = gpu_info.get("arch", "Unknown")
+            gpu_cc = gpu_info.get("compute_cap", "?")
+            console.print(f"  GPU: [cyan]{gpu_info.get('name', '?')}[/cyan]")
+            console.print(f"  Architecture: [cyan]{gpu_arch} (compute capability {gpu_cc})[/cyan]")
+            console.print(f"  GPU Memory: [cyan]{gpu_info.get('mem_gb', 0)} GB[/cyan]")
+            console.print(f"  CUDA toolkit: [cyan]{gpu_info.get('cuda_version', '?')}[/cyan]")
+            if gpu_info.get("mem_gb", 0) < 6:
+                console.print("[yellow]  Warning: Less than 6GB VRAM. Model may not fit on GPU.[/yellow]")
+
+            # Check compatibility
+            compat_ok, compat_msg = check_gpu_pytorch_compat(gpu_info)
+            if compat_ok:
+                console.print(f"  Compatibility: [green]{compat_msg}[/green]")
+            else:
+                console.print(f"  Compatibility: [red]ISSUE[/red]")
+                console.print(f"  [yellow]{compat_msg}[/yellow]")
     except ImportError:
         console.print("  PyTorch: [red]Not installed[/red]")
+        console.print(f"\n[yellow]Install PyTorch (Python {py_ver.major}.{py_ver.minor} is compatible):[/yellow]")
         if gpu is True or gpu is None:
-            console.print("\n[yellow]Install PyTorch with GPU support:[/yellow]")
-            console.print("  pip install torch --index-url https://download.pytorch.org/whl/cu121")
+            console.print("  [bold]Pascal GPU (GTX 1070/1080):[/bold]  pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu118")
+            console.print("  [bold]Turing+ GPU (RTX 2000+):[/bold]     pip install torch --index-url https://download.pytorch.org/whl/cu121")
         if gpu is False or gpu is None:
-            console.print("\n[yellow]Install PyTorch for CPU:[/yellow]")
-            console.print("  pip install torch --index-url https://download.pytorch.org/whl/cpu")
+            console.print("  [bold]CPU only:[/bold]                    pip install torch --index-url https://download.pytorch.org/whl/cpu")
         return
 
     # Check transformers
