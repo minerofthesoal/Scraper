@@ -1,4 +1,4 @@
-/* ── Smart Content Extractor v0.6.2b ── */
+/* ── Smart Content Extractor v0.6.3b ── */
 /* Article body detection, readability scoring, regex extraction rules */
 (function () {
   "use strict";

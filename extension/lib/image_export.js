@@ -1,4 +1,4 @@
-/* ── Image Export Module v0.6.2b ── */
+/* ── Image Export Module v0.6.3b ── */
 /* Export scraped images in multiple formats: PNG, WebP, BMP, SVG, JPEG */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_ImageExport */

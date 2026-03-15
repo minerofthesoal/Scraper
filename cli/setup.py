@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="webscraper-pro-cli",
-    version="0.6.2b0",
+    version="0.6.3b0",
     description="CLI companion for WebScraper Pro Firefox extension",
     long_description=open("../README.md", encoding="utf-8").read() if __import__("os").path.exists("../README.md") else "",
     long_description_content_type="text/markdown",

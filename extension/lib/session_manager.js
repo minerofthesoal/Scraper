@@ -1,4 +1,4 @@
-/* ── Session Manager v0.6.2b ── */
+/* ── Session Manager v0.6.3b ── */
 /* Named session save/restore, batch URL queue, domain filtering */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_Session, window.WSP_DomainFilter, window.WSP_Queue */

@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.6.2b ── */
+/* ── WebScraper Pro Background Script v0.6.3b ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -8,12 +8,16 @@ var citations = [];
 var sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
 var lastUploadRecordCount = 0;
 
-// Load persisted data on startup
+// Load persisted data on startup (with validation)
 browser.storage.local.get(["scrapedRecords", "citations", "sessionStats", "lastUploadRecordCount"]).then(function (data) {
-  if (data.scrapedRecords) scrapedRecords = data.scrapedRecords;
-  if (data.citations) citations = data.citations;
-  if (data.sessionStats) sessionStats = data.sessionStats;
-  if (data.lastUploadRecordCount) lastUploadRecordCount = data.lastUploadRecordCount;
+  if (Array.isArray(data.scrapedRecords)) scrapedRecords = data.scrapedRecords;
+  if (Array.isArray(data.citations)) citations = data.citations;
+  if (data.sessionStats && typeof data.sessionStats === "object") {
+    sessionStats = Object.assign({ words: 0, pages: 0, images: 0, links: 0, audio: 0 }, data.sessionStats);
+  }
+  if (typeof data.lastUploadRecordCount === "number") lastUploadRecordCount = data.lastUploadRecordCount;
+}).catch(function (err) {
+  console.error("[WSP] Failed to load persisted data:", err);
 });
 
 /* ── Save state ── */
@@ -170,7 +174,11 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
 
 /* ── Handle scraped data ── */
 function handleScrapedData(data) {
+  if (!data) return;
   var meta = data.meta || {};
+
+  // Mark as actively scraping
+  browser.storage.local.set({ scrapeActive: true });
 
   // Generate citation (MLA + APA) — guard against WSP_Citation not loaded
   if (typeof WSP_Citation === "undefined") {
@@ -381,7 +389,7 @@ function exportData(format) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.2b</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.6.3b</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';

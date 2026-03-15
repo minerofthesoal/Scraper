@@ -1,4 +1,4 @@
-/* ── Rate Limiter Module v0.6.2b ── */
+/* ── Rate Limiter Module v0.6.3b ── */
 /* Prevents getting blocked by sites with configurable per-domain rate limiting */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_RateLimiter */
