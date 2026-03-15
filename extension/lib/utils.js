@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Utilities v0.6.3b ── */
+/* ── WebScraper Pro Utilities v0.6.3b1 ── */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_Utils */
 var WSP_Utils = {

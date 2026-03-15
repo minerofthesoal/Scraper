@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.3b ── */
+/* ── Popup Controller v0.6.3b1 ── */
 (function () {
   "use strict";
 
@@ -169,17 +169,90 @@
     try { return new URL(url).hostname; } catch (e) { return ""; }
   }
 
+  /* ── Helpers: bindClick ── */
+  const bindClick = (sel, fn) => { const el = $(sel); if (el) el.addEventListener("click", fn); };
+
+  /* ── Record Detail Modal ── */
+  const modal = $("#record-modal");
+  const modalBackdrop = modal ? modal.querySelector(".modal-backdrop") : null;
+  let modalRecord = null; // currently displayed record
+
+  function openModal(record) {
+    if (!modal) return;
+    modalRecord = record;
+    const typeEl = $("#modal-type");
+    const sourceEl = $("#modal-source");
+    const bodyEl = $("#modal-body");
+    if (typeEl) { typeEl.textContent = record.type || "unknown"; typeEl.className = "dr-type dr-type-" + (record.type || "text"); }
+    if (sourceEl) sourceEl.textContent = safeDomain(record.source_url);
+
+    if (bodyEl) {
+      const clean = Object.assign({}, record);
+      delete clean._fp;
+      const entries = Object.entries(clean);
+      bodyEl.innerHTML = entries.map(([k, v]) => {
+        let val = v;
+        if (typeof v === "object" && v !== null) val = JSON.stringify(v, null, 2);
+        if (typeof val === "string" && val.length > 500) val = val.slice(0, 500) + "…";
+        return '<div class="modal-field"><strong>' + escapeHtml(k) + ':</strong> <span>' + escapeHtml(String(val)) + '</span></div>';
+      }).join("");
+    }
+    modal.classList.remove("hidden");
+  }
+
+  function closeModal() {
+    if (modal) modal.classList.add("hidden");
+    modalRecord = null;
+  }
+
+  bindClick("#modal-close", closeModal);
+  if (modalBackdrop) modalBackdrop.addEventListener("click", closeModal);
+
+  bindClick("#modal-copy", () => {
+    if (!modalRecord) return;
+    const clean = Object.assign({}, modalRecord);
+    delete clean._fp;
+    navigator.clipboard.writeText(JSON.stringify(clean, null, 2)).then(() => {
+      const btn = $("#modal-copy");
+      if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy JSON"; }, 1200); }
+    }).catch(() => {});
+  });
+
+  bindClick("#modal-copy-text", () => {
+    if (!modalRecord) return;
+    const text = modalRecord.text || modalRecord.src || modalRecord.href || modalRecord.content || "";
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = $("#modal-copy-text");
+      if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy Text"; }, 1200); }
+    }).catch(() => {});
+  });
+
+  /* ── Domain Stats & Dedup Display ── */
+  function renderDomainStats(domains) {
+    const el = $("#domain-stats");
+    if (!el || !domains || domains.length === 0) { if (el) el.innerHTML = ""; return; }
+    el.innerHTML = domains.map(d =>
+      '<span class="domain-pill">' + escapeHtml(d.domain) + ' <b>' + d.count + '</b></span>'
+    ).join("");
+  }
+
+  function renderDedupStat(count) {
+    const el = $("#stat-dedup");
+    if (!el) return;
+    el.textContent = count > 0 ? count + " dupes skipped" : "";
+  }
+
   /* ── Get full stats ── */
   browser.runtime.sendMessage({ action: "GET_STATS" }).then(resp => {
     if (resp) {
       updateStats(resp.stats || {});
       updateRecordMeta(resp.recordCount || 0, resp.stats);
+      renderDomainStats(resp.domains || []);
+      renderDedupStat(resp.dedupSkipped || 0);
     }
   }).catch(() => {});
 
   /* ── Scrape Tab Buttons ── */
-  const bindClick = (sel, fn) => { const el = $(sel); if (el) el.addEventListener("click", fn); };
-
   bindClick("#btn-select-area", () => {
     sendToTab("START_SELECTION");
     updateStatus("active");
@@ -388,20 +461,12 @@
             + '</div>';
         }).join("");
 
-        // Click to copy record to clipboard
+        // Click to open record detail modal
         for (const rec of preview.querySelectorAll(".data-record")) {
           rec.addEventListener("click", () => {
             const idx = parseInt(rec.dataset.idx);
-            if (records[idx]) {
-              const clean = Object.assign({}, records[idx]);
-              delete clean._fp;
-              navigator.clipboard.writeText(JSON.stringify(clean, null, 2)).then(() => {
-                rec.style.outline = "1px solid var(--green)";
-                setTimeout(() => { rec.style.outline = ""; }, 800);
-              }).catch(() => {});
-            }
+            if (records[idx]) openModal(records[idx]);
           });
-          rec.style.cursor = "pointer";
         }
       }
 
@@ -547,6 +612,8 @@
     if (msg.action === "STATS_UPDATE") {
       updateStats(msg.stats);
       if (msg.recordCount !== undefined) updateRecordMeta(msg.recordCount);
+      if (msg.dedupSkipped !== undefined) renderDedupStat(msg.dedupSkipped);
+      if (msg.domains) renderDomainStats(msg.domains);
     }
     if (msg.action === "STATUS_CHANGE") {
       updateStatus(msg.status);
@@ -554,6 +621,34 @@
     }
     if (msg.action === "QUEUE_UPDATE") {
       loadQueue();
+    }
+  });
+
+  /* ── Keyboard Navigation ── */
+  document.addEventListener("keydown", (e) => {
+    // Escape closes modal
+    if (e.key === "Escape") {
+      closeModal();
+      return;
+    }
+    // Arrow keys for data pagination (only when Data tab is active and not in an input)
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+    const dataTab = $("#tab-data");
+    if (!dataTab || !dataTab.classList.contains("active")) return;
+    const pagEl = $("#data-pagination");
+    if (!pagEl || pagEl.children.length === 0) return;
+
+    if (e.key === "ArrowLeft" && dataPage > 0) {
+      dataPage--;
+      loadDataPreview();
+    } else if (e.key === "ArrowRight") {
+      const totalBtns = pagEl.querySelectorAll("button").length;
+      const lastBtn = pagEl.querySelector("button:last-child");
+      const maxPage = lastBtn ? parseInt(lastBtn.dataset.page) : dataPage;
+      if (dataPage < maxPage) {
+        dataPage++;
+        loadDataPreview();
+      }
     }
   });
 })();
