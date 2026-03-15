@@ -1,4 +1,4 @@
-/* ── Smart Content Extractor v0.6.1b ── */
+/* ── Smart Content Extractor v0.6.2b ── */
 /* Article body detection, readability scoring, regex extraction rules */
 (function () {
   "use strict";
@@ -328,6 +328,22 @@
     }
     if (msg.action === "SHOW_SHORTCUTS") {
       showShortcutHint();
+    }
+    if (msg.action === "AI_EXTRACT_PAGE") {
+      // Extract the main article text and send it to the AI server via background
+      const article = WSP_SmartExtract.extractArticle();
+      const text = article ? article.fullText : (document.body.innerText || "").slice(0, 4000);
+      const template = msg.template || "article";
+
+      // Send to background to forward to AI server
+      browser.runtime.sendMessage({
+        action: "AI_EXTRACT_REQUEST",
+        text: text.slice(0, 4000),
+        template: template,
+        source_url: window.location.href,
+        source_title: document.title,
+      });
+      return Promise.resolve({ sent: true });
     }
   });
 

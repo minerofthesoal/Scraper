@@ -218,6 +218,35 @@
       </label>
     </section>
 
+    <!-- AI Extraction (Optional) -->
+    <section class="card">
+      <h2>AI Extraction (Optional)</h2>
+      <small class="card-hint">Uses <a href="https://huggingface.co/numind/NuExtract-2.0-2B" target="_blank" style="color:var(--accent)">NuExtract-2.0-2B</a> for intelligent structured data extraction. Requires the CLI AI server running locally.</small>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-ai-enabled">
+        <span>Enable AI extraction</span>
+      </label>
+
+      <div class="field">
+        <label for="inp-ai-server">AI Server URL:</label>
+        <input type="text" id="inp-ai-server" value="http://127.0.0.1:8377" placeholder="http://127.0.0.1:8377">
+        <small>Start the server with: <code style="color:var(--accent)">scrape ai.serve</code> (GPU) or <code style="color:var(--accent)">scrape ai.serve --cpu</code></small>
+      </div>
+
+      <div class="field">
+        <button id="btn-ai-check" class="btn btn-small">Check Connection</button>
+        <span id="ai-server-status" class="status"></span>
+      </div>
+
+      <small class="card-hint" style="margin-top:8px">
+        <strong>Hardware requirements:</strong><br>
+        GPU: NVIDIA GTX 1070 (8GB) or newer &mdash; recommended, ~2s per extraction<br>
+        CPU: Intel i7-7660U / i7-7700HQ or equivalent &mdash; works but slower, ~15-30s per extraction<br>
+        <strong>Setup:</strong> <code style="color:var(--accent)">pip install torch transformers</code> then <code style="color:var(--accent)">scrape ai.setup</code>
+      </small>
+    </section>
+
     <!-- Data Management -->
     <section class="card">
       <h2>Data Management</h2>

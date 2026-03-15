@@ -9,7 +9,7 @@
     <header>
       <div class="header-left">
         <h1>WebScraper Pro</h1>
-        <span id="version-tag" class="version">v0.6.1b</span>
+        <span id="version-tag" class="version">v0.6.2b</span>
       </div>
       <div class="header-right">
         <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
@@ -93,6 +93,37 @@
         <button id="btn-upload-hf" class="btn btn-small">Upload HF</button>
         <button id="btn-options" class="btn btn-small">Settings</button>
       </section>
+
+      <section class="image-export-section">
+        <h2>Image Export</h2>
+        <div class="btn-row-2">
+          <select id="sel-img-format" class="img-format-select">
+            <option value="png">PNG</option>
+            <option value="webp">WebP</option>
+            <option value="jpeg">JPEG</option>
+            <option value="bmp">BMP</option>
+            <option value="svg">SVG</option>
+          </select>
+          <button id="btn-export-images" class="btn btn-secondary btn-small">Export Images</button>
+        </div>
+        <span id="img-export-status" class="export-status"></span>
+      </section>
+
+      <section class="ai-section">
+        <h2>AI Extract <span id="ai-status-dot" class="ai-dot ai-dot-off" title="AI server status"></span></h2>
+        <div class="btn-row-2">
+          <select id="sel-ai-template">
+            <option value="article">Article</option>
+            <option value="product">Product</option>
+            <option value="contact">Contact</option>
+            <option value="event">Event</option>
+            <option value="recipe">Recipe</option>
+            <option value="research">Research</option>
+          </select>
+          <button id="btn-ai-extract" class="btn btn-secondary btn-small">AI Extract</button>
+        </div>
+        <span id="ai-extract-status" class="export-status"></span>
+      </section>
     </div>
 
     <!-- Queue Tab -->
@@ -148,7 +179,7 @@
     </div>
 
     <footer>
-      <small>v0.6.1b | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
+      <small>v0.6.2b | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
     </footer>
   </div>
   <script src="popup.js"></script>

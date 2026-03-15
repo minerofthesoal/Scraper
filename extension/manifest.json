@@ -1,10 +1,21 @@
 {
   "manifest_version": 2,
   "name": "WebScraper Pro",
-  "version": "0.6.1",
-  "description": "Scrape text, images, links, and audio with smart extraction, batch queuing, session management, HuggingFace upload, and MLA/APA citations.",
+  "version": "0.6.2",
+  "description": "Scrape text, images, links, and audio with smart extraction, AI-powered extraction, batch queuing, session management, HuggingFace upload, and MLA/APA citations.",
   "author": "WebScraper Pro Team",
   "homepage_url": "https://github.com/minerofthesoal/Scraper",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "webscraper-pro@minerofthesoal",
+      "strict_min_version": "109.0",
+      "data_collection_permissions": {
+        "required": ["technicalAndInteraction"],
+        "optional": []
+      }
+    }
+  },
 
   "icons": {
     "48": "icons/icon-48.png",
@@ -37,6 +48,8 @@
       "lib/rate_limiter.js",
       "lib/session_manager.js",
       "lib/hf_upload.js",
+      "lib/image_export.js",
+      "lib/ai_extract.js",
       "background/background.js"
     ],
     "persistent": true

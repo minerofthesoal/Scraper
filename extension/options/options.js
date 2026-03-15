@@ -1,4 +1,4 @@
-/* ── Options Page Controller v0.6.1b ── */
+/* ── Options Page Controller v0.6.2b ── */
 (function () {
   "use strict";
 
@@ -54,13 +54,18 @@
     tokenStatus: $("#token-status"),
     saveStatus: $("#save-status"),
     dataStats: $("#data-stats"),
-    // New v0.6.1b
+    // New v0.6.2b
     rateMax: $("#inp-rate-max"),
     rateWindow: $("#inp-rate-window"),
     rateEnabled: $("#chk-rate-enabled"),
     allowlist: $("#txt-allowlist"),
     blocklist: $("#txt-blocklist"),
     regexRules: $("#txt-regex-rules"),
+    // AI extraction
+    aiEnabled: $("#chk-ai-enabled"),
+    aiServer: $("#inp-ai-server"),
+    btnAICheck: $("#btn-ai-check"),
+    aiServerStatus: $("#ai-server-status"),
   };
 
   /* ── Load settings ── */
@@ -72,6 +77,7 @@
     "scrapeJS", "citationFormat", "respectRobots", "minTextLength",
     "rateLimitConfig", "domainAllowlist", "domainBlocklist", "regexPatterns",
     "rateEnabled",
+    "aiEnabled", "aiServerUrl",
   ]).then((cfg) => {
     elements.autoStart.checked = !!cfg.autoStart;
     elements.autoScroll.checked = cfg.autoScroll !== false;
@@ -120,6 +126,10 @@
     if (elements.regexRules && cfg.regexPatterns) {
       elements.regexRules.value = JSON.stringify(cfg.regexPatterns, null, 2);
     }
+
+    // AI extraction
+    if (elements.aiEnabled) elements.aiEnabled.checked = !!cfg.aiEnabled;
+    if (elements.aiServer) elements.aiServer.value = cfg.aiServerUrl || "http://127.0.0.1:8377";
   });
 
   /* ── Load stats ── */
@@ -191,6 +201,10 @@
         .split("\n").map(d => d.trim()).filter(d => d),
     };
 
+    // AI extraction
+    settings.aiEnabled = elements.aiEnabled ? elements.aiEnabled.checked : false;
+    settings.aiServerUrl = elements.aiServer ? elements.aiServer.value.trim() : "http://127.0.0.1:8377";
+
     // Regex patterns
     if (elements.regexRules && elements.regexRules.value.trim()) {
       try {
@@ -251,6 +265,30 @@
       elements.tokenStatus.className = "status error";
     }
   });
+
+  /* ── AI Connection Check ── */
+  if (elements.btnAICheck) {
+    elements.btnAICheck.addEventListener("click", async () => {
+      const serverUrl = (elements.aiServer ? elements.aiServer.value : "http://127.0.0.1:8377").trim();
+      elements.aiServerStatus.textContent = "Checking...";
+      elements.aiServerStatus.className = "status";
+
+      try {
+        const resp = await fetch(serverUrl + "/health", { method: "GET" });
+        if (resp.ok) {
+          const info = await resp.json();
+          elements.aiServerStatus.textContent = `Connected! Model: ${info.model || "NuExtract"}, Device: ${info.device || "?"}, GPU: ${info.gpu || "N/A"}`;
+          elements.aiServerStatus.className = "status success";
+        } else {
+          elements.aiServerStatus.textContent = `Server returned status ${resp.status}`;
+          elements.aiServerStatus.className = "status error";
+        }
+      } catch (err) {
+        elements.aiServerStatus.textContent = "Cannot connect. Start server with: scrape ai.serve";
+        elements.aiServerStatus.className = "status error";
+      }
+    });
+  }
 
   /* ── Export ── */
   elements.btnExport.addEventListener("click", () => {

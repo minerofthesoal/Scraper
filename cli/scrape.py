@@ -32,6 +32,11 @@ Commands:
     scrape filter FIELD VALUE        - Filter records by field value
     scrape readme                    - Generate HF README from data
     scrape validate                  - Validate scraped data integrity
+    scrape ai.serve [--gpu|--cpu]    - Start NuExtract AI server
+    scrape ai.extract TEMPLATE TEXT  - Extract structured data with AI
+    scrape ai.status                 - Check AI server status
+    scrape ai.setup                  - Download and configure NuExtract model
+    scrape images.export [FORMAT]    - Export images in PNG/WebP/BMP/JPEG
     scrape -U -new                   - Update to newest version
     scrape -C option.upload          - Configure upload (dot-syntax)
     scrape --version                 - Show version
@@ -62,7 +67,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.1b"
+VERSION = "0.6.2b"
 
 # ── Config paths ──
 def get_config_dir():
@@ -2165,6 +2170,614 @@ def sample(count, record_type):
     for r in samples:
         rprint(r)
         console.print()
+
+
+# ── 52. scrape ai.serve ──
+@cli.command("ai.serve")
+@click.option("--gpu/--cpu", default=None, help="Force GPU or CPU mode (auto-detect if not specified)")
+@click.option("--port", "-p", default=8377, type=int, help="Server port")
+@click.option("--model", default="numind/NuExtract-2.0-2B", help="HuggingFace model ID")
+def ai_serve(gpu, port, model):
+    """Start the NuExtract AI extraction server.
+
+    This runs a local HTTP server that the browser extension can connect to
+    for AI-powered structured data extraction. Works on GPU (min GTX 1070)
+    or CPU (any modern Intel/AMD processor).
+
+    Requirements: pip install torch transformers
+    """
+    try:
+        import torch
+    except ImportError:
+        console.print("[red]PyTorch not installed. Run:[/red] pip install torch")
+        console.print("[dim]For GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121[/dim]")
+        console.print("[dim]For CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu[/dim]")
+        return
+
+    try:
+        from transformers import AutoProcessor, AutoModelForVision2Seq
+    except ImportError:
+        console.print("[red]Transformers not installed. Run:[/red] pip install transformers")
+        return
+
+    # Determine device
+    if gpu is True:
+        if not torch.cuda.is_available():
+            console.print("[red]GPU requested but CUDA not available.[/red]")
+            return
+        device = "cuda"
+    elif gpu is False:
+        device = "cpu"
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    console.print(f"[bold blue]NuExtract AI Server[/bold blue]")
+    console.print(f"  Model:  [cyan]{model}[/cyan]")
+    console.print(f"  Device: [cyan]{device}[/cyan]")
+    if device == "cuda":
+        gpu_name = torch.cuda.get_device_name(0)
+        gpu_mem = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+        console.print(f"  GPU:    [cyan]{gpu_name} ({gpu_mem:.1f} GB)[/cyan]")
+    console.print(f"  Port:   [cyan]{port}[/cyan]")
+    console.print()
+
+    console.print("[yellow]Loading model (this may take a minute on first run)...[/yellow]")
+
+    # Load model with appropriate settings for the device
+    if device == "cuda":
+        # Use float16 for GPU — compatible with GTX 1070 (Pascal) and newer
+        # Don't use bfloat16 (requires Ampere+) or flash_attention_2 (requires Ampere+)
+        model_obj = AutoModelForVision2Seq.from_pretrained(
+            model,
+            trust_remote_code=True,
+            torch_dtype=torch.float16,
+            device_map="auto",
+        )
+    else:
+        # CPU mode — use float32, no device_map
+        model_obj = AutoModelForVision2Seq.from_pretrained(
+            model,
+            trust_remote_code=True,
+            torch_dtype=torch.float32,
+        )
+        model_obj = model_obj.to("cpu")
+
+    processor = AutoProcessor.from_pretrained(model, trust_remote_code=True)
+    console.print("[green]Model loaded successfully![/green]")
+    console.print(f"[bold]Server starting at http://127.0.0.1:{port}[/bold]")
+    console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+
+    # Start HTTP server
+    import http.server
+    import json as json_mod
+
+    class NuExtractHandler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            console.print(f"[dim]{self.address_string()} {fmt % args}[/dim]")
+
+        def _set_cors_headers(self):
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+        def do_OPTIONS(self):
+            self.send_response(200)
+            self._set_cors_headers()
+            self.end_headers()
+
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self._set_cors_headers()
+                self.end_headers()
+                info = {
+                    "status": "ready",
+                    "model": model,
+                    "device": device,
+                    "version": VERSION,
+                }
+                if device == "cuda":
+                    info["gpu"] = torch.cuda.get_device_name(0)
+                    info["gpu_memory_gb"] = round(torch.cuda.get_device_properties(0).total_mem / (1024**3), 1)
+                self.wfile.write(json_mod.dumps(info).encode())
+            elif self.path == "/templates":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self._set_cors_headers()
+                self.end_headers()
+                templates = _get_ai_templates()
+                self.wfile.write(json_mod.dumps(templates).encode())
+            else:
+                self.send_error(404)
+
+        def do_POST(self):
+            if self.path == "/extract":
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len)
+                try:
+                    req = json_mod.loads(body)
+                except json_mod.JSONDecodeError:
+                    self.send_error(400, "Invalid JSON")
+                    return
+
+                text = req.get("text", "")
+                template = req.get("template", {})
+                max_tokens = req.get("max_tokens", 2048)
+
+                if not text:
+                    self.send_error(400, "Missing 'text' field")
+                    return
+                if not template:
+                    self.send_error(400, "Missing 'template' field")
+                    return
+
+                try:
+                    result = _run_extraction(model_obj, processor, text, template, max_tokens, device)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self._set_cors_headers()
+                    self.end_headers()
+                    self.wfile.write(json_mod.dumps(result).encode())
+                except Exception as e:
+                    self.send_error(500, str(e))
+            else:
+                self.send_error(404)
+
+    server = http.server.HTTPServer(("127.0.0.1", port), NuExtractHandler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped.[/yellow]")
+        server.server_close()
+
+
+def _run_extraction(model_obj, processor, text, template, max_tokens, device):
+    """Run NuExtract extraction on text with a given template."""
+    import torch
+    import json as json_mod
+
+    template_str = json_mod.dumps(template) if isinstance(template, dict) else str(template)
+
+    messages = [{"role": "user", "content": text}]
+    rendered = processor.tokenizer.apply_chat_template(
+        messages,
+        template=template_str,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+
+    inputs = processor(text=[rendered], padding=True, return_tensors="pt")
+    if device == "cuda":
+        inputs = {k: v.to("cuda") if hasattr(v, "to") else v for k, v in inputs.items()}
+
+    with torch.no_grad():
+        generated = model_obj.generate(
+            **inputs,
+            do_sample=False,
+            num_beams=1,
+            max_new_tokens=max_tokens,
+        )
+
+    # Decode only the new tokens
+    input_len = inputs["input_ids"].shape[1]
+    output_ids = generated[0][input_len:]
+    result_text = processor.tokenizer.decode(output_ids, skip_special_tokens=True)
+
+    # Try to parse as JSON
+    try:
+        return json_mod.loads(result_text)
+    except json_mod.JSONDecodeError:
+        # Return raw text if not valid JSON
+        return {"raw_output": result_text}
+
+
+def _get_ai_templates():
+    """Get predefined extraction templates."""
+    return {
+        "article": {
+            "title": "verbatim-string",
+            "author": "verbatim-string",
+            "date_published": "date-time",
+            "summary": "string",
+            "key_points": ["string"],
+            "topics": [["Technology", "Science", "Politics", "Business", "Health",
+                        "Sports", "Entertainment", "Education", "Environment", "Other"]],
+            "sentiment": ["Positive", "Negative", "Neutral", "Mixed"],
+        },
+        "product": {
+            "product_name": "verbatim-string",
+            "price": "number",
+            "currency": "verbatim-string",
+            "brand": "verbatim-string",
+            "description": "string",
+            "rating": "number",
+            "features": ["string"],
+            "availability": ["In Stock", "Out of Stock", "Pre-order", "Unknown"],
+        },
+        "contact": {
+            "names": ["verbatim-string"],
+            "emails": ["verbatim-string"],
+            "phone_numbers": ["verbatim-string"],
+            "addresses": ["string"],
+            "companies": ["verbatim-string"],
+            "job_titles": ["verbatim-string"],
+        },
+        "event": {
+            "event_name": "verbatim-string",
+            "date": "date-time",
+            "location": "string",
+            "organizer": "verbatim-string",
+            "description": "string",
+        },
+        "recipe": {
+            "recipe_name": "verbatim-string",
+            "servings": "integer",
+            "prep_time_minutes": "integer",
+            "cook_time_minutes": "integer",
+            "ingredients": ["string"],
+            "instructions": ["string"],
+        },
+        "research": {
+            "title": "verbatim-string",
+            "authors": ["verbatim-string"],
+            "abstract": "string",
+            "key_findings": ["string"],
+            "publication_date": "date-time",
+            "doi": "verbatim-string",
+        },
+    }
+
+
+# ── 53. scrape ai.extract ──
+@cli.command("ai.extract")
+@click.argument("template_name", default="article")
+@click.option("--file", "-f", "input_file", default=None, help="Input text file to extract from")
+@click.option("--text", "-t", default=None, help="Inline text to extract from")
+@click.option("--server", default="http://127.0.0.1:8377", help="AI server URL")
+@click.option("--output", "-o", default=None, help="Output file (default: stdout)")
+def ai_extract(template_name, input_file, text, server, output):
+    """Extract structured data from text using NuExtract AI.
+
+    TEMPLATE_NAME can be: article, product, contact, event, recipe, research
+    Or a path to a JSON template file.
+    """
+    import requests
+
+    # Get text
+    if input_file:
+        with open(input_file, "r") as f:
+            text = f.read()
+    elif text is None:
+        # Read from scraped data
+        cfg = load_config()
+        records = load_records(cfg)
+        text_records = [r for r in records if r.get("type") == "text"]
+        if not text_records:
+            console.print("[yellow]No text records found. Provide --file or --text[/yellow]")
+            return
+        # Use the longest text record
+        text = max(text_records, key=lambda r: len(r.get("text", "")))["text"]
+        console.print(f"[dim]Using longest text record ({len(text)} chars)[/dim]")
+
+    # Get template
+    templates = _get_ai_templates()
+    if template_name in templates:
+        template = templates[template_name]
+    elif os.path.exists(template_name):
+        with open(template_name, "r") as f:
+            template = json.load(f)
+    else:
+        console.print(f"[red]Unknown template '{template_name}'. Available: {', '.join(templates.keys())}[/red]")
+        return
+
+    # Truncate long text
+    if len(text) > 4000:
+        console.print(f"[dim]Text truncated from {len(text)} to 4000 chars[/dim]")
+        text = text[:4000]
+
+    console.print(f"[yellow]Extracting with template '{template_name}'...[/yellow]")
+
+    try:
+        resp = requests.post(f"{server}/extract", json={
+            "text": text,
+            "template": template,
+            "max_tokens": 2048,
+        }, timeout=120)
+
+        if resp.status_code != 200:
+            console.print(f"[red]Server error ({resp.status_code}): {resp.text}[/red]")
+            return
+
+        result = resp.json()
+
+        if output:
+            with open(output, "w") as f:
+                json.dump(result, f, indent=2)
+            console.print(f"[green]Result saved to {output}[/green]")
+        else:
+            rprint(result)
+
+    except requests.ConnectionError:
+        console.print("[red]Cannot connect to AI server.[/red]")
+        console.print("[dim]Start it with: scrape ai.serve[/dim]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+# ── 54. scrape ai.status ──
+@cli.command("ai.status")
+@click.option("--server", default="http://127.0.0.1:8377", help="AI server URL")
+def ai_status(server):
+    """Check if the NuExtract AI server is running."""
+    import requests
+
+    try:
+        resp = requests.get(f"{server}/health", timeout=5)
+        if resp.ok:
+            info = resp.json()
+            console.print(Panel(
+                f"[green]Server is running![/green]\n\n"
+                f"  Model:  [cyan]{info.get('model', 'unknown')}[/cyan]\n"
+                f"  Device: [cyan]{info.get('device', 'unknown')}[/cyan]\n"
+                f"  GPU:    [cyan]{info.get('gpu', 'N/A')}[/cyan]\n"
+                f"  Memory: [cyan]{info.get('gpu_memory_gb', 'N/A')} GB[/cyan]\n"
+                f"  Version: [cyan]{info.get('version', 'unknown')}[/cyan]",
+                title="NuExtract AI Server",
+                border_style="green"
+            ))
+        else:
+            console.print(f"[red]Server returned status {resp.status_code}[/red]")
+    except requests.ConnectionError:
+        console.print("[red]AI server is not running.[/red]")
+        console.print("[dim]Start it with: scrape ai.serve[/dim]")
+        console.print("[dim]  GPU mode: scrape ai.serve --gpu[/dim]")
+        console.print("[dim]  CPU mode: scrape ai.serve --cpu[/dim]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+# ── 55. scrape ai.setup ──
+@cli.command("ai.setup")
+@click.option("--gpu/--cpu", default=None, help="Configure for GPU or CPU")
+def ai_setup(gpu):
+    """Download and configure NuExtract model.
+
+    This will install required dependencies and download the model.
+    GPU mode requires CUDA-capable GPU (min GTX 1070 8GB).
+    CPU mode works on any modern processor (i7-7660U, i7-7700HQ, etc.).
+    """
+    console.print("[bold blue]NuExtract AI Setup[/bold blue]\n")
+
+    # Check Python version
+    py_ver = sys.version_info
+    console.print(f"  Python: [cyan]{py_ver.major}.{py_ver.minor}.{py_ver.micro}[/cyan]")
+
+    # Check PyTorch
+    try:
+        import torch
+        console.print(f"  PyTorch: [green]{torch.__version__}[/green]")
+        cuda_available = torch.cuda.is_available()
+        console.print(f"  CUDA: [{'green' if cuda_available else 'yellow'}]{cuda_available}[/{'green' if cuda_available else 'yellow'}]")
+        if cuda_available:
+            console.print(f"  GPU: [cyan]{torch.cuda.get_device_name(0)}[/cyan]")
+            mem_gb = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+            console.print(f"  GPU Memory: [cyan]{mem_gb:.1f} GB[/cyan]")
+            if mem_gb < 6:
+                console.print("[yellow]  Warning: Less than 6GB VRAM. Model may not fit.[/yellow]")
+    except ImportError:
+        console.print("  PyTorch: [red]Not installed[/red]")
+        if gpu is True or gpu is None:
+            console.print("\n[yellow]Install PyTorch with GPU support:[/yellow]")
+            console.print("  pip install torch --index-url https://download.pytorch.org/whl/cu121")
+        if gpu is False or gpu is None:
+            console.print("\n[yellow]Install PyTorch for CPU:[/yellow]")
+            console.print("  pip install torch --index-url https://download.pytorch.org/whl/cpu")
+        return
+
+    # Check transformers
+    try:
+        import transformers
+        console.print(f"  Transformers: [green]{transformers.__version__}[/green]")
+    except ImportError:
+        console.print("  Transformers: [red]Not installed[/red]")
+        console.print("\n[yellow]Install transformers:[/yellow]")
+        console.print("  pip install transformers")
+        return
+
+    # Try to download model
+    console.print(f"\n[yellow]Downloading NuExtract-2.0-2B model...[/yellow]")
+    console.print("[dim]This may take a few minutes on first run (~4GB download)[/dim]")
+
+    try:
+        from transformers import AutoProcessor, AutoModelForVision2Seq
+
+        console.print("[dim]Downloading processor...[/dim]")
+        AutoProcessor.from_pretrained("numind/NuExtract-2.0-2B", trust_remote_code=True)
+
+        console.print("[dim]Downloading model...[/dim]")
+        if gpu is False:
+            AutoModelForVision2Seq.from_pretrained(
+                "numind/NuExtract-2.0-2B",
+                trust_remote_code=True,
+                torch_dtype=torch.float32,
+            )
+        else:
+            AutoModelForVision2Seq.from_pretrained(
+                "numind/NuExtract-2.0-2B",
+                trust_remote_code=True,
+                torch_dtype=torch.float16,
+            )
+
+        console.print("\n[green]Setup complete! Model downloaded successfully.[/green]")
+        console.print("[dim]Start the server with: scrape ai.serve[/dim]")
+
+    except Exception as e:
+        console.print(f"\n[red]Setup failed: {e}[/red]")
+        console.print("[dim]Check your internet connection and try again.[/dim]")
+
+
+# ── 56. scrape ai.batch ──
+@cli.command("ai.batch")
+@click.argument("template_name", default="article")
+@click.option("--server", default="http://127.0.0.1:8377", help="AI server URL")
+@click.option("--output", "-o", default=None, help="Output JSONL file")
+@click.option("--limit", "-n", default=50, type=int, help="Max records to process")
+def ai_batch(template_name, server, output, limit):
+    """Run AI extraction on all scraped text records."""
+    import requests
+
+    cfg = load_config()
+    records = load_records(cfg)
+    text_records = [r for r in records if r.get("type") == "text" and len(r.get("text", "")) >= 20]
+
+    if not text_records:
+        console.print("[yellow]No text records found.[/yellow]")
+        return
+
+    text_records = text_records[:limit]
+    console.print(f"[yellow]Processing {len(text_records)} text records with '{template_name}' template...[/yellow]")
+
+    templates = _get_ai_templates()
+    template = templates.get(template_name, templates["article"])
+
+    results = []
+    errors = 0
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task(f"Extracting...", total=len(text_records))
+
+        for i, rec in enumerate(text_records):
+            text = rec.get("text", "")[:4000]
+            try:
+                resp = requests.post(f"{server}/extract", json={
+                    "text": text,
+                    "template": template,
+                    "max_tokens": 2048,
+                }, timeout=120)
+
+                if resp.ok:
+                    result = resp.json()
+                    result["_source_url"] = rec.get("source_url", "")
+                    result["_source_id"] = rec.get("id", "")
+                    results.append(result)
+                else:
+                    errors += 1
+            except Exception:
+                errors += 1
+
+            progress.update(task, advance=1, description=f"Extracting... {i+1}/{len(text_records)}")
+
+    console.print(f"\n[green]Done! {len(results)} extracted, {errors} errors[/green]")
+
+    if output:
+        with open(output, "w") as f:
+            for r in results:
+                f.write(json.dumps(r) + "\n")
+        console.print(f"[green]Results saved to {output}[/green]")
+    else:
+        for r in results[:5]:
+            rprint(r)
+            console.print()
+        if len(results) > 5:
+            console.print(f"[dim]... and {len(results) - 5} more. Use --output to save all.[/dim]")
+
+
+# ── 57. scrape images.export ──
+@cli.command("images.export")
+@click.argument("format", default="png", type=click.Choice(["png", "webp", "jpeg", "bmp"]))
+@click.option("--output-dir", "-o", default=None, help="Output directory")
+@click.option("--quality", "-q", default=92, type=int, help="Quality (1-100) for lossy formats")
+@click.option("--limit", "-n", default=0, type=int, help="Max images to export (0=all)")
+def images_export(format, output_dir, quality, limit):
+    """Export scraped images in various formats (PNG, WebP, JPEG, BMP)."""
+    try:
+        from PIL import Image
+        import requests as req_lib
+        from io import BytesIO
+    except ImportError:
+        console.print("[red]Pillow not installed. Run:[/red] pip install Pillow")
+        return
+
+    cfg = load_config()
+    records = load_records(cfg)
+    image_records = [r for r in records if r.get("type") == "image" and r.get("src")]
+
+    if not image_records:
+        console.print("[yellow]No image records found.[/yellow]")
+        return
+
+    if limit > 0:
+        image_records = image_records[:limit]
+
+    if output_dir is None:
+        output_dir = os.path.join(cfg.get("save_path", os.path.join(DATA_DIR, "scraped")), "images")
+    os.makedirs(output_dir, exist_ok=True)
+
+    console.print(f"[yellow]Exporting {len(image_records)} images as {format.upper()}...[/yellow]")
+
+    exported = 0
+    errors = 0
+
+    ext_map = {"png": ".png", "webp": ".webp", "jpeg": ".jpg", "bmp": ".bmp"}
+    ext = ext_map[format]
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Exporting...", total=len(image_records))
+
+        for i, rec in enumerate(image_records):
+            src = rec["src"]
+            try:
+                # Download image
+                resp = req_lib.get(src, timeout=15, headers={"User-Agent": "WebScraperPro/1.0"})
+                if resp.status_code != 200:
+                    errors += 1
+                    progress.update(task, advance=1)
+                    continue
+
+                img = Image.open(BytesIO(resp.content))
+
+                # Convert mode for format compatibility
+                if format in ("jpeg", "bmp") and img.mode in ("RGBA", "P", "LA"):
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == "P":
+                        img = img.convert("RGBA")
+                    bg.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
+                    img = bg
+                elif format == "jpeg" and img.mode != "RGB":
+                    img = img.convert("RGB")
+
+                # Generate filename
+                alt = rec.get("alt", "")
+                if alt:
+                    name = alt.replace(" ", "_")[:80]
+                else:
+                    name = os.path.splitext(os.path.basename(src.split("?")[0]))[0][:80]
+                name = "".join(c if c.isalnum() or c in "_-." else "_" for c in name) or "image"
+                name = f"{name}_{i}{ext}"
+
+                filepath = os.path.join(output_dir, name)
+
+                # Save
+                save_kwargs = {}
+                if format in ("webp", "jpeg"):
+                    save_kwargs["quality"] = quality
+                if format == "webp":
+                    save_kwargs["method"] = 4
+
+                img.save(filepath, **save_kwargs)
+                exported += 1
+
+            except Exception as e:
+                errors += 1
+
+            progress.update(task, advance=1, description=f"Exporting... {i+1}/{len(image_records)}")
+
+    console.print(f"\n[green]Exported {exported} images to {output_dir}[/green]")
+    if errors:
+        console.print(f"[yellow]{errors} images failed[/yellow]")
+
+    log_history("images.export", f"Exported {exported} images as {format}")
 
 
 # ── Entry point ──
