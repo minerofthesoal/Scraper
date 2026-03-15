@@ -1,8 +1,8 @@
 # WebScraper Pro
 
-**v0.6.3b3** | Firefox Extension + Python CLI + Full GUI
+**v0.6.3b4** | Firefox Extension + Python CLI + Full GUI | Android supported
 
-A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation.
+A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Now with Android/Fenix support, Markdown export, pretty-print JSON/JSONL, and auto LLM downloading.
 
 [![Build & Release](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml)
 [![Lint & Validate](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml)
@@ -88,6 +88,9 @@ scrape export jsonl
 | JSON | `.json` | APIs, structured storage |
 | CSV | `.csv` | Spreadsheets, data analysis |
 | XML | `.xml` | Enterprise, interoperability |
+| Markdown | `.md` | Documentation, human-readable |
+
+Pretty-print JSON/JSONL exports are supported for human-readable output.
 
 ### HuggingFace Integration
 
@@ -106,9 +109,15 @@ scrape export jsonl
 ### AI-Powered Extraction
 
 - **NuExtract** integration for structured data extraction
+- Auto-download model (~1.5GB) - no separate server needed
 - Template-based extraction with custom schemas
-- Local GPU/CPU inference server
+- Local GPU/CPU inference (server or auto mode)
 - Batch processing support
+
+### Android Support
+
+- Works on Firefox for Android (Fenix 120+)
+- Full popup menu with all tabs and features
 
 ---
 
@@ -238,7 +247,7 @@ Or: Firefox -> `about:addons` -> gear icon -> **Install Add-on From File** -> se
 
 | Command | Description |
 |---------|-------------|
-| `scrape export [FORMAT]` | Export data (jsonl/json/csv/xml) |
+| `scrape export [FORMAT]` | Export data (jsonl/json/csv/xml/md) |
 | `scrape upload` | Upload to your HuggingFace repo |
 | `scrape upload.new REPO_ID` | Create new HF repo and upload |
 | `scrape upload.owner` | Upload to shared community repo |

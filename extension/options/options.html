@@ -51,6 +51,7 @@
           <option value="json">JSON</option>
           <option value="csv">CSV</option>
           <option value="xml">XML</option>
+          <option value="md">Markdown (.md)</option>
         </select>
       </div>
 
@@ -69,6 +70,11 @@
       <label class="toggle-row">
         <input type="checkbox" id="chk-respect-robots" checked>
         <span>Respect robots.txt directives</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-pretty-print">
+        <span>Pretty-print JSON/JSONL exports (human-readable, larger files)</span>
       </label>
     </section>
 
@@ -221,17 +227,23 @@
     <!-- AI Extraction (Optional) -->
     <section class="card">
       <h2>AI Extraction (Optional)</h2>
-      <small class="card-hint">Uses <a href="https://huggingface.co/numind/NuExtract-2.0-2B" target="_blank" style="color:var(--accent)">NuExtract-2.0-2B</a> for intelligent structured data extraction. Requires the CLI AI server running locally.</small>
+      <small class="card-hint">Uses <a href="https://huggingface.co/numind/NuExtract-2.0-2B" target="_blank" style="color:var(--accent)">NuExtract-2.0-2B</a> for intelligent structured data extraction.</small>
 
       <label class="toggle-row">
         <input type="checkbox" id="chk-ai-enabled">
         <span>Enable AI extraction</span>
       </label>
 
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-ai-auto-download">
+        <span>Auto-download model (no server needed &mdash; downloads ~1.5GB model on first use)</span>
+      </label>
+      <small class="card-hint">When enabled, the CLI will automatically download and cache the NuExtract model locally. No separate server process required. Disable this if you want to run your own server instead.</small>
+
       <div class="field">
-        <label for="inp-ai-server">AI Server URL:</label>
+        <label for="inp-ai-server">AI Server URL (if not using auto-download):</label>
         <input type="text" id="inp-ai-server" value="http://127.0.0.1:8377" placeholder="http://127.0.0.1:8377">
-        <small>Start the server with: <code style="color:var(--accent)">scrape ai.serve</code> (GPU) or <code style="color:var(--accent)">scrape ai.serve --cpu</code></small>
+        <small>Only needed if auto-download is off. Start with: <code style="color:var(--accent)">scrape ai.serve</code></small>
       </div>
 
       <div class="field">
@@ -241,9 +253,9 @@
 
       <small class="card-hint" style="margin-top:8px">
         <strong>Hardware requirements:</strong><br>
-        GPU: NVIDIA GTX 1070 (8GB) or newer &mdash; recommended, ~2s per extraction<br>
-        CPU: Intel i7-7660U / i7-7700HQ or equivalent &mdash; works but slower, ~15-30s per extraction<br>
-        <strong>Setup:</strong> <code style="color:var(--accent)">pip install torch transformers</code> then <code style="color:var(--accent)">scrape ai.setup</code>
+        GPU: NVIDIA GTX 1070 (8GB+) &mdash; recommended, ~2s per extraction<br>
+        CPU: Any modern processor &mdash; works but slower, ~15-30s per extraction<br>
+        <strong>Manual setup:</strong> <code style="color:var(--accent)">pip install torch transformers</code> then <code style="color:var(--accent)">scrape ai.setup</code>
       </small>
     </section>
 

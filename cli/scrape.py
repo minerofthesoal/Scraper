@@ -14,7 +14,7 @@ Commands:
     scrape config.upload             - Configure HF upload settings
     scrape config.save               - Configure local save settings
     scrape config.reset              - Reset config to defaults
-    scrape export [FORMAT]           - Export scraped data (jsonl/json/csv)
+    scrape export [FORMAT]           - Export scraped data (jsonl/json/csv/xml/md)
     scrape upload                    - Upload data to HuggingFace
     scrape upload.new REPO_ID        - Create new HF repo and upload
     scrape upload.status             - Check upload status
@@ -73,7 +73,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.3b3"
+VERSION = "0.6.3b4"
 
 # ── Config paths ──
 def get_config_dir():
@@ -355,9 +355,10 @@ def config_reset():
 
 # ── 9. scrape export ──
 @cli.command("export")
-@click.argument("format", default="jsonl", type=click.Choice(["jsonl", "json", "csv"]))
+@click.argument("format", default="jsonl", type=click.Choice(["jsonl", "json", "csv", "xml", "md"]))
 @click.option("--output", "-o", default=None, help="Output file path")
-def export_data(format, output):
+@click.option("--pretty", "-p", is_flag=True, help="Pretty-print JSON/JSONL output")
+def export_data(format, output, pretty):
     """Export scraped data in specified format."""
     cfg = load_config()
     records = load_records(cfg)
@@ -373,10 +374,13 @@ def export_data(format, output):
     if format == "jsonl":
         with open(output, "w") as f:
             for r in records:
-                f.write(json.dumps(r) + "\n")
+                if pretty:
+                    f.write(json.dumps(r, indent=2) + "\n\n")
+                else:
+                    f.write(json.dumps(r) + "\n")
     elif format == "json":
         with open(output, "w") as f:
-            json.dump(records, f, indent=2)
+            json.dump(records, f, indent=2 if pretty else None)
     elif format == "csv":
         import csv
         if records:
@@ -385,6 +389,40 @@ def export_data(format, output):
                 writer = csv.DictWriter(f, fieldnames=keys)
                 writer.writeheader()
                 writer.writerows(records)
+    elif format == "xml":
+        with open(output, "w") as f:
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n<records>\n')
+            for r in records:
+                f.write("  <record>\n")
+                for k, v in r.items():
+                    safe_val = str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    f.write(f"    <{k}>{safe_val}</{k}>\n")
+                f.write("  </record>\n")
+            f.write("</records>\n")
+    elif format == "md":
+        with open(output, "w") as f:
+            f.write(f"# WebScraper Pro Export\n\n")
+            f.write(f"**Records:** {len(records)} | **Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n---\n\n")
+            for i, r in enumerate(records):
+                rtype = r.get("type", "unknown")
+                source = r.get("source_url", "")
+                f.write(f"## Record {i+1} ({rtype})\n\n")
+                if source:
+                    f.write(f"**Source:** {source}\n\n")
+                if rtype == "text":
+                    f.write(r.get("text", r.get("content", "")) + "\n\n")
+                elif rtype == "image":
+                    f.write(f"![{r.get('alt', 'image')}]({r.get('src', '')})\n\n")
+                elif rtype == "link":
+                    f.write(f"- [{r.get('text', r.get('href', ''))}]({r.get('href', '')})\n\n")
+                elif rtype == "audio":
+                    f.write(f"Audio: {r.get('src', '')}\n\n")
+                else:
+                    for k, v in r.items():
+                        if k not in ("type", "source_url", "timestamp", "hash"):
+                            f.write(f"- **{k}:** {v}\n")
+                    f.write("\n")
+                f.write("---\n\n")
 
     log_history("export", f"Exported {len(records)} records to {output}")
     console.print(f"[green]Exported {len(records)} records to {output}[/green]")
@@ -1239,6 +1277,16 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.3b4", "2026-03-15", [
+            "Android/Fenix support (Firefox for Android 120+)",
+            "Markdown (.md) export format for human-readable output",
+            "Pretty-print JSON/JSONL exports (--pretty flag in CLI)",
+            "Auto LLM downloading - no separate server needed for AI extraction",
+            "New Export tab in popup with format selection and image export",
+            "XML export support in CLI",
+            "Reorganized popup menu with 5 tabs (Scrape, Queue, Data, Export, Sessions)",
+            "AI mode indicator (local vs server) in popup",
+        ]),
         ("0.6.3b3", "2026-03-15", [
             "Fix Firefox manifest: numeric-only version (0.6.3.3), valid data_collection_permissions",
             "Fix HuggingFace token validation: whoami-v2 + fallback endpoints for 404 errors",
