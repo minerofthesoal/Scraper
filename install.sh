@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════
-# WebScraper Pro v0.6.3b4 - Auto Installer (Linux / macOS)
+# WebScraper Pro v0.6.3b4.1 - Auto Installer (Linux / macOS)
 # Installs the Python CLI and sets up the Firefox extension
 # Works on: Arch, Ubuntu, Debian, Fedora, macOS, and more
 # ══════════════════════════════════════════════════════════════
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║    WebScraper Pro v0.6.3b4 - Auto Installer  ║${NC}"
+echo -e "${BLUE}║    WebScraper Pro v0.6.3b4.1 - Auto Installer  ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -78,6 +78,30 @@ install_system_deps() {
     esac
 }
 
+# ── Find compatible Python (3.10-3.12 for PyTorch) ──
+find_compatible_python() {
+    # Try specific versions first (prefer newest compatible)
+    for minor in 12 11 10; do
+        local cmd="python3.${minor}"
+        if command -v "$cmd" &>/dev/null; then
+            echo "$cmd"
+            return 0
+        fi
+    done
+
+    # Fall back to generic python3 if it's in the right range
+    if command -v python3 &>/dev/null; then
+        local ver
+        ver=$(python3 -c "import sys; print(sys.version_info.minor)" 2>/dev/null)
+        if [[ "$ver" -ge 10 ]] && [[ "$ver" -le 12 ]]; then
+            echo "python3"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 # ── Check Python ──
 check_python() {
     if command -v python3 &>/dev/null; then
@@ -96,9 +120,26 @@ check_python() {
     # Check minimum version
     PY_MAJOR=$($PYTHON -c "import sys; print(sys.version_info.major)")
     PY_MINOR=$($PYTHON -c "import sys; print(sys.version_info.minor)")
-    if [[ "$PY_MAJOR" -lt 3 ]] || { [[ "$PY_MAJOR" -eq 3 ]] && [[ "$PY_MINOR" -lt 8 ]]; }; then
-        err "Python 3.8+ required (found $PY_VERSION)"
+    if [[ "$PY_MAJOR" -lt 3 ]] || { [[ "$PY_MAJOR" -eq 3 ]] && [[ "$PY_MINOR" -lt 10 ]]; }; then
+        err "Python 3.10+ required (found $PY_VERSION)"
         exit 1
+    fi
+
+    # Check for PyTorch-compatible Python (3.10-3.12)
+    if [[ "$PY_MINOR" -gt 12 ]]; then
+        warn "Python $PY_VERSION detected. PyTorch requires Python 3.10-3.12."
+        COMPAT_PYTHON=$(find_compatible_python)
+        if [[ -n "$COMPAT_PYTHON" ]]; then
+            local compat_ver
+            compat_ver=$($COMPAT_PYTHON --version 2>&1 | awk '{print $2}')
+            ok "Found compatible Python: $compat_ver ($COMPAT_PYTHON)"
+            PYTHON="$COMPAT_PYTHON"
+            PY_VERSION="$compat_ver"
+        else
+            warn "No Python 3.10-3.12 found. AI features (NuExtract) will not work."
+            warn "Install Python 3.10-3.12 for full functionality."
+            info "Continuing with Python $PY_VERSION for non-AI features..."
+        fi
     fi
 }
 

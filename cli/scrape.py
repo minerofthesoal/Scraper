@@ -73,7 +73,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.3b4"
+VERSION = "0.6.3b4.1"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1277,6 +1277,12 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.3b4.1", "2026-03-15", [
+            "Force Python 3.10-3.12 in all installers (PyTorch compatibility)",
+            "Improved PyTorch detection in doctor, ai.serve, ai.setup commands",
+            "Show GPU info and CUDA status in scrape doctor",
+            "Better error messages when Python version is incompatible",
+        ]),
         ("0.6.3b4", "2026-03-15", [
             "Android/Fenix support (Firefox for Android 120+)",
             "Markdown (.md) export format for human-readable output",
@@ -2165,7 +2171,14 @@ def doctor():
     table.add_column("Details", style="dim")
 
     # Python
-    table.add_row("Python", "[green]OK[/green]", f"{sys.version.split()[0]}")
+    py_ver = sys.version.split()[0]
+    py_minor = sys.version_info.minor
+    if 10 <= py_minor <= 12:
+        table.add_row("Python", "[green]OK[/green]", f"{py_ver} (PyTorch compatible)")
+    elif py_minor > 12:
+        table.add_row("Python", "[yellow]WARN[/yellow]", f"{py_ver} - PyTorch needs 3.10-3.12")
+    else:
+        table.add_row("Python", "[yellow]WARN[/yellow]", f"{py_ver} - Upgrade to 3.10-3.12")
 
     # Required packages
     packages = [
@@ -2179,6 +2192,31 @@ def doctor():
             table.add_row(name, "[green]OK[/green]", "Installed")
         except ImportError:
             table.add_row(name, "[red]MISSING[/red]", f"pip install {name}")
+
+    # PyTorch (AI extraction)
+    try:
+        import torch
+        torch_ver = torch.__version__
+        cuda_str = ""
+        if torch.cuda.is_available():
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_mem = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+            cuda_str = f" | CUDA: {gpu_name} ({gpu_mem:.0f}GB)"
+        else:
+            cuda_str = " | CPU only"
+        table.add_row("PyTorch (AI)", "[green]OK[/green]", f"{torch_ver}{cuda_str}")
+    except ImportError:
+        if py_minor > 12:
+            table.add_row("PyTorch (AI)", "[red]UNAVAILABLE[/red]", f"Needs Python 3.10-3.12 (have {py_ver})")
+        else:
+            table.add_row("PyTorch (AI)", "[yellow]MISSING[/yellow]", "pip install torch (optional, for AI)")
+
+    # transformers
+    try:
+        import transformers
+        table.add_row("Transformers (AI)", "[green]OK[/green]", transformers.__version__)
+    except ImportError:
+        table.add_row("Transformers (AI)", "[yellow]MISSING[/yellow]", "Optional: pip install transformers")
 
     # tkinter
     try:
@@ -2547,13 +2585,29 @@ def ai_serve(gpu, port, model):
     or CPU (any modern Intel/AMD processor).
 
     Requirements: pip install torch transformers
+    Requires Python 3.10-3.12 (PyTorch does not support 3.13+).
     """
+    # Check Python version first
+    py_minor = sys.version_info.minor
+    if py_minor > 12:
+        console.print(f"[red]Python {sys.version_info.major}.{py_minor} detected. PyTorch requires Python 3.10-3.12.[/red]")
+        console.print("[yellow]Install Python 3.10, 3.11, or 3.12 and reinstall:[/yellow]")
+        console.print("  python3.12 -m pip install torch transformers")
+        console.print("  python3.12 -m webscraper_pro ai.serve")
+        return
+    if py_minor < 10:
+        console.print(f"[red]Python {sys.version_info.major}.{py_minor} is too old. PyTorch requires Python 3.10+.[/red]")
+        return
+
     try:
         import torch
     except ImportError:
-        console.print("[red]PyTorch not installed. Run:[/red] pip install torch")
-        console.print("[dim]For GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121[/dim]")
-        console.print("[dim]For CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu[/dim]")
+        console.print("[red]PyTorch not installed.[/red]")
+        console.print(f"[dim]Python {sys.version_info.major}.{py_minor} detected (compatible).[/dim]")
+        console.print("[yellow]Install PyTorch:[/yellow]")
+        console.print("[dim]  For GPU (CUDA 12.1): pip install torch --index-url https://download.pytorch.org/whl/cu121[/dim]")
+        console.print("[dim]  For GPU (CUDA 12.4): pip install torch --index-url https://download.pytorch.org/whl/cu124[/dim]")
+        console.print("[dim]  For CPU only:        pip install torch --index-url https://download.pytorch.org/whl/cpu[/dim]")
         return
 
     try:
@@ -2908,12 +2962,29 @@ def ai_setup(gpu):
     This will install required dependencies and download the model.
     GPU mode requires CUDA-capable GPU (min GTX 1070 8GB).
     CPU mode works on any modern processor (i7-7660U, i7-7700HQ, etc.).
+    Requires Python 3.10-3.12 (PyTorch does not support 3.13+).
     """
     console.print("[bold blue]NuExtract AI Setup[/bold blue]\n")
 
     # Check Python version
     py_ver = sys.version_info
     console.print(f"  Python: [cyan]{py_ver.major}.{py_ver.minor}.{py_ver.micro}[/cyan]")
+
+    if py_ver.minor > 12:
+        console.print(f"  [red]Python {py_ver.major}.{py_ver.minor} is not supported by PyTorch.[/red]")
+        console.print("  [yellow]PyTorch requires Python 3.10, 3.11, or 3.12.[/yellow]")
+        console.print("  [dim]Install a compatible Python version and try again.[/dim]")
+        console.print("  [dim]  Arch: sudo pacman -S python311[/dim]")
+        console.print("  [dim]  Ubuntu: sudo apt install python3.12[/dim]")
+        console.print("  [dim]  macOS: brew install python@3.12[/dim]")
+        console.print("  [dim]  Windows: https://www.python.org/downloads/release/python-3120/[/dim]")
+        return
+    if py_ver.minor < 10:
+        console.print(f"  [red]Python {py_ver.major}.{py_ver.minor} is too old for PyTorch.[/red]")
+        console.print("  [yellow]Upgrade to Python 3.10-3.12.[/yellow]")
+        return
+
+    console.print(f"  Python compatibility: [green]OK[/green] (3.10-3.12 range)")
 
     # Check PyTorch
     try:
@@ -2929,12 +3000,12 @@ def ai_setup(gpu):
                 console.print("[yellow]  Warning: Less than 6GB VRAM. Model may not fit.[/yellow]")
     except ImportError:
         console.print("  PyTorch: [red]Not installed[/red]")
+        console.print(f"\n[yellow]Install PyTorch (Python {py_ver.major}.{py_ver.minor} is compatible):[/yellow]")
         if gpu is True or gpu is None:
-            console.print("\n[yellow]Install PyTorch with GPU support:[/yellow]")
-            console.print("  pip install torch --index-url https://download.pytorch.org/whl/cu121")
+            console.print("  [bold]GPU (CUDA 12.1):[/bold] pip install torch --index-url https://download.pytorch.org/whl/cu121")
+            console.print("  [bold]GPU (CUDA 12.4):[/bold] pip install torch --index-url https://download.pytorch.org/whl/cu124")
         if gpu is False or gpu is None:
-            console.print("\n[yellow]Install PyTorch for CPU:[/yellow]")
-            console.print("  pip install torch --index-url https://download.pytorch.org/whl/cpu")
+            console.print("  [bold]CPU only:[/bold]       pip install torch --index-url https://download.pytorch.org/whl/cpu")
         return
 
     # Check transformers

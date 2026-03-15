@@ -1,13 +1,13 @@
 # Maintainer: WebScraper Pro <https://github.com/minerofthesoal/Scraper>
 pkgname=webscraper-pro
-pkgver=0.6.3b4
+pkgver=0.6.3b4.1
 pkgrel=1
 pkgdesc="Firefox extension + CLI for web scraping with HuggingFace upload and MLA citations"
 arch=('any')
 url="https://github.com/minerofthesoal/Scraper"
 license=('custom:Uni-S')
 depends=(
-    'python>=3.8'
+    'python>=3.10'
     'python-click'
     'python-requests'
     'python-beautifulsoup4'

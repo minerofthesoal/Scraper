@@ -1,12 +1,12 @@
 @echo off
 REM ══════════════════════════════════════════════════════════════
-REM WebScraper Pro v0.6.3b4 - Auto Installer (Windows 10/11)
+REM WebScraper Pro v0.6.3b4.1 - Auto Installer (Windows 10/11)
 REM Installs the Python CLI and sets up the Firefox extension
 REM ══════════════════════════════════════════════════════════════
 
 echo.
 echo ╔══════════════════════════════════════════════╗
-echo ║    WebScraper Pro v0.6.3b4 - Auto Installer  ║
+echo ║    WebScraper Pro v0.6.3b4.1 - Auto Installer  ║
 echo ╚══════════════════════════════════════════════╝
 echo.
 
@@ -17,7 +17,8 @@ python --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Python not found!
     echo.
-    echo Please install Python 3.8+ from https://www.python.org/downloads/
+    echo Please install Python 3.10-3.12 from https://www.python.org/downloads/
+    echo PyTorch does NOT support Python 3.13+. Use 3.10, 3.11, or 3.12.
     echo Make sure to check "Add Python to PATH" during installation.
     echo.
     pause
@@ -27,11 +28,39 @@ if %errorlevel% neq 0 (
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PY_VERSION=%%i
 echo [INFO] Python version: %PY_VERSION%
 
+REM ── Find compatible Python (3.10-3.12 for PyTorch) ──
+set COMPAT_PYTHON=python
+set FOUND_COMPAT=0
+
+REM Try specific versions first
+for %%v in (3.12 3.11 3.10) do (
+    where python%%v >nul 2>&1
+    if !errorlevel! equ 0 (
+        if !FOUND_COMPAT! equ 0 (
+            set COMPAT_PYTHON=python%%v
+            set FOUND_COMPAT=1
+            echo [OK] Found compatible Python %%v
+        )
+    )
+)
+
+REM Check if default python is in range
+if %FOUND_COMPAT% equ 0 (
+    for /f %%m in ('python -c "import sys; print(sys.version_info.minor)"') do set PY_MINOR=%%m
+    if %PY_MINOR% GEQ 10 if %PY_MINOR% LEQ 12 (
+        set FOUND_COMPAT=1
+    )
+    if %FOUND_COMPAT% equ 0 (
+        echo [WARN] Python %PY_VERSION% detected. PyTorch requires Python 3.10-3.12.
+        echo [WARN] AI features will not work. Install Python 3.10-3.12 for full support.
+    )
+)
+
 REM ── Create virtual environment ──
 set VENV_DIR=%USERPROFILE%\.webscraper-pro\venv
 if not exist "%VENV_DIR%" (
     echo [INFO] Creating virtual environment...
-    python -m venv "%VENV_DIR%"
+    %COMPAT_PYTHON% -m venv "%VENV_DIR%"
 )
 
 REM ── Activate venv ──

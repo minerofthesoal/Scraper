@@ -18,7 +18,39 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "0.6.3b4"
+VERSION = "0.6.3b4.1"
+
+# Python version requirements for PyTorch compatibility
+MIN_PYTHON = (3, 10)
+MAX_PYTHON = (3, 12)
+
+
+def find_compatible_python():
+    """Find a Python 3.10-3.12 interpreter. PyTorch doesn't support 3.13+."""
+    current = (sys.version_info.major, sys.version_info.minor)
+    if MIN_PYTHON <= current <= MAX_PYTHON:
+        return sys.executable
+
+    # Search for compatible Python versions
+    candidates = []
+    for minor in range(MAX_PYTHON[1], MIN_PYTHON[1] - 1, -1):
+        candidates.append(f"python3.{minor}")
+
+    for cmd in candidates:
+        path = shutil.which(cmd)
+        if path:
+            try:
+                result = subprocess.run([path, "--version"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    ver_str = result.stdout.strip().split()[-1]
+                    parts = ver_str.split(".")
+                    ver = (int(parts[0]), int(parts[1]))
+                    if MIN_PYTHON <= ver <= MAX_PYTHON:
+                        return path
+            except Exception:
+                continue
+
+    return None
 
 
 def colored(text, color):
@@ -95,9 +127,23 @@ def install_system_deps(os_type):
 def install_cli(use_global=False):
     info("Installing WebScraper Pro CLI...")
 
+    # Find a compatible Python (3.10-3.12) for PyTorch support
+    compatible_python = find_compatible_python()
+    if not compatible_python:
+        current = f"{sys.version_info.major}.{sys.version_info.minor}"
+        warn(f"Python {current} detected. PyTorch requires Python 3.10-3.12.")
+        warn("AI features (NuExtract) will not work without a compatible Python version.")
+        warn("Install Python 3.10-3.12 for full functionality.")
+        info("Continuing with current Python for non-AI features...")
+        compatible_python = sys.executable
+    else:
+        py_ver = subprocess.run([compatible_python, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                                capture_output=True, text=True).stdout.strip()
+        ok(f"Using Python {py_ver} ({compatible_python}) for PyTorch compatibility")
+
     if use_global:
-        pip_cmd = [sys.executable, "-m", "pip"]
-        python_cmd = sys.executable
+        pip_cmd = [compatible_python, "-m", "pip"]
+        python_cmd = compatible_python
     else:
         if sys.platform == "win32":
             venv_dir = Path.home() / ".webscraper-pro" / "venv"
@@ -108,8 +154,7 @@ def install_cli(use_global=False):
 
         if not venv_dir.exists():
             info(f"Creating virtual environment at {venv_dir}...")
-            import venv
-            venv.create(str(venv_dir), with_pip=True)
+            run([compatible_python, "-m", "venv", str(venv_dir)])
 
         if sys.platform == "win32":
             pip_cmd = [str(venv_dir / "Scripts" / "pip")]
@@ -255,7 +300,7 @@ def verify_installation():
 def main():
     print()
     print(colored("╔══════════════════════════════════════════════╗", "blue"))
-    print(colored("║    WebScraper Pro v0.6.3b4 - Auto Installer  ║", "blue"))
+    print(colored("║    WebScraper Pro v0.6.3b4.1 - Auto Installer  ║", "blue"))
     print(colored("╚══════════════════════════════════════════════╝", "blue"))
     print()
 
