@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════
-# WebScraper Pro v0.6.3b4.2 - Auto Installer (Linux / macOS)
+# WebScraper Pro v0.6.5 - Auto Installer (Linux / macOS)
 # Installs the Python CLI and sets up the Firefox extension
 # Works on: Arch, Ubuntu, Debian, Fedora, macOS, and more
 # ══════════════════════════════════════════════════════════════
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║    WebScraper Pro v0.6.3b4.2 - Auto Installer  ║${NC}"
+echo -e "${BLUE}║    WebScraper Pro v0.6.5 - Auto Installer  ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -78,6 +78,69 @@ install_system_deps() {
     esac
 }
 
+# ── Auto-install Python 3.12 if no compatible version found ──
+install_python312() {
+    info "Auto-installing Python 3.12 for PyTorch compatibility..."
+
+    case $OS in
+        arch)
+            # python312 is available in AUR or community
+            if command -v yay &>/dev/null; then
+                yay -S --noconfirm python312 2>/dev/null || true
+            elif command -v paru &>/dev/null; then
+                paru -S --noconfirm python312 2>/dev/null || true
+            else
+                # Try the official repos first (some Arch versions have it)
+                sudo pacman -S --noconfirm python312 2>/dev/null || {
+                    warn "Could not auto-install python312."
+                    warn "Install manually: yay -S python312  (or paru -S python312)"
+                    return 1
+                }
+            fi
+            ;;
+        debian)
+            # Try deadsnakes PPA for Ubuntu, or direct package for Debian
+            if command -v add-apt-repository &>/dev/null; then
+                info "Adding deadsnakes PPA for Python 3.12..."
+                sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+                sudo apt-get update -qq
+            fi
+            sudo apt-get install -y python3.12 python3.12-venv python3.12-dev 2>/dev/null || {
+                warn "Could not auto-install python3.12."
+                warn "Install manually: sudo apt install python3.12 python3.12-venv"
+                return 1
+            }
+            ;;
+        fedora)
+            sudo dnf install -y python3.12 2>/dev/null || {
+                warn "Could not auto-install python3.12."
+                warn "Install manually: sudo dnf install python3.12"
+                return 1
+            }
+            ;;
+        macos)
+            if command -v brew &>/dev/null; then
+                brew install python@3.12 2>/dev/null || {
+                    warn "Could not auto-install python@3.12."
+                    warn "Install manually: brew install python@3.12"
+                    return 1
+                }
+            else
+                warn "Homebrew not found. Install Python 3.12 from https://www.python.org/downloads/"
+                return 1
+            fi
+            ;;
+        *)
+            warn "Cannot auto-install Python 3.12 on this OS."
+            warn "Download from: https://www.python.org/downloads/release/python-3120/"
+            return 1
+            ;;
+    esac
+
+    ok "Python 3.12 installed!"
+    return 0
+}
+
 # ── Find compatible Python (3.10-3.12 for PyTorch) ──
 find_compatible_python() {
     # Try specific versions first (prefer newest compatible)
@@ -126,7 +189,7 @@ check_python() {
     fi
 
     # Check for PyTorch-compatible Python (3.10-3.12)
-    if [[ "$PY_MINOR" -gt 12 ]]; then
+    if [[ "$PY_MINOR" -gt 12 ]] || [[ "$PY_MINOR" -lt 10 ]]; then
         warn "Python $PY_VERSION detected. PyTorch requires Python 3.10-3.12."
         COMPAT_PYTHON=$(find_compatible_python)
         if [[ -n "$COMPAT_PYTHON" ]]; then
@@ -136,9 +199,20 @@ check_python() {
             PYTHON="$COMPAT_PYTHON"
             PY_VERSION="$compat_ver"
         else
-            warn "No Python 3.10-3.12 found. AI features (NuExtract) will not work."
-            warn "Install Python 3.10-3.12 for full functionality."
-            info "Continuing with Python $PY_VERSION for non-AI features..."
+            info "No Python 3.10-3.12 found. Attempting auto-install..."
+            if install_python312; then
+                COMPAT_PYTHON=$(find_compatible_python)
+                if [[ -n "$COMPAT_PYTHON" ]]; then
+                    local compat_ver
+                    compat_ver=$($COMPAT_PYTHON --version 2>&1 | awk '{print $2}')
+                    ok "Now using Python $compat_ver ($COMPAT_PYTHON)"
+                    PYTHON="$COMPAT_PYTHON"
+                    PY_VERSION="$compat_ver"
+                fi
+            else
+                warn "Auto-install failed. AI features (NuExtract) will not work."
+                info "Continuing with Python $PY_VERSION for non-AI features..."
+            fi
         fi
     fi
 }

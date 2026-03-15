@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "0.6.3b4.2"
+VERSION = "0.6.5"
 
 # Python version requirements for PyTorch compatibility
 MIN_PYTHON = (3, 10)
@@ -51,6 +51,51 @@ def find_compatible_python():
                 continue
 
     return None
+
+
+def install_python312():
+    """Auto-install Python 3.12 using the system package manager."""
+    info("Auto-installing Python 3.12 for PyTorch compatibility...")
+
+    system = platform.system().lower()
+
+    if system == "linux":
+        if os.path.exists("/etc/arch-release"):
+            # Arch Linux - try pacman, then AUR helpers
+            for helper in ["yay", "paru"]:
+                if shutil.which(helper):
+                    result = run([helper, "-S", "--noconfirm", "python312"])
+                    if result.returncode == 0:
+                        ok("Python 3.12 installed via " + helper)
+                        return True
+            result = run(["sudo", "pacman", "-S", "--noconfirm", "python312"])
+            if result.returncode == 0:
+                ok("Python 3.12 installed")
+                return True
+        elif os.path.exists("/etc/debian_version"):
+            # Ubuntu/Debian - try deadsnakes PPA
+            if shutil.which("add-apt-repository"):
+                run(["sudo", "add-apt-repository", "-y", "ppa:deadsnakes/ppa"])
+                run(["sudo", "apt-get", "update", "-qq"])
+            result = run(["sudo", "apt-get", "install", "-y", "python3.12", "python3.12-venv", "python3.12-dev"])
+            if result.returncode == 0:
+                ok("Python 3.12 installed")
+                return True
+        elif os.path.exists("/etc/fedora-release"):
+            result = run(["sudo", "dnf", "install", "-y", "python3.12"])
+            if result.returncode == 0:
+                ok("Python 3.12 installed")
+                return True
+    elif system == "darwin":
+        if shutil.which("brew"):
+            result = run(["brew", "install", "python@3.12"])
+            if result.returncode == 0:
+                ok("Python 3.12 installed via Homebrew")
+                return True
+
+    warn("Could not auto-install Python 3.12.")
+    warn("Download from: https://www.python.org/downloads/release/python-3120/")
+    return False
 
 
 def colored(text, color):
@@ -132,10 +177,13 @@ def install_cli(use_global=False):
     if not compatible_python:
         current = f"{sys.version_info.major}.{sys.version_info.minor}"
         warn(f"Python {current} detected. PyTorch requires Python 3.10-3.12.")
-        warn("AI features (NuExtract) will not work without a compatible Python version.")
-        warn("Install Python 3.10-3.12 for full functionality.")
-        info("Continuing with current Python for non-AI features...")
-        compatible_python = sys.executable
+        info("Attempting to auto-install Python 3.12...")
+        if install_python312():
+            compatible_python = find_compatible_python()
+        if not compatible_python:
+            warn("Auto-install failed. AI features (NuExtract) will not work.")
+            info("Continuing with current Python for non-AI features...")
+            compatible_python = sys.executable
     else:
         py_ver = subprocess.run([compatible_python, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
                                 capture_output=True, text=True).stdout.strip()
@@ -300,7 +348,7 @@ def verify_installation():
 def main():
     print()
     print(colored("╔══════════════════════════════════════════════╗", "blue"))
-    print(colored("║    WebScraper Pro v0.6.3b4.2 - Auto Installer  ║", "blue"))
+    print(colored("║    WebScraper Pro v0.6.5 - Auto Installer  ║", "blue"))
     print(colored("╚══════════════════════════════════════════════╝", "blue"))
     print()
 
