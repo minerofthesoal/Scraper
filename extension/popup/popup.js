@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6b ── */
+/* ── Popup Controller v0.6.1b ── */
 (function () {
   "use strict";
 
@@ -348,8 +348,37 @@
         pagEl.innerHTML = "";
       }
 
+      // Type counts
+      const typeCounts = $("#data-type-counts");
+      if (typeCounts) {
+        const types = { text: 0, image: 0, link: 0, audio: 0 };
+        records.forEach(r => { if (types[r.type] !== undefined) types[r.type]++; });
+        typeCounts.innerHTML = Object.entries(types)
+          .filter(([, v]) => v > 0)
+          .map(([k, v]) => `<span class="dtc-pill dtc-${k}">${k}: ${formatNum(v)}</span>`)
+          .join("");
+      }
+
+      // Storage usage estimate
+      const storageEl = $("#data-storage-usage");
+      if (storageEl) {
+        const jsonSize = JSON.stringify(records).length;
+        storageEl.textContent = "Storage: ~" + formatBytes(jsonSize);
+      }
+
       updateRecordMeta(records.length, resp.stats);
     }).catch(() => {});
+  }
+
+  // Clear data button
+  const btnDataClear = $("#btn-data-clear");
+  if (btnDataClear) {
+    btnDataClear.addEventListener("click", () => {
+      if (confirm("Clear all scraped data? This cannot be undone.")) {
+        sendToBackground("CLEAR_DATA");
+        setTimeout(loadDataPreview, 300);
+      }
+    });
   }
 
   // Search/filter listeners

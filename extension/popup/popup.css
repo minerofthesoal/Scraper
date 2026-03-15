@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Popup v0.6b ── */
+/* ── WebScraper Pro Popup v0.6.1b ── */
 /* Dark-first theme with light mode toggle */
 
 :root {
@@ -302,6 +302,39 @@ header h1 { font-size: 15px; color: var(--accent); }
 }
 .session-item .si-actions button:hover { background: var(--accent); color: #fff; }
 .session-item .si-actions .si-delete:hover { background: var(--red); }
+
+/* ── Data Type Counts ── */
+.data-type-counts {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.dtc-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  color: #fff;
+}
+.dtc-text { background: var(--accent); }
+.dtc-image { background: var(--orange); }
+.dtc-link { background: var(--green); }
+.dtc-audio { background: #9b59b6; }
+
+/* ── Data Actions ── */
+.data-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.storage-usage {
+  font-size: 10px;
+  color: var(--text-muted);
+}
 
 /* ── Footer ── */
 footer { text-align: center; color: var(--text-muted); padding-top: 4px; border-top: 1px solid var(--border); }
