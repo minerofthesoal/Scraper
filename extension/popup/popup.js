@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.3b1 ── */
+/* ── Popup Controller v0.6.3b4 ── */
 (function () {
   "use strict";
 
@@ -298,10 +298,15 @@
   }
 
   bindClick("#btn-export", () => {
-    sendToBackground("EXPORT_DATA", { format: selFormat ? selFormat.value : "jsonl" });
+    const fmt = selFormat ? selFormat.value : "jsonl";
+    const prettyPrint = !!($("#chk-pretty-print") && $("#chk-pretty-print").checked);
+    sendToBackground("EXPORT_DATA", { format: fmt, options: { prettyPrint } });
+    const statusEl = $("#export-status");
+    if (statusEl) { statusEl.textContent = "Exporting..."; setTimeout(() => { statusEl.textContent = ""; }, 5000); }
   });
 
   bindClick("#btn-upload-hf", () => { sendToBackground("UPLOAD_HF"); });
+  bindClick("#btn-upload-hf-2", () => { sendToBackground("UPLOAD_HF"); });
 
   bindClick("#btn-options", () => { browser.runtime.openOptionsPage(); });
 
@@ -329,7 +334,13 @@
 
   browser.runtime.sendMessage({ action: "AI_STATUS" }).then(resp => {
     if (resp && resp.status === "ready") {
-      if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI server ready (" + (resp.device || "?") + ")"; }
+      if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI ready (" + (resp.device || "?") + ")"; }
+    }
+    const modeLabel = $("#ai-mode-label");
+    if (modeLabel && resp) {
+      if (resp.mode === "local") modeLabel.textContent = "Mode: Local (auto-downloaded)";
+      else if (resp.status === "ready") modeLabel.textContent = "Mode: Server (" + (resp.device || "?") + ")";
+      else modeLabel.textContent = "Mode: Not connected";
     }
   }).catch(() => {});
 

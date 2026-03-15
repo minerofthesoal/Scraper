@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "0.6.3b3"
+VERSION = "0.6.3b4"
 
 
 def colored(text, color):
@@ -255,7 +255,7 @@ def verify_installation():
 def main():
     print()
     print(colored("╔══════════════════════════════════════════════╗", "blue"))
-    print(colored("║    WebScraper Pro v0.6.3b3 - Auto Installer  ║", "blue"))
+    print(colored("║    WebScraper Pro v0.6.3b4 - Auto Installer  ║", "blue"))
     print(colored("╚══════════════════════════════════════════════╝", "blue"))
     print()
 

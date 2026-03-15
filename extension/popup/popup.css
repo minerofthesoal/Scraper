@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Popup v0.6.3b1 ── */
+/* ── WebScraper Pro Popup v0.6.3b4 ── */
 /* Dark-first theme with light mode toggle */
 
 :root {
@@ -429,6 +429,16 @@ header h1 { font-size: 15px; color: var(--accent); }
   margin: 1px;
 }
 .dedup-stat { font-size: 10px; color: var(--text-muted); margin-top: 2px; display: block; }
+
+/* ── Export Tab ── */
+.export-section { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.export-section:last-child { border-bottom: none; }
+.export-section h2 { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.btn-full { width: 100%; margin-top: 4px; }
+
+/* ── AI Mode ── */
+.ai-mode-row { margin-top: 3px; }
+.ai-mode-label { font-size: 10px; color: var(--text-muted); }
 
 /* ── Footer ── */
 footer { text-align: center; color: var(--text-muted); padding-top: 4px; border-top: 1px solid var(--border); }

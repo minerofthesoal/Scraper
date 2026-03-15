@@ -1,4 +1,4 @@
-/* ── Options Page Controller v0.6.3b1 ── */
+/* ── Options Page Controller v0.6.3b4 ── */
 (function () {
   "use strict";
 
@@ -63,9 +63,12 @@
     regexRules: $("#txt-regex-rules"),
     // AI extraction
     aiEnabled: $("#chk-ai-enabled"),
+    aiAutoDownload: $("#chk-ai-auto-download"),
     aiServer: $("#inp-ai-server"),
     btnAICheck: $("#btn-ai-check"),
     aiServerStatus: $("#ai-server-status"),
+    // v0.6.3b4
+    prettyPrint: $("#chk-pretty-print"),
   };
 
   /* ── Load settings ── */
@@ -77,7 +80,7 @@
     "scrapeJS", "citationFormat", "respectRobots", "minTextLength",
     "rateLimitConfig", "domainAllowlist", "domainBlocklist", "regexPatterns",
     "rateEnabled",
-    "aiEnabled", "aiServerUrl",
+    "aiEnabled", "aiServerUrl", "aiAutoDownload", "prettyPrint",
   ]).then((cfg) => {
     elements.autoStart.checked = !!cfg.autoStart;
     elements.autoScroll.checked = cfg.autoScroll !== false;
@@ -129,7 +132,11 @@
 
     // AI extraction
     if (elements.aiEnabled) elements.aiEnabled.checked = !!cfg.aiEnabled;
+    if (elements.aiAutoDownload) elements.aiAutoDownload.checked = !!cfg.aiAutoDownload;
     if (elements.aiServer) elements.aiServer.value = cfg.aiServerUrl || "http://127.0.0.1:8377";
+
+    // Pretty-print
+    if (elements.prettyPrint) elements.prettyPrint.checked = !!cfg.prettyPrint;
   });
 
   /* ── Load stats ── */
@@ -203,7 +210,11 @@
 
     // AI extraction
     settings.aiEnabled = elements.aiEnabled ? elements.aiEnabled.checked : false;
+    settings.aiAutoDownload = elements.aiAutoDownload ? elements.aiAutoDownload.checked : false;
     settings.aiServerUrl = elements.aiServer ? elements.aiServer.value.trim() : "http://127.0.0.1:8377";
+
+    // Pretty-print
+    settings.prettyPrint = elements.prettyPrint ? elements.prettyPrint.checked : false;
 
     // Regex patterns
     if (elements.regexRules && elements.regexRules.value.trim()) {

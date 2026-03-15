@@ -1,6 +1,6 @@
-/* ── AI Extraction Module v0.6.3b1 ── */
+/* ── AI Extraction Module v0.6.3b4 ── */
 /* Optional NuExtract-2.0-2B integration for structured data extraction */
-/* Connects to a local NuExtract server started via the CLI */
+/* Supports auto-download (no server needed) or remote server mode */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_AI */
 
@@ -9,7 +9,9 @@ var WSP_AI = {
   /* Default server URL (CLI starts the server) */
   _serverUrl: "http://127.0.0.1:8377",
   _enabled: false,
-  _status: "disconnected", // disconnected, connecting, ready, error
+  _autoDownload: false,
+  _status: "disconnected", // disconnected, connecting, ready, downloading, error
+  _downloadProgress: 0,
 
   /**
    * Initialize from stored config.
@@ -17,14 +19,110 @@ var WSP_AI = {
   init() {
     var self = this;
     try {
-      browser.storage.local.get(["aiEnabled", "aiServerUrl"]).then(function (cfg) {
+      browser.storage.local.get(["aiEnabled", "aiServerUrl", "aiAutoDownload"]).then(function (cfg) {
         self._enabled = !!cfg.aiEnabled;
+        self._autoDownload = !!cfg.aiAutoDownload;
         if (cfg.aiServerUrl) self._serverUrl = cfg.aiServerUrl;
-        if (self._enabled) self.checkServer();
+        if (self._enabled) {
+          if (self._autoDownload) {
+            self._initAutoMode();
+          } else {
+            self.checkServer();
+          }
+        }
       }).catch(function () {});
     } catch (e) {
       console.warn("[WSP] AI init error:", e);
     }
+  },
+
+  /**
+   * Initialize auto-download mode (model runs via CLI subprocess).
+   * Sends a message to background to start/check the local model process.
+   */
+  _initAutoMode() {
+    var self = this;
+    self._status = "connecting";
+
+    // In auto-download mode, try to reach the local server first
+    // If not running, signal the CLI to start it automatically
+    fetch(self._serverUrl + "/health", { method: "GET" })
+      .then(function (resp) {
+        if (resp.ok) {
+          return resp.json().then(function (data) {
+            self._status = "ready";
+            self._modelInfo = data;
+          });
+        }
+        self._triggerAutoStart();
+      })
+      .catch(function () {
+        self._triggerAutoStart();
+      });
+  },
+
+  /**
+   * Signal background script to auto-start the AI model via native messaging.
+   * The CLI handles downloading (~1.5GB) and launching the inference server.
+   */
+  _triggerAutoStart() {
+    var self = this;
+    self._status = "downloading";
+    self._downloadProgress = 0;
+
+    // Attempt native messaging to CLI for auto-start
+    try {
+      browser.runtime.sendMessage({
+        action: "AI_AUTO_START",
+        serverUrl: self._serverUrl
+      }).then(function (resp) {
+        if (resp && resp.status === "started") {
+          self._status = "connecting";
+          // Poll until server is ready (model loading takes time)
+          self._pollServerReady(0);
+        } else if (resp && resp.status === "already_running") {
+          self._status = "ready";
+          self._modelInfo = resp.info || {};
+        } else {
+          self._status = "error";
+          console.warn("[WSP] AI auto-start failed:", resp);
+        }
+      }).catch(function (err) {
+        // Native messaging not available - try CLI command hint
+        self._status = "disconnected";
+        console.info("[WSP] Auto-start unavailable. Run: scrape ai.serve --auto-download");
+      });
+    } catch (e) {
+      self._status = "disconnected";
+    }
+  },
+
+  /**
+   * Poll the server until it becomes ready (model loading can take 10-60s).
+   */
+  _pollServerReady(attempt) {
+    var self = this;
+    var maxAttempts = 30; // 30 * 2s = 60s max wait
+    if (attempt >= maxAttempts) {
+      self._status = "error";
+      return;
+    }
+
+    setTimeout(function () {
+      fetch(self._serverUrl + "/health", { method: "GET" })
+        .then(function (resp) {
+          if (resp.ok) {
+            return resp.json().then(function (data) {
+              self._status = "ready";
+              self._modelInfo = data;
+            });
+          }
+          self._pollServerReady(attempt + 1);
+        })
+        .catch(function () {
+          self._pollServerReady(attempt + 1);
+        });
+    }, 2000);
   },
 
   /**
@@ -62,7 +160,14 @@ var WSP_AI = {
   extract(text, template, maxTokens) {
     var self = this;
     if (!self._enabled) return Promise.reject(new Error("AI extraction is not enabled. Enable it in Settings."));
-    if (self._status !== "ready") return Promise.reject(new Error("AI server not ready. Status: " + self._status));
+    if (self._status !== "ready") {
+      // In auto-download mode, try to start if not ready
+      if (self._autoDownload && self._status === "disconnected") {
+        self._initAutoMode();
+        return Promise.reject(new Error("AI model is starting up. Please wait and try again."));
+      }
+      return Promise.reject(new Error("AI server not ready. Status: " + self._status));
+    }
 
     maxTokens = maxTokens || 2048;
 
@@ -173,8 +278,11 @@ var WSP_AI = {
       enabled: this._enabled,
       status: this._status,
       serverUrl: this._serverUrl,
+      autoDownload: this._autoDownload,
+      mode: this._autoDownload ? "local" : "server",
       model: this._modelInfo ? this._modelInfo.model : null,
       device: this._modelInfo ? this._modelInfo.device : null,
+      downloadProgress: this._downloadProgress,
     };
   },
 

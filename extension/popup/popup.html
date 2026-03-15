@@ -9,7 +9,7 @@
     <header>
       <div class="header-left">
         <h1>WebScraper Pro</h1>
-        <span id="version-tag" class="version">v0.6.3b1</span>
+        <span id="version-tag" class="version">v0.6.3b4</span>
       </div>
       <div class="header-right">
         <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
@@ -22,6 +22,7 @@
       <button class="tab-btn active" data-tab="scrape">Scrape</button>
       <button class="tab-btn" data-tab="queue">Queue</button>
       <button class="tab-btn" data-tab="data">Data</button>
+      <button class="tab-btn" data-tab="export">Export</button>
       <button class="tab-btn" data-tab="sessions">Sessions</button>
     </nav>
 
@@ -62,15 +63,6 @@
           <input type="checkbox" id="chk-auto-next">
           <span>Auto-next page</span>
         </label>
-        <div class="field-row">
-          <label for="sel-format">Format:</label>
-          <select id="sel-format">
-            <option value="jsonl">JSONL</option>
-            <option value="json">JSON</option>
-            <option value="csv">CSV</option>
-            <option value="xml">XML</option>
-          </select>
-        </div>
       </section>
 
       <section class="stats">
@@ -91,24 +83,8 @@
       </section>
 
       <section class="actions">
-        <button id="btn-export" class="btn btn-small">Export</button>
         <button id="btn-upload-hf" class="btn btn-small">Upload HF</button>
         <button id="btn-options" class="btn btn-small">Settings</button>
-      </section>
-
-      <section class="image-export-section">
-        <h2>Image Export</h2>
-        <div class="btn-row-2">
-          <select id="sel-img-format" class="img-format-select">
-            <option value="png">PNG</option>
-            <option value="webp">WebP</option>
-            <option value="jpeg">JPEG</option>
-            <option value="bmp">BMP</option>
-            <option value="svg">SVG</option>
-          </select>
-          <button id="btn-export-images" class="btn btn-secondary btn-small">Export Images</button>
-        </div>
-        <span id="img-export-status" class="export-status"></span>
       </section>
 
       <section class="ai-section">
@@ -123,6 +99,9 @@
             <option value="research">Research</option>
           </select>
           <button id="btn-ai-extract" class="btn btn-secondary btn-small">AI Extract</button>
+        </div>
+        <div class="ai-mode-row">
+          <small id="ai-mode-label" class="ai-mode-label">Mode: Server</small>
         </div>
         <span id="ai-extract-status" class="export-status"></span>
       </section>
@@ -170,6 +149,49 @@
       </div>
     </div>
 
+    <!-- Export Tab (NEW) -->
+    <div id="tab-export" class="tab-content">
+      <section class="export-section">
+        <h2>Export Data</h2>
+        <div class="field-row">
+          <label for="sel-format">Format:</label>
+          <select id="sel-format">
+            <option value="jsonl">JSONL</option>
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+            <option value="xml">XML</option>
+            <option value="md">Markdown</option>
+          </select>
+        </div>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-pretty-print">
+          <span>Pretty-print JSON/JSONL</span>
+        </label>
+        <button id="btn-export" class="btn btn-primary btn-full">Export Data</button>
+        <span id="export-status" class="export-status"></span>
+      </section>
+
+      <section class="export-section">
+        <h2>Image Export</h2>
+        <div class="btn-row-2">
+          <select id="sel-img-format" class="img-format-select">
+            <option value="png">PNG</option>
+            <option value="webp">WebP</option>
+            <option value="jpeg">JPEG</option>
+            <option value="bmp">BMP</option>
+            <option value="svg">SVG</option>
+          </select>
+          <button id="btn-export-images" class="btn btn-secondary btn-small">Export Images</button>
+        </div>
+        <span id="img-export-status" class="export-status"></span>
+      </section>
+
+      <section class="export-section">
+        <h2>HuggingFace</h2>
+        <button id="btn-upload-hf-2" class="btn btn-accent btn-full">Upload to HuggingFace</button>
+      </section>
+    </div>
+
     <!-- Sessions Tab -->
     <div id="tab-sessions" class="tab-content">
       <div class="session-save">
@@ -199,7 +221,7 @@
     </div>
 
     <footer>
-      <small>v0.6.3b1 | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
+      <small>v0.6.3b4 | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a> | Android supported</small>
     </footer>
   </div>
   <script src="popup.js"></script>

@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.6.3b1 ── */
+/* ── WebScraper Pro Background Script v0.6.3b4 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -54,7 +54,7 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
       break;
 
     case "EXPORT_DATA":
-      exportData(msg.format || "jsonl");
+      exportData(msg.format || "jsonl", msg.options || {});
       break;
 
     case "UPLOAD_HF":
@@ -374,7 +374,7 @@ function _fingerprint(str) {
 }
 
 /* ── Export data ── */
-function exportData(format) {
+function exportData(format, options) {
   if (scrapedRecords.length === 0) {
     notify("WebScraper Pro", "No data to export. Start scraping first!");
     return;
@@ -385,6 +385,7 @@ function exportData(format) {
     return;
   }
 
+  var prettyPrint = !!(options && options.prettyPrint);
   var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   var clean = function (r) { var c = Object.assign({}, r); delete c._fp; return c; };
   var texts = scrapedRecords.filter(function (r) { return r.type === "text"; }).map(clean);
@@ -393,13 +394,18 @@ function exportData(format) {
   var audioRecs = scrapedRecords.filter(function (r) { return r.type === "audio"; }).map(clean);
 
   if (format === "jsonl") {
-    if (texts.length > 0) WSP_Utils.downloadText(WSP_Utils.toJSONL(texts), "webscraper-pro/data/text_data_" + timestamp + ".jsonl");
-    if (images.length > 0) WSP_Utils.downloadText(WSP_Utils.toJSONL(images), "webscraper-pro/data/images_" + timestamp + ".jsonl");
-    if (links.length > 0) WSP_Utils.downloadText(WSP_Utils.toJSONL(links), "webscraper-pro/data/links_" + timestamp + ".jsonl");
-    if (audioRecs.length > 0) WSP_Utils.downloadText(WSP_Utils.toJSONL(audioRecs), "webscraper-pro/data/audio_" + timestamp + ".jsonl");
-    WSP_Utils.downloadText(WSP_Utils.toJSONL(citations), "webscraper-pro/data/citations_" + timestamp + ".jsonl");
+    var toJL = prettyPrint
+      ? function (arr) { return arr.map(function (r) { return JSON.stringify(r, null, 2); }).join("\n\n"); }
+      : WSP_Utils.toJSONL;
+    var ext = prettyPrint ? ".pretty.jsonl" : ".jsonl";
+    if (texts.length > 0) WSP_Utils.downloadText(toJL(texts), "webscraper-pro/data/text_data_" + timestamp + ext);
+    if (images.length > 0) WSP_Utils.downloadText(toJL(images), "webscraper-pro/data/images_" + timestamp + ext);
+    if (links.length > 0) WSP_Utils.downloadText(toJL(links), "webscraper-pro/data/links_" + timestamp + ext);
+    if (audioRecs.length > 0) WSP_Utils.downloadText(toJL(audioRecs), "webscraper-pro/data/audio_" + timestamp + ext);
+    WSP_Utils.downloadText(toJL(citations), "webscraper-pro/data/citations_" + timestamp + ext);
   } else if (format === "json") {
-    WSP_Utils.downloadText(JSON.stringify({ texts: texts, images: images, links: links, audio: audioRecs, citations: citations }, null, 2),
+    var indent = prettyPrint ? 4 : 2;
+    WSP_Utils.downloadText(JSON.stringify({ texts: texts, images: images, links: links, audio: audioRecs, citations: citations }, null, indent),
       "webscraper-pro/data/full_export_" + timestamp + ".json");
   } else if (format === "csv") {
     if (texts.length > 0) WSP_Utils.downloadText(WSP_Utils.toCSV(texts), "webscraper-pro/data/text_data_" + timestamp + ".csv", "text/csv");
@@ -408,15 +414,83 @@ function exportData(format) {
   } else if (format === "xml") {
     var xml = toXML(texts, images, links, audioRecs, citations);
     WSP_Utils.downloadText(xml, "webscraper-pro/data/export_" + timestamp + ".xml", "application/xml");
+  } else if (format === "md" || format === "markdown") {
+    var md = toMarkdown(texts, images, links, audioRecs, citations);
+    WSP_Utils.downloadText(md, "webscraper-pro/data/export_" + timestamp + ".md", "text/markdown");
   }
 
   notify("WebScraper Pro", "Exported " + scrapedRecords.length + " records in " + format.toUpperCase() + " format.");
 }
 
+/* ── Markdown export ── */
+function toMarkdown(texts, images, links, audio, citationsList) {
+  var md = "# WebScraper Pro Export\n\n";
+  md += "**Generated:** " + new Date().toISOString() + "  \n";
+  md += "**Version:** v0.6.3b4  \n";
+  md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
+  md += "---\n\n";
+
+  if (texts.length > 0) {
+    md += "## Text (" + texts.length + " records)\n\n";
+    for (var i = 0; i < texts.length; i++) {
+      var t = texts[i];
+      md += "### " + (t.source_title || "Untitled") + "\n\n";
+      md += "**Source:** " + (t.source_url || "unknown") + "  \n";
+      if (t.author) md += "**Author:** " + t.author + "  \n";
+      if (t.scraped_at) md += "**Scraped:** " + t.scraped_at + "  \n";
+      md += "\n" + (t.text || "") + "\n\n";
+      if (t.citation_mla) md += "> *" + t.citation_mla + "*\n\n";
+      md += "---\n\n";
+    }
+  }
+
+  if (images.length > 0) {
+    md += "## Images (" + images.length + " records)\n\n";
+    md += "| # | Source | Alt Text | Dimensions |\n";
+    md += "|---|--------|----------|------------|\n";
+    for (var j = 0; j < images.length; j++) {
+      var img = images[j];
+      md += "| " + (j + 1) + " | " + (img.source_url || "").replace(/\|/g, "\\|") + " | " + (img.alt || "").replace(/\|/g, "\\|") + " | " + (img.width || "?") + "x" + (img.height || "?") + " |\n";
+    }
+    md += "\n";
+  }
+
+  if (links.length > 0) {
+    md += "## Links (" + links.length + " records)\n\n";
+    for (var k = 0; k < Math.min(links.length, 500); k++) {
+      var l = links[k];
+      md += "- [" + (l.text || l.href || "link").replace(/[\[\]]/g, "") + "](" + (l.href || "") + ")\n";
+    }
+    if (links.length > 500) md += "\n*...and " + (links.length - 500) + " more links*\n";
+    md += "\n";
+  }
+
+  if (audio.length > 0) {
+    md += "## Audio (" + audio.length + " records)\n\n";
+    for (var m = 0; m < audio.length; m++) {
+      var a = audio[m];
+      md += "- `" + (a.src || "unknown") + "` (" + (a.media_type || "audio") + ")\n";
+    }
+    md += "\n";
+  }
+
+  if (citationsList.length > 0) {
+    md += "## Citations\n\n";
+    for (var n = 0; n < citationsList.length; n++) {
+      var c = citationsList[n];
+      md += (n + 1) + ". " + (c.mla || c.apa || c.url || "") + "\n";
+    }
+    md += "\n";
+  }
+
+  md += "---\n\n*Exported by [WebScraper Pro](https://github.com/minerofthesoal/Scraper)*\n";
+  return md;
+}
+
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.3b1</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.6.3b4</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
