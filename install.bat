@@ -1,13 +1,13 @@
 @echo off
 REM ══════════════════════════════════════════════════════════════
-REM WebScraper Pro - Auto Installer (Windows 10/11)
+REM WebScraper Pro v0.6.3b2 - Auto Installer (Windows 10/11)
 REM Installs the Python CLI and sets up the Firefox extension
 REM ══════════════════════════════════════════════════════════════
 
 echo.
-echo ╔══════════════════════════════════════════╗
-echo ║      WebScraper Pro - Auto Installer     ║
-echo ╚══════════════════════════════════════════╝
+echo ╔══════════════════════════════════════════════╗
+echo ║    WebScraper Pro v0.6.3b2 - Auto Installer  ║
+echo ╚══════════════════════════════════════════════╝
 echo.
 
 set SCRIPT_DIR=%~dp0
@@ -69,15 +69,31 @@ if exist "%SCRIPT_DIR%webscraper-pro.zip" (
 )
 cd /d "%SCRIPT_DIR%"
 
+REM ── Verify Installation ──
 echo.
-echo ╔══════════════════════════════════════════╗
-echo ║    Installation Complete!                ║
-echo ╚══════════════════════════════════════════╝
+echo [INFO] Verifying installation...
+scrape --version >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] CLI is working
+) else (
+    echo [WARN] CLI not found in PATH. Add %LOCAL_BIN% to your PATH.
+)
+
+echo.
+echo ╔══════════════════════════════════════════════╗
+echo ║      Installation Complete!                   ║
+echo ╚══════════════════════════════════════════════╝
 echo.
 echo Quick start:
-echo   scrape --help          Show all commands
+echo   scrape -h              Show all commands
 echo   scrape start           Start a scraping session
+echo   scrape url ^<URL^>       Scrape a URL directly
 echo   scrape config.upload   Configure HuggingFace
+echo   scrape doctor          Check system health
+echo   scrape gui.start       Launch the GUI
+echo.
+echo Update:      scrape -U
+echo Uninstall:   scrape -rmv
 echo.
 echo Firefox extension:
 echo   Load from: %SCRIPT_DIR%extension\manifest.json

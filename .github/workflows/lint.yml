@@ -14,29 +14,78 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
       - name: Install CLI dependencies
         run: |
           cd cli
           pip install -e .
       - name: Check syntax
-        run: python -m py_compile cli/scrape.py && python -m py_compile cli/gui.py
-      - name: Basic CLI smoke test
+        run: |
+          python -m py_compile cli/scrape.py
+          python -m py_compile cli/gui.py
+      - name: CLI smoke tests
         run: |
           scrape --version
+          scrape -h
           scrape env
+          scrape changelog
 
   lint-extension:
     name: Validate Extension
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Validate JSON files
         run: |
           python3 -c "import json; json.load(open('extension/manifest.json'))"
           echo "manifest.json is valid JSON"
-      - name: Check for JS syntax errors (basic)
+
+      - name: Check for JS syntax errors
         run: |
-          for f in extension/**/*.js; do
-            node --check "$f" 2>/dev/null || echo "WARN: $f (might use browser APIs)"
+          for f in extension/**/*.js extension/**/**/*.js; do
+            if [ -f "$f" ]; then
+              node --check "$f" 2>/dev/null || echo "WARN: $f (might use browser APIs)"
+            fi
           done
+
+  version-check:
+    name: Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version strings match
+        run: |
+          python3 -c "
+          import json, re, sys
+
+          # Read manifest version
+          with open('extension/manifest.json') as f:
+              manifest_ver = json.load(f)['version']
+
+          # Read CLI version
+          with open('cli/scrape.py') as f:
+              for line in f:
+                  m = re.match(r'VERSION\s*=\s*\"(.+?)\"', line)
+                  if m:
+                      cli_ver = m.group(1)
+                      break
+
+          # Read setup.py version
+          with open('cli/setup.py') as f:
+              for line in f:
+                  m = re.match(r'\s*version=\"(.+?)\"', line)
+                  if m:
+                      setup_ver = m.group(1)
+                      break
+
+          print(f'Manifest: {manifest_ver}')
+          print(f'CLI:      {cli_ver}')
+          print(f'Setup:    {setup_ver}')
+
+          if cli_ver != setup_ver:
+              print('ERROR: CLI and setup.py versions do not match!')
+              sys.exit(1)
+
+          print('Version check passed!')
+          "

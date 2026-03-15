@@ -21,23 +21,75 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
+
+      - name: Install Pillow for icon generation
+        run: pip install Pillow
 
       - name: Generate icons
         run: python extension/icons/generate_icons.py
 
+      - name: Validate manifest.json
+        run: |
+          python3 -c "
+          import json, sys
+          with open('extension/manifest.json') as f:
+              m = json.load(f)
+          errors = []
+          if m.get('manifest_version') != 2:
+              errors.append('manifest_version must be 2')
+          if not m.get('name'):
+              errors.append('Missing name')
+          if not m.get('version'):
+              errors.append('Missing version')
+          if not m.get('background', {}).get('scripts'):
+              errors.append('Missing background scripts')
+          if not m.get('content_scripts'):
+              errors.append('Missing content scripts')
+          if not m.get('browser_action'):
+              errors.append('Missing browser_action')
+          if errors:
+              print('Manifest errors: ' + ', '.join(errors))
+              sys.exit(1)
+          print(f'Manifest OK: {m[\"name\"]} v{m[\"version\"]}')
+          "
+
+      - name: Check all referenced files exist
+        run: |
+          python3 -c "
+          import json, os, sys
+          with open('extension/manifest.json') as f:
+              m = json.load(f)
+
+          files = []
+          files.append(m['browser_action']['default_popup'])
+          files.extend(m['background']['scripts'])
+          for cs in m['content_scripts']:
+              files.extend(cs.get('js', []))
+              files.extend(cs.get('css', []))
+          files.append(m['options_ui']['page'])
+
+          missing = [f for f in files if not os.path.exists(os.path.join('extension', f))]
+          if missing:
+              print(f'MISSING FILES: {missing}')
+              sys.exit(1)
+          print(f'All {len(files)} referenced files verified')
+          "
+
       - name: Package .xpi
         run: |
           cd extension
-          zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc"
+          zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc" -x ".DS_Store"
           cd ..
           echo "XPI_SIZE=$(du -h webscraper-pro.xpi | cut -f1)" >> $GITHUB_ENV
+          echo "Built webscraper-pro.xpi ($(du -h webscraper-pro.xpi | cut -f1))"
 
       - name: Upload XPI artifact
         uses: actions/upload-artifact@v4
         with:
           name: webscraper-pro-xpi
           path: webscraper-pro.xpi
+          retention-days: 30
 
   # ── Build Python Package ──
   build-python:
@@ -49,7 +101,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install build tools
         run: pip install build wheel setuptools
@@ -58,13 +110,20 @@ jobs:
         run: |
           cd cli
           python -m build
-          cd ..
+          echo "Built packages:"
+          ls -lh dist/
+
+      - name: Verify package
+        run: |
+          pip install cli/dist/*.whl
+          scrape --version
 
       - name: Upload Python artifacts
         uses: actions/upload-artifact@v4
         with:
           name: python-package
           path: cli/dist/*
+          retention-days: 30
 
   # ── Build Arch Linux Package ──
   build-arch:
@@ -76,8 +135,7 @@ jobs:
       - name: Setup Arch build environment
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git python python-pip python-setuptools python-build python-wheel zip sudo
-          # Create build user (makepkg can't run as root)
+          pacman -S --noconfirm base-devel git python python-pip python-setuptools python-build python-wheel python-pillow zip sudo
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
@@ -86,7 +144,7 @@ jobs:
       - name: Generate icons
         run: python extension/icons/generate_icons.py
 
-      - name: Build .xpi first
+      - name: Build .xpi
         run: |
           cd extension
           zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc"
@@ -117,14 +175,15 @@ jobs:
           path: |
             *.pkg.tar.zst
             *.pkg.tar.xz
+          retention-days: 30
 
   # ── Test CLI ──
   test-cli:
-    name: Test CLI
+    name: Test CLI (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
 
@@ -138,14 +197,15 @@ jobs:
           cd cli
           pip install -e .
 
-      - name: Test CLI
+      - name: CLI smoke tests
         run: |
           scrape --version
-          scrape --help
+          scrape -h
           scrape config
           scrape status
           scrape env
           scrape doctor
+          scrape changelog
 
   # ── Test Extension ──
   test-extension:
@@ -195,6 +255,17 @@ jobs:
           print(f'All {len(files)} referenced files exist!')
           "
 
+      - name: Check for JS syntax issues
+        run: |
+          error_count=0
+          for f in extension/**/*.js extension/**/**/*.js; do
+            if [ -f "$f" ]; then
+              node --check "$f" 2>/dev/null || {
+                echo "WARN: $f may use browser-only APIs"
+              }
+            fi
+          done
+
   # ── Release ──
   release:
     name: Create Release
@@ -216,21 +287,31 @@ jobs:
             arch-package/*
           generate_release_notes: true
           body: |
-            ## WebScraper Pro Release
+            ## WebScraper Pro ${{ github.ref_name }}
 
             ### Downloads
-            - **Firefox Extension:** `webscraper-pro.xpi` - Load in Firefox via about:addons
-            - **Python CLI:** Install with `pip install webscraper-pro-cli`
-            - **Arch Linux:** Install the `.pkg.tar.zst` with `sudo pacman -U`
+            | Package | Description |
+            |---------|-------------|
+            | `webscraper-pro.xpi` | Firefox extension - load via `about:addons` |
+            | `webscraper_pro_cli-*.whl` | Python CLI - `pip install <file>` |
+            | `webscraper-pro-*.pkg.tar.zst` | Arch Linux - `sudo pacman -U <file>` |
 
             ### Install
             ```bash
             # Quick install (all platforms)
             python install.py
 
+            # Update existing installation
+            scrape -U
+
             # Arch Linux native
             sudo pacman -U webscraper-pro-*.pkg.tar.zst
 
             # CLI only
             cd cli && pip install -e .
+            ```
+
+            ### Uninstall
+            ```bash
+            scrape -rmv
             ```
