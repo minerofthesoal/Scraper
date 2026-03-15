@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════
-# WebScraper Pro v0.6.3b4.1 - Auto Installer (Linux / macOS)
+# WebScraper Pro v0.6.3b4.2 - Auto Installer (Linux / macOS)
 # Installs the Python CLI and sets up the Firefox extension
 # Works on: Arch, Ubuntu, Debian, Fedora, macOS, and more
 # ══════════════════════════════════════════════════════════════
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║    WebScraper Pro v0.6.3b4.1 - Auto Installer  ║${NC}"
+echo -e "${BLUE}║    WebScraper Pro v0.6.3b4.2 - Auto Installer  ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
