@@ -6,6 +6,7 @@ Works on Linux (Arch, Ubuntu, Fedora, etc.), macOS, and Windows 10/11.
 Usage:
     python install.py
     python install.py --global    (skip venv, install globally)
+    python install.py --verify    (verify existing installation)
 """
 
 import os
@@ -17,11 +18,11 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "1.0.0"
+VERSION = "0.6.3b2"
 
 
 def colored(text, color):
-    colors = {"blue": "\033[94m", "green": "\033[92m", "yellow": "\033[93m", "red": "\033[91m", "reset": "\033[0m"}
+    colors = {"blue": "\033[94m", "green": "\033[92m", "yellow": "\033[93m", "red": "\033[91m", "bold": "\033[1m", "reset": "\033[0m"}
     if sys.platform == "win32" and not os.environ.get("TERM"):
         return text
     return f"{colors.get(color, '')}{text}{colors['reset']}"
@@ -72,21 +73,23 @@ def detect_os():
 def install_system_deps(os_type):
     info("Checking system dependencies...")
 
-    # Check for ffmpeg
-    if not shutil.which("ffmpeg"):
-        warn("ffmpeg not found. Audio conversion requires ffmpeg.")
-        if os_type == "arch":
-            info("Install with: sudo pacman -S ffmpeg")
-        elif os_type == "debian":
-            info("Install with: sudo apt install ffmpeg")
-        elif os_type == "fedora":
-            info("Install with: sudo dnf install ffmpeg")
-        elif os_type == "macos":
-            info("Install with: brew install ffmpeg")
-        elif os_type == "windows":
-            info("Download ffmpeg from https://ffmpeg.org/download.html")
-    else:
-        ok("ffmpeg found")
+    deps = {
+        "ffmpeg": {
+            "arch": "sudo pacman -S ffmpeg",
+            "debian": "sudo apt install ffmpeg",
+            "fedora": "sudo dnf install ffmpeg",
+            "macos": "brew install ffmpeg",
+            "windows": "Download from https://ffmpeg.org/download.html",
+        },
+    }
+
+    for dep, instructions in deps.items():
+        if shutil.which(dep):
+            ok(f"{dep} found")
+        else:
+            warn(f"{dep} not found. Audio conversion requires {dep}.")
+            hint = instructions.get(os_type, f"Please install {dep} manually.")
+            info(f"Install with: {hint}")
 
 
 def install_cli(use_global=False):
@@ -96,7 +99,6 @@ def install_cli(use_global=False):
         pip_cmd = [sys.executable, "-m", "pip"]
         python_cmd = sys.executable
     else:
-        # Create venv
         if sys.platform == "win32":
             venv_dir = Path.home() / ".webscraper-pro" / "venv"
         else:
@@ -163,7 +165,6 @@ def setup_extension():
     ext_dir = SCRIPT_DIR / "extension"
     with zipfile.ZipFile(str(xpi_path), "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(str(ext_dir)):
-            # Skip Python files and cache
             dirs[:] = [d for d in dirs if d != "__pycache__"]
             for fname in files:
                 if fname.endswith((".py", ".pyc")):
@@ -181,17 +182,90 @@ def setup_extension():
     print(f"  3. Click 'Load Temporary Add-on'")
     print(f"  4. Select: {ext_dir / 'manifest.json'}")
     print()
+    print(colored("For permanent installation:", "yellow"))
+    print(f"  1. Go to: about:addons")
+    print(f"  2. Click the gear icon -> 'Install Add-on From File'")
+    print(f"  3. Select: {xpi_path}")
+    print()
+
+
+def verify_installation():
+    """Verify that WebScraper Pro is correctly installed."""
+    info("Verifying installation...")
+    checks = []
+
+    # Check CLI availability
+    scrape_path = shutil.which("scrape")
+    if scrape_path:
+        ok(f"CLI found: {scrape_path}")
+        checks.append(True)
+    else:
+        err("CLI not found in PATH")
+        checks.append(False)
+
+    # Check Python dependencies
+    deps = ["click", "rich", "requests", "bs4"]
+    for dep in deps:
+        try:
+            __import__(dep)
+            ok(f"Module {dep} available")
+            checks.append(True)
+        except ImportError:
+            err(f"Module {dep} not found")
+            checks.append(False)
+
+    # Check extension files
+    manifest = SCRIPT_DIR / "extension" / "manifest.json"
+    if manifest.exists():
+        ok(f"Extension manifest found")
+        checks.append(True)
+    else:
+        err("Extension manifest not found")
+        checks.append(False)
+
+    # Check icons
+    icon = SCRIPT_DIR / "extension" / "icons" / "icon-48.png"
+    if icon.exists():
+        ok("Extension icons generated")
+        checks.append(True)
+    else:
+        warn("Extension icons not generated (run install to generate)")
+        checks.append(False)
+
+    # Check .xpi
+    xpi = SCRIPT_DIR / "webscraper-pro.xpi"
+    if xpi.exists():
+        ok(f"XPI packaged ({xpi.stat().st_size // 1024}KB)")
+        checks.append(True)
+    else:
+        warn("XPI not yet packaged")
+        checks.append(False)
+
+    passed = sum(checks)
+    total = len(checks)
+    print()
+    if passed == total:
+        ok(f"All {total} checks passed!")
+    else:
+        warn(f"{passed}/{total} checks passed")
+
+    return all(checks)
 
 
 def main():
     print()
-    print(colored("╔══════════════════════════════════════════╗", "blue"))
-    print(colored("║      WebScraper Pro - Auto Installer     ║", "blue"))
-    print(colored("╚══════════════════════════════════════════╝", "blue"))
+    print(colored("╔══════════════════════════════════════════════╗", "blue"))
+    print(colored("║    WebScraper Pro v0.6.3b2 - Auto Installer  ║", "blue"))
+    print(colored("╚══════════════════════════════════════════════╝", "blue"))
     print()
+
+    if "--verify" in sys.argv:
+        verify_installation()
+        return
 
     os_type = detect_os()
     info(f"Detected OS: {os_type} ({platform.platform()})")
+    info(f"Python: {sys.version}")
 
     use_global = "--global" in sys.argv
 
@@ -199,16 +273,27 @@ def main():
     install_cli(use_global)
     setup_extension()
 
+    # Post-install verification
     print()
-    print(colored("╔══════════════════════════════════════════╗", "green"))
-    print(colored("║    Installation Complete!                ║", "green"))
-    print(colored("╚══════════════════════════════════════════╝", "green"))
+    info("Running post-install verification...")
+    verify_installation()
+
+    print()
+    print(colored("╔══════════════════════════════════════════════╗", "green"))
+    print(colored("║      Installation Complete!                   ║", "green"))
+    print(colored("╚══════════════════════════════════════════════╝", "green"))
     print()
     print("Quick start:")
-    print("  scrape --help          Show all commands")
+    print("  scrape -h              Show all commands")
     print("  scrape start           Start a scraping session")
+    print("  scrape url <URL>       Scrape a URL directly")
     print("  scrape config.upload   Configure HuggingFace")
     print("  scrape status          Check status")
+    print("  scrape doctor          Check system health")
+    print("  scrape gui.start       Launch the GUI")
+    print()
+    print("Update:      scrape -U")
+    print("Uninstall:   scrape -rmv")
     print()
 
 

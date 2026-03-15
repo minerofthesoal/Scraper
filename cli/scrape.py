@@ -37,10 +37,16 @@ Commands:
     scrape ai.status                 - Check AI server status
     scrape ai.setup                  - Download and configure NuExtract model
     scrape images.export [FORMAT]    - Export images in PNG/WebP/BMP/JPEG
-    scrape -U -new                   - Update to newest version
+    scrape -U                        - Update automatically from GitHub
+    scrape -rmv                      - Uninstall WebScraper Pro completely
+    scrape -h                        - Show help (alias for --help)
     scrape -C option.upload          - Configure upload (dot-syntax)
     scrape --version                 - Show version
     scrape --help                    - Show this help
+    scrape logs [--tail N]           - Show scraping logs
+    scrape ping URL                  - Check if a URL is reachable
+    scrape reset                     - Factory reset all data and config
+    scrape benchmark URL             - Benchmark scraping speed for a URL
 """
 
 import os
@@ -67,7 +73,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.2b2"
+VERSION = "0.6.3b2"
 
 # ── Config paths ──
 def get_config_dir():
@@ -171,19 +177,27 @@ def load_records(cfg):
 # CLI Commands
 # ══════════════════════════════════════════
 
-@click.group(invoke_without_command=True)
+@click.group(invoke_without_command=True, context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option("--version", "-v", is_flag=True, help="Show version")
+@click.option("-U", "do_update", is_flag=True, help="Update from GitHub")
+@click.option("-rmv", "do_remove", is_flag=True, help="Uninstall WebScraper Pro")
 @click.pass_context
-def cli(ctx, version):
+def cli(ctx, version, do_update, do_remove):
     """WebScraper Pro CLI - Scraping companion tool."""
     if version:
         console.print(f"[bold blue]WebScraper Pro CLI[/bold blue] v{VERSION}")
         return
+    if do_update:
+        ctx.invoke(update)
+        return
+    if do_remove:
+        ctx.invoke(uninstall)
+        return
     if ctx.invoked_subcommand is None:
         console.print(Panel(
             "[bold blue]WebScraper Pro CLI[/bold blue] v" + VERSION + "\n\n"
-            "Use [green]scrape --help[/green] to see all commands.\n"
-            "Use [green]scrape <command> --help[/green] for command details.",
+            "Use [green]scrape -h[/green] to see all commands.\n"
+            "Use [green]scrape <command> -h[/green] for command details.",
             title="WebScraper Pro",
             border_style="blue"
         ))
@@ -935,33 +949,331 @@ def validate():
 
 # ── 27. scrape -U / update ──
 @cli.command("update")
-@click.option("--new", "-n", "newest", is_flag=True, help="Update to the newest version")
-def update(newest):
-    """Update WebScraper Pro to the newest version."""
+def update():
+    """Update WebScraper Pro automatically from GitHub."""
     import subprocess
-    console.print("[blue]Checking for updates...[/blue]")
+    console.print(f"[blue]Current version: v{VERSION}[/blue]")
+    console.print("[blue]Checking for updates from GitHub...[/blue]")
+
+    repo_url = "https://github.com/minerofthesoal/Scraper.git"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
 
     try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "webscraper-pro-cli"],
-            capture_output=True, text=True
-        )
-        if result.returncode == 0:
-            console.print("[green]Updated successfully![/green]")
-        else:
-            # Try from git
-            console.print("[yellow]PyPI package not found. Trying git update...[/yellow]")
+        # Check if we're in a git repo
+        git_dir = os.path.join(project_root, ".git")
+        if os.path.isdir(git_dir):
+            console.print("[yellow]Pulling latest from GitHub...[/yellow]")
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--upgrade",
-                 "git+https://github.com/minerofthesoal/Scraper.git#subdirectory=cli"],
+                ["git", "-C", project_root, "pull", "origin", "main"],
                 capture_output=True, text=True
             )
             if result.returncode == 0:
-                console.print("[green]Updated from git successfully![/green]")
+                console.print(f"[green]Repository updated![/green]")
+                console.print(result.stdout.strip())
             else:
-                console.print(f"[red]Update failed.[/red] {result.stderr}")
+                # Try master branch
+                result = subprocess.run(
+                    ["git", "-C", project_root, "pull", "origin", "master"],
+                    capture_output=True, text=True
+                )
+                if result.returncode == 0:
+                    console.print(f"[green]Repository updated![/green]")
+                else:
+                    console.print(f"[yellow]Git pull failed, trying pip...[/yellow]")
+                    raise FileNotFoundError("git pull failed")
+
+            # Reinstall CLI after pull
+            console.print("[blue]Reinstalling CLI dependencies...[/blue]")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-e", script_dir],
+                capture_output=True, text=True
+            )
+            console.print("[green]Update complete! Restart scrape to use the new version.[/green]")
+        else:
+            # Not in a git repo, try pip install from git
+            console.print("[yellow]Not a git checkout. Installing from GitHub...[/yellow]")
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade",
+                 f"git+{repo_url}#subdirectory=cli"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                console.print("[green]Updated from GitHub successfully![/green]")
+            else:
+                console.print(f"[red]Update failed.[/red]\n{result.stderr}")
     except Exception as e:
         console.print(f"[red]Update failed: {e}[/red]")
+
+
+# ── 28. scrape -rmv / uninstall ──
+@cli.command("uninstall")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def uninstall(yes):
+    """Completely uninstall WebScraper Pro (CLI, config, data, venv)."""
+    import subprocess
+
+    config_dir = get_config_dir()
+    data_dir = get_data_dir()
+    venv_dir = os.path.join(os.path.expanduser("~"), ".webscraper-pro")
+    local_bin = os.path.join(os.path.expanduser("~"), ".local", "bin", "scrape")
+
+    console.print("[bold red]WebScraper Pro Uninstaller[/bold red]\n")
+    console.print("This will remove:")
+    console.print(f"  Config:  [cyan]{config_dir}[/cyan]")
+    console.print(f"  Data:    [cyan]{data_dir}[/cyan]")
+    console.print(f"  Venv:    [cyan]{venv_dir}[/cyan]")
+    console.print(f"  CLI:     [cyan]{local_bin}[/cyan]")
+
+    if not yes:
+        click.confirm("\nAre you sure you want to uninstall everything?", abort=True)
+
+    removed = []
+    for path in [config_dir, data_dir, venv_dir]:
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+            removed.append(path)
+
+    if os.path.exists(local_bin):
+        os.remove(local_bin)
+        removed.append(local_bin)
+    # Also try .cmd on Windows
+    if sys.platform == "win32" and os.path.exists(local_bin + ".cmd"):
+        os.remove(local_bin + ".cmd")
+
+    # Uninstall pip package
+    subprocess.run(
+        [sys.executable, "-m", "pip", "uninstall", "-y", "webscraper-pro-cli"],
+        capture_output=True, text=True
+    )
+
+    console.print(f"\n[green]Removed {len(removed)} items.[/green]")
+    console.print("[green]WebScraper Pro has been uninstalled.[/green]")
+    console.print("[dim]To remove the source code, delete the Scraper directory manually.[/dim]")
+
+
+# ── 29. scrape logs ──
+@cli.command("logs")
+@click.option("--tail", "-n", "tail_n", default=50, help="Number of log lines to show")
+@click.option("--level", "-l", type=click.Choice(["all", "error", "warn", "info"]), default="all", help="Filter by level")
+def logs(tail_n, level):
+    """Show scraping logs and activity history."""
+    log_file = os.path.join(get_data_dir(), "scrape.log")
+    history = HISTORY_FILE
+
+    # Collect from history file
+    lines = []
+    for source in [history, log_file]:
+        if os.path.exists(source):
+            with open(source, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if level != "all":
+                        try:
+                            obj = json.loads(line)
+                            action = obj.get("action", "").lower()
+                            if level == "error" and "error" not in action and "fail" not in action:
+                                continue
+                        except json.JSONDecodeError:
+                            if level == "error" and "error" not in line.lower():
+                                continue
+                    lines.append(line)
+
+    if not lines:
+        console.print("[yellow]No logs found.[/yellow]")
+        return
+
+    # Show last N lines
+    for line in lines[-tail_n:]:
+        try:
+            obj = json.loads(line)
+            ts = obj.get("timestamp", "")[:19]
+            action = obj.get("action", "unknown")
+            detail = obj.get("detail", "")
+            color = "red" if "error" in action.lower() or "fail" in action.lower() else "blue"
+            console.print(f"  [{color}]{ts}[/{color}]  {action:20s}  {detail}")
+        except json.JSONDecodeError:
+            console.print(f"  {line}")
+
+    console.print(f"\n[dim]Showing last {min(tail_n, len(lines))} of {len(lines)} entries[/dim]")
+
+
+# ── 30. scrape ping ──
+@cli.command("ping")
+@click.argument("url")
+@click.option("--count", "-c", default=3, help="Number of pings")
+def ping(url, count):
+    """Check if a URL is reachable and measure response time."""
+    try:
+        import requests as req_lib
+    except ImportError:
+        console.print("[red]requests library required. Run: pip install requests[/red]")
+        return
+
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    console.print(f"[blue]Pinging {url}...[/blue]\n")
+
+    times = []
+    for i in range(count):
+        try:
+            start = time.time()
+            resp = req_lib.head(url, timeout=10, allow_redirects=True,
+                                headers={"User-Agent": "WebScraperPro/1.0"})
+            elapsed = (time.time() - start) * 1000
+            times.append(elapsed)
+
+            status_color = "green" if resp.status_code < 400 else "red"
+            console.print(f"  [{status_color}]{resp.status_code}[/{status_color}]  {elapsed:.0f}ms  "
+                          f"[dim]{resp.headers.get('content-type', 'unknown')}[/dim]")
+        except Exception as e:
+            console.print(f"  [red]FAIL[/red]  {e}")
+
+    if times:
+        avg = sum(times) / len(times)
+        console.print(f"\n[bold]Avg:[/bold] {avg:.0f}ms  [bold]Min:[/bold] {min(times):.0f}ms  "
+                      f"[bold]Max:[/bold] {max(times):.0f}ms  ({len(times)}/{count} successful)")
+
+
+# ── 31. scrape reset ──
+@cli.command("reset")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def reset(yes):
+    """Factory reset - delete all config, data, cache, and history."""
+    config_dir = get_config_dir()
+    data_dir = get_data_dir()
+
+    console.print("[bold red]Factory Reset[/bold red]\n")
+    console.print("This will delete ALL WebScraper Pro data:")
+    console.print(f"  Config:  [cyan]{config_dir}[/cyan]")
+    console.print(f"  Data:    [cyan]{data_dir}[/cyan]")
+
+    if not yes:
+        click.confirm("\nThis cannot be undone. Continue?", abort=True)
+
+    for path in [config_dir, data_dir]:
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+            console.print(f"  [red]Deleted[/red] {path}")
+
+    # Recreate dirs with fresh defaults
+    get_config_dir()
+    get_data_dir()
+    save_config(DEFAULT_CONFIG.copy())
+
+    console.print("\n[green]Factory reset complete. All settings restored to defaults.[/green]")
+    log_history("reset", "Factory reset performed")
+
+
+# ── 32. scrape benchmark ──
+@cli.command("benchmark")
+@click.argument("url")
+@click.option("--rounds", "-r", default=5, help="Number of fetch rounds")
+def benchmark(url, rounds):
+    """Benchmark scraping speed for a URL (fetch + parse timing)."""
+    try:
+        import requests as req_lib
+        from bs4 import BeautifulSoup
+    except ImportError:
+        console.print("[red]requests and beautifulsoup4 required.[/red]")
+        return
+
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    console.print(f"[blue]Benchmarking {url} ({rounds} rounds)...[/blue]\n")
+
+    fetch_times = []
+    parse_times = []
+    sizes = []
+
+    for i in range(rounds):
+        try:
+            # Fetch
+            t0 = time.time()
+            resp = req_lib.get(url, timeout=30, headers={"User-Agent": "WebScraperPro/1.0"})
+            t_fetch = time.time() - t0
+
+            # Parse
+            t1 = time.time()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            texts = soup.find_all(string=True)
+            images = soup.find_all("img")
+            links = soup.find_all("a", href=True)
+            t_parse = time.time() - t1
+
+            fetch_times.append(t_fetch * 1000)
+            parse_times.append(t_parse * 1000)
+            sizes.append(len(resp.content))
+
+            console.print(f"  Round {i+1}: fetch={t_fetch*1000:.0f}ms  parse={t_parse*1000:.0f}ms  "
+                          f"size={len(resp.content)//1024}KB  "
+                          f"[dim]{len(texts)} texts, {len(images)} imgs, {len(links)} links[/dim]")
+        except Exception as e:
+            console.print(f"  Round {i+1}: [red]FAIL - {e}[/red]")
+
+    if fetch_times:
+        console.print(f"\n[bold]Results ({len(fetch_times)}/{rounds} successful):[/bold]")
+        table = Table()
+        table.add_column("Metric", style="bold")
+        table.add_column("Avg")
+        table.add_column("Min")
+        table.add_column("Max")
+        table.add_row("Fetch", f"{sum(fetch_times)/len(fetch_times):.0f}ms",
+                       f"{min(fetch_times):.0f}ms", f"{max(fetch_times):.0f}ms")
+        table.add_row("Parse", f"{sum(parse_times)/len(parse_times):.0f}ms",
+                       f"{min(parse_times):.0f}ms", f"{max(parse_times):.0f}ms")
+        table.add_row("Total", f"{(sum(fetch_times)+sum(parse_times))/len(fetch_times):.0f}ms",
+                       f"{min(f+p for f,p in zip(fetch_times,parse_times)):.0f}ms",
+                       f"{max(f+p for f,p in zip(fetch_times,parse_times)):.0f}ms")
+        avg_size = sum(sizes) / len(sizes)
+        table.add_row("Page size", f"{avg_size/1024:.0f}KB", "", "")
+        console.print(table)
+
+
+# ── 33. scrape changelog ──
+@cli.command("changelog")
+def changelog():
+    """Show version history and changelog."""
+    entries = [
+        ("0.6.3b2", "2026-03-15", [
+            "New commands: logs, ping, reset, benchmark, changelog, uninstall",
+            "scrape -h for help, -U for auto-update, -rmv for uninstall",
+            "Updated installer with post-install verification",
+            "Uni-S License v2.1 with expanded protections",
+            "Improved GitHub Actions workflows",
+        ]),
+        ("0.6.3b1", "2026-03-15", [
+            "Record detail modal, domain stats, dedup tracking, keyboard nav",
+        ]),
+        ("0.6.3b", "2026-03-14", [
+            "Bug fixes, robustness improvements, code quality overhaul",
+        ]),
+        ("0.6.2b", "2026-03-13", [
+            "Image export, NuExtract AI integration, Firefox validation fix",
+        ]),
+        ("0.6.1b", "2026-03-12", [
+            "Fix WSP_HFUpload undefined error, remove IIFEs from all lib files",
+        ]),
+        ("0.6b", "2026-03-11", [
+            "Major update: smart extract, batch queue, sessions, rate limiting, themes",
+        ]),
+        ("0.5.5b", "2026-03-10", [
+            "Fix HF upload API, add keyboard shortcuts, live preview, dedup",
+        ]),
+        ("0.5b", "2026-03-09", [
+            "Major feature update: GUI, CLI commands, scroll-first scraping, APA citations, Arch pkg",
+        ]),
+    ]
+
+    console.print(Panel("[bold blue]WebScraper Pro Changelog[/bold blue]", border_style="blue"))
+    for ver, date, changes in entries:
+        console.print(f"\n[bold green]v{ver}[/bold green]  [dim]{date}[/dim]")
+        for change in changes:
+            console.print(f"  - {change}")
 
 
 # ══════════════════════════════════════════

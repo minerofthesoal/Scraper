@@ -1,5 +1,5 @@
 Uni-S License (Universal Scraping License)
-Version 2.0
+Version 2.1
 
 Copyright (c) 2026 minerofthesoal
 https://github.com/minerofthesoal/Scraper
@@ -8,176 +8,419 @@ https://github.com/minerofthesoal/Scraper
 PREAMBLE
 =============================================================================
 
-This license is designed to keep web scraping tools free and open while
-making it clear that scraping data does not create ownership of that data.
-Version 2.0 is more permissive than v1.0 — other projects can incorporate
-this code with fewer restrictions, and the data ownership terms are clearer.
+This license governs the use, modification, and distribution of web scraping
+software and tools. It is designed with two fundamental principles:
+
+  1. Web scraping TOOLS should be free, open, and accessible to everyone.
+  2. Web scraping does NOT create ownership of the scraped CONTENT.
+
+Version 2.1 expands on v2.0 with clearer AI/ML training provisions,
+stronger protections for original content creators, explicit data retention
+and deletion obligations, and improved international compatibility.
+
+This license applies to the Software (code, documentation, configuration
+files, build scripts, and associated assets) distributed alongside this
+license text. It does NOT apply to any content collected using the Software.
 
 =============================================================================
 PART I — SOFTWARE LICENSE
 =============================================================================
 
-1. GRANT OF RIGHTS
+1. DEFINITIONS
+
+   "Software" means the source code, object code, documentation,
+   configuration files, build scripts, icons, stylesheets, and all other
+   files distributed with this license.
+
+   "Derivative Work" means any work that is based on, incorporates, or
+   modifies the Software in whole or in part.
+
+   "Standalone Scraping Tool" means a software product whose primary
+   purpose is web scraping, data collection, or automated content
+   extraction from websites or web services.
+
+   "Library Use" means incorporating portions of the Software as a
+   component, module, or dependency within a larger software project
+   whose primary purpose is NOT web scraping.
+
+   "Scraped Content" means any data, text, images, audio, video,
+   structured data, metadata, or other content collected, extracted,
+   downloaded, or otherwise obtained using the Software.
+
+   "Original Creator" means the person, organization, or entity that
+   authored, published, or holds rights to content that may be scraped.
+
+2. GRANT OF RIGHTS
 
    Permission is hereby granted, free of charge, to any person or
    organization obtaining a copy of this Software and associated
    documentation files, to deal in the Software without restriction,
    including without limitation the rights to:
 
-     a) Use the Software for any purpose (personal, commercial, research,
-        educational, governmental, or otherwise).
-     b) Copy, modify, merge, adapt, and create derivative works.
-     c) Publish, distribute, sublicense, and/or sell copies.
-     d) Embed, integrate, or incorporate into other software projects,
-        libraries, frameworks, or services — including proprietary ones,
-        with the conditions in Section 2.
+     a) Use the Software for any lawful purpose — personal, commercial,
+        research, educational, governmental, journalistic, archival, or
+        otherwise.
 
-2. CONDITIONS
+     b) Copy, modify, merge, adapt, translate, and create derivative works
+        of the Software.
+
+     c) Publish, distribute, sublicense, and/or sell copies of the
+        Software or derivative works.
+
+     d) Embed, integrate, or incorporate the Software into other software
+        projects, libraries, frameworks, platforms, or services — including
+        proprietary ones — subject to the conditions in Section 3.
+
+     e) Use the Software for automated testing, continuous integration,
+        research pipelines, and other automated workflows.
+
+3. CONDITIONS
 
    The above rights are granted subject to the following conditions:
 
      a) ATTRIBUTION — This copyright notice and license text (or a
         prominent link to it) SHALL be included in all copies or
-        substantial portions of the Software.
+        substantial portions of the Software. Attribution must be
+        reasonably visible — in a LICENSE file, an "About" dialog,
+        documentation, or a NOTICE file.
 
      b) SHARE-ALIKE FOR STANDALONE FORKS — If you distribute the Software
-        as a standalone scraping tool (i.e., a product whose primary
-        purpose is web scraping), the source code of your distribution
-        MUST remain open source under this license or any OSI-approved
-        open source license.
+        or a Derivative Work as a Standalone Scraping Tool, the source
+        code of your distribution MUST remain open source under this
+        license or any OSI-approved open source license. This ensures
+        scraping tools remain accessible to all.
 
      c) LIBRARY USE IS UNRESTRICTED — If you incorporate portions of
         this Software as a component or library within a larger project
-        whose primary purpose is NOT web scraping, you are NOT required
-        to open-source your larger project. Attribution is still required.
+        whose primary purpose is NOT web scraping (Library Use), you are
+        NOT required to open-source your larger project. Attribution is
+        still required per Section 3(a).
 
-     d) MODIFICATIONS — If you distribute modified versions, you MUST
-        clearly indicate that changes were made and MUST NOT misrepresent
-        the modified version as the original.
+     d) MODIFICATIONS — If you distribute modified versions, you MUST:
+        (i)  Clearly indicate that changes were made.
+        (ii) NOT misrepresent the modified version as the original.
+        (iii) Include a changelog or summary of modifications.
 
      e) NO TRADEMARK RIGHTS — This license does not grant permission to
-        use the trade names, trademarks, service marks, or product names
-        of the original authors, except as required for attribution.
+        use the trade names, trademarks, service marks, logos, or product
+        names of the original authors, except as required for reasonable
+        and customary attribution.
 
-3. COMPATIBILITY
+     f) NO ENDORSEMENT — You may not use the name of the original authors
+        or contributors to endorse or promote products derived from this
+        Software without specific prior written permission.
 
-   This license is intended to be compatible with:
+     g) DISTRIBUTION FORMAT — You may distribute the Software in source
+        code form, compiled binary form, packaged form (e.g., .xpi, .whl,
+        .deb, .rpm, .pkg.tar.zst), or any other format, provided the
+        license text remains accessible.
+
+4. COMPATIBILITY
+
+   This license is intended to be compatible with the following licenses:
+
      - MIT License
      - Apache License 2.0
      - BSD 2-Clause and 3-Clause Licenses
      - ISC License
-     - MPL 2.0
+     - Mozilla Public License 2.0 (MPL 2.0)
+     - Artistic License 2.0
+     - Zlib License
 
    Code licensed under any of the above may be combined with this
    Software. Derivative works may be re-licensed under any of the above
-   licenses PROVIDED the data ownership terms in Part II are preserved
-   in documentation or a separate NOTICE file.
+   licenses PROVIDED that the data ownership terms in Part II are
+   preserved in documentation, a NOTICE file, or equivalent.
+
+   This license is NOT compatible with licenses that claim ownership
+   over data collected by the licensed software.
 
 =============================================================================
-PART II — SCRAPED DATA OWNERSHIP
+PART II — SCRAPED DATA OWNERSHIP & RESPONSIBILITY
 =============================================================================
 
-4. NO OWNERSHIP OF SCRAPED CONTENT
+5. NO OWNERSHIP OF SCRAPED CONTENT
 
-   Neither the authors of this Software nor its users acquire any
-   ownership, copyright, or intellectual property rights over content
-   collected using this Software ("Scraped Content"), by the mere act
-   of scraping.
+   Neither the authors of this Software, its contributors, its users,
+   nor any organization employing or contracting with the above, acquire
+   any ownership, copyright, license, or intellectual property rights
+   over Scraped Content by the mere act of scraping, collecting,
+   downloading, caching, indexing, transforming, or storing it.
 
    To be unambiguously clear:
 
-     a) Scraping content does NOT transfer ownership.
-     b) Scraping content does NOT create a new copyright.
-     c) Scraping content does NOT grant a license to use that content.
-     d) Aggregating or reformatting scraped content does NOT create
-        new rights over the underlying content.
+     a) Scraping content does NOT transfer ownership of that content.
+     b) Scraping content does NOT create a new copyright over that content.
+     c) Scraping content does NOT grant a license to use, reproduce,
+        distribute, display, or create derivative works from that content.
+     d) Aggregating, reformatting, cleaning, deduplicating, or otherwise
+        processing Scraped Content does NOT create new intellectual
+        property rights over the underlying content.
+     e) Storing Scraped Content in a database, dataset, file, or any
+        other format does NOT constitute authorship of that content.
+     f) Making Scraped Content available through an API, website, or
+        service does NOT transfer or create rights.
 
-5. ORIGINAL RIGHTS PRESERVED
+6. ORIGINAL RIGHTS PRESERVED
 
-   ALL rights in Scraped Content — including copyright, trademark,
-   database rights, moral rights, and any other intellectual property
-   rights — belong to, and remain with, the original authors, creators,
-   publishers, and/or rights holders.
+   ALL rights in Scraped Content — including but not limited to copyright,
+   trademark, trade secret, database rights, moral rights, publicity
+   rights, privacy rights, and any other intellectual property or
+   proprietary rights — belong to, and remain exclusively with, the
+   Original Creators, authors, publishers, and/or rights holders.
 
-   This applies to all types of content: text, images, photographs,
-   audio, video, code, databases, structured data, trademarks, and
-   brand elements.
+   This applies without limitation to all types of content:
 
-6. USER RESPONSIBILITY
+     - Text, articles, blog posts, comments, reviews, descriptions
+     - Images, photographs, illustrations, graphics, icons, logos
+     - Audio recordings, music, podcasts, sound effects
+     - Video, animations, livestream recordings
+     - Source code, compiled code, scripts, configuration files
+     - Databases, datasets, spreadsheets, structured data
+     - Trademarks, brand elements, trade dress, service marks
+     - Personal data, biographical information, contact details
+     - Metadata, tags, categories, taxonomies
 
-   Users of this Software are solely responsible for:
+7. AI AND MACHINE LEARNING
+
+   The following additional terms apply to the use of Scraped Content
+   in connection with artificial intelligence and machine learning:
+
+     a) Training AI or ML models on Scraped Content does NOT grant
+        ownership of the training data to the model creator, trainer,
+        deployer, or any downstream user.
+
+     b) AI/ML models trained on Scraped Content do NOT inherit any
+        rights to the content used for training.
+
+     c) Outputs generated by AI/ML models trained on Scraped Content
+        may be subject to the intellectual property rights of Original
+        Creators if the outputs are substantially similar to, derived
+        from, or reproduce the training data.
+
+     d) Users who train AI/ML models on Scraped Content are solely
+        responsible for ensuring they have the legal right to use the
+        content for training purposes, including compliance with
+        applicable AI/ML regulations and opt-out mechanisms.
+
+     e) The Software itself may include AI/ML capabilities (such as
+        NuExtract integration). The license terms for the Software
+        (Part I) apply to the Software's AI components. The data
+        ownership terms (Part II) apply to any content processed
+        by those components.
+
+8. USER RESPONSIBILITY
+
+   Users of this Software are solely and exclusively responsible for:
 
      a) Ensuring they have the legal right to scrape, store, process,
-        and/or redistribute any content they collect.
-     b) Complying with applicable laws (copyright, GDPR, CCPA, CFAA,
-        terms of service, etc.).
-     c) Respecting robots.txt where configured to do so.
-     d) Properly attributing and citing original sources.
-     e) Honoring takedown requests from rights holders.
+        analyze, transform, and/or redistribute any content they collect.
 
-7. COMMUNITY DATASET
+     b) Complying with all applicable laws, regulations, and legal
+        frameworks, including but not limited to:
+        - Copyright and intellectual property laws
+        - The Computer Fraud and Abuse Act (CFAA) and equivalents
+        - The General Data Protection Regulation (GDPR)
+        - The California Consumer Privacy Act (CCPA/CPRA)
+        - The Digital Millennium Copyright Act (DMCA)
+        - The EU Database Directive
+        - The AI Act (EU) and other AI-specific regulations
+        - Applicable terms of service of scraped websites
+        - National and regional data protection laws
 
-   The community dataset at:
+     c) Respecting robots.txt directives and other machine-readable
+        access controls where technically feasible and legally required.
+
+     d) Properly attributing and citing original sources when using or
+        publishing Scraped Content.
+
+     e) Honoring takedown requests, opt-out signals, and removal
+        requests from rights holders in a timely manner.
+
+     f) Implementing appropriate data retention and deletion policies
+        for Scraped Content, particularly content containing personal
+        data or sensitive information.
+
+     g) Conducting data protection impact assessments where required
+        by applicable law before scraping personal data at scale.
+
+     h) Not using the Software to circumvent technical protection
+        measures, access controls, or authentication mechanisms in
+        violation of applicable law.
+
+9. COMMUNITY DATASET
+
+   The community dataset hosted at:
      https://huggingface.co/datasets/ray0rf1re/Site.scraped
 
-   Is community-contributed. The maintainer (ray0rf1re / minerofthesoal)
-   does NOT own contributed content. All rights remain with original
-   creators. Contributors are responsible for their uploads. Rights
-   holders may request removal via the GitHub issue tracker.
+   is community-contributed and subject to the following terms:
 
-8. CITATIONS
+     a) The dataset maintainer (ray0rf1re / minerofthesoal) does NOT
+        own, claim ownership of, or hold any rights to contributed content.
 
-   Auto-generated citations (MLA 9th / APA 7th) are provided to assist
-   with attribution. They may contain errors and must be verified. They
-   do not constitute legal permission to use cited content.
+     b) All rights in contributed content remain exclusively with the
+        Original Creators and rights holders.
+
+     c) Contributors are solely responsible for ensuring they have the
+        legal right to upload and share the content they contribute.
+
+     d) Rights holders may request removal of their content via the
+        GitHub issue tracker at:
+        https://github.com/minerofthesoal/Scraper/issues
+
+     e) Removal requests will be honored within a reasonable timeframe,
+        not to exceed 30 days from receipt of a valid request.
+
+     f) The dataset is provided for research and educational purposes.
+        Commercial use of individual records may require separate
+        permission from Original Creators.
+
+10. CITATIONS
+
+    Auto-generated citations (MLA 9th edition, APA 7th edition, and
+    other formats) are provided as a convenience to assist users with
+    proper attribution. However:
+
+      a) Citations are generated algorithmically and may contain errors,
+         omissions, or inaccuracies.
+
+      b) Citations MUST be verified by the user before use in academic
+         work, publications, legal proceedings, or any context where
+         accuracy is required.
+
+      c) Providing a citation does NOT constitute legal permission to
+         use the cited content. Users must independently verify their
+         right to use any cited material.
+
+      d) Citation generation is a feature of the Software, not a legal
+         service. No attorney-client relationship is created.
 
 =============================================================================
-PART III — DISCLAIMERS
+PART III — DISCLAIMERS & LIABILITY
 =============================================================================
 
-9. NO WARRANTY
+11. NO WARRANTY
 
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
-   NONINFRINGEMENT.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NONINFRINGEMENT,
+    ACCURACY, COMPLETENESS, RELIABILITY, SECURITY, OR AVAILABILITY.
 
-10. LIMITATION OF LIABILITY
+    THE AUTHORS DO NOT WARRANT THAT:
+      a) The Software will meet your requirements.
+      b) The Software will be uninterrupted, timely, secure, or error-free.
+      c) The results obtained from the Software will be accurate or reliable.
+      d) Any errors in the Software will be corrected.
+      e) The Software will be compatible with any particular system,
+         browser, or environment.
 
-    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-    CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-    TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
-    SOFTWARE OR ITS USE, INCLUDING BUT NOT LIMITED TO LIABILITY ARISING
-    FROM: COLLECTION OR MISUSE OF DATA; THIRD-PARTY CLAIMS REGARDING
-    SCRAPED CONTENT; VIOLATIONS OF TERMS OF SERVICE OR LAW BY USERS;
-    INACCURATE CITATIONS; DATA LOSS OR CORRUPTION.
+12. LIMITATION OF LIABILITY
 
-11. INDEMNIFICATION
+    IN NO EVENT SHALL THE AUTHORS, COPYRIGHT HOLDERS, CONTRIBUTORS,
+    OR MAINTAINERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+    WHETHER IN AN ACTION OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT
+    LIABILITY, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH
+    THE SOFTWARE OR THE USE OR INABILITY TO USE THE SOFTWARE, INCLUDING
+    BUT NOT LIMITED TO:
 
-    Users agree to indemnify and hold harmless the authors and
-    contributors from any claims arising from the user's use of the
-    Software or any Scraped Content.
+      a) Direct, indirect, incidental, special, exemplary, consequential,
+         or punitive damages.
+      b) Loss of profits, revenue, data, goodwill, or business opportunity.
+      c) Cost of procurement of substitute goods or services.
+      d) Claims by third parties regarding Scraped Content.
+      e) Violations of terms of service, applicable law, or regulations
+         by users of the Software.
+      f) Inaccurate, incomplete, or erroneous citations.
+      g) Data loss, corruption, or unauthorized access to scraped data.
+      h) Damages arising from AI/ML model training on Scraped Content.
+      i) Legal action taken against users by content rights holders.
+
+    THIS LIMITATION APPLIES REGARDLESS OF WHETHER THE AUTHORS HAVE BEEN
+    ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+13. INDEMNIFICATION
+
+    Users agree to indemnify, defend, and hold harmless the authors,
+    copyright holders, contributors, and maintainers from and against
+    any and all claims, damages, losses, costs, and expenses (including
+    reasonable attorney fees) arising from or related to:
+
+      a) The user's use of the Software.
+      b) The user's collection, storage, processing, or distribution
+         of Scraped Content.
+      c) The user's violation of any applicable law, regulation, or
+         third-party right.
+      d) The user's breach of any term of this license.
+      e) Any AI/ML model trained using Scraped Content obtained through
+         the user's use of the Software.
 
 =============================================================================
-PART IV — GENERAL
+PART IV — GENERAL PROVISIONS
 =============================================================================
 
-12. SEVERABILITY
+14. SEVERABILITY
 
-    If any provision is held invalid, the remaining provisions continue
-    in full force.
+    If any provision of this license is held to be invalid, illegal, or
+    unenforceable by a court of competent jurisdiction, the remaining
+    provisions shall continue in full force and effect. The invalid
+    provision shall be modified to the minimum extent necessary to make
+    it valid and enforceable while preserving its original intent.
 
-13. AMENDMENTS
+15. AMENDMENTS AND VERSIONING
 
-    Updated versions of this license may be published by the copyright
-    holder. Users may adopt the new version or continue under the version
-    in effect when they obtained the Software.
+    a) Updated versions of this license may be published by the
+       copyright holder at the project repository.
 
-14. GOVERNING INTERPRETATION
+    b) Each version will be clearly numbered (e.g., v2.0, v2.1, v3.0).
 
-    Where this license is silent, interpret it in the spirit of the
-    MIT License for software terms and in the spirit of "we don't own
-    your data" for data terms.
+    c) Users may choose to adopt the new version or continue under the
+       version that was in effect when they obtained the Software.
+
+    d) Major version changes (e.g., v2.x to v3.0) may introduce
+       significant changes to rights and obligations. Users should
+       review major version updates carefully.
+
+    e) Minor version changes (e.g., v2.0 to v2.1) are intended to
+       clarify, expand, or improve existing terms without fundamentally
+       changing the license's intent.
+
+16. GOVERNING INTERPRETATION
+
+    Where this license is silent on a matter:
+
+      a) For software-related matters, interpret in the spirit of the
+         MIT License — permissive, with minimal restrictions.
+
+      b) For data-related matters, interpret in the spirit of "nobody
+         owns scraped data by scraping it" — Original Creators retain
+         all rights.
+
+      c) For AI/ML-related matters, interpret in the spirit of
+         protecting Original Creator rights while permitting legitimate
+         research and development.
+
+17. ENTIRE AGREEMENT
+
+    This license constitutes the entire agreement between the parties
+    with respect to the Software. It supersedes all prior or
+    contemporaneous understandings, agreements, or representations
+    regarding the Software, whether written or oral.
+
+18. WAIVER
+
+    The failure of any party to enforce any provision of this license
+    shall not constitute a waiver of that party's right to enforce
+    that provision or any other provision in the future.
+
+19. NOTICES
+
+    Any notices required or permitted under this license should be
+    directed to the project repository:
+      https://github.com/minerofthesoal/Scraper
+
+    For takedown requests, rights holder inquiries, and legal matters,
+    please open an issue at:
+      https://github.com/minerofthesoal/Scraper/issues
 
 =============================================================================
 
@@ -185,9 +428,16 @@ QUICK REFERENCE (not legally binding):
 
   SOFTWARE:  Use it for anything. Attribution required. Standalone
              scraper forks must stay open source. Library use in larger
-             projects is unrestricted. Compatible with MIT/Apache/BSD.
+             projects is unrestricted. Compatible with MIT/Apache/BSD/MPL.
 
   DATA:      Nobody owns scraped data by scraping it. Original creators
              own everything. You are responsible for legal compliance.
+             Respect robots.txt, honor takedown requests.
+
+  AI/ML:     Training on scraped data does not create ownership. Original
+             creator rights are preserved. Comply with AI regulations.
+
+  LIABILITY: Software is provided as-is. Authors are not liable for
+             misuse, data loss, legal violations, or inaccurate citations.
 
 =============================================================================

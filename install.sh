@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════
-# WebScraper Pro - Auto Installer (Linux / macOS)
+# WebScraper Pro v0.6.3b2 - Auto Installer (Linux / macOS)
 # Installs the Python CLI and sets up the Firefox extension
 # Works on: Arch, Ubuntu, Debian, Fedora, macOS, and more
 # ══════════════════════════════════════════════════════════════
@@ -11,6 +11,7 @@ BLUE='\033[1;34m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
 RED='\033[1;31m'
+BOLD='\033[1m'
 NC='\033[0m'
 
 info()  { echo -e "${BLUE}[INFO]${NC} $*"; }
@@ -21,9 +22,9 @@ err()   { echo -e "${RED}[ERROR]${NC} $*"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
-echo -e "${BLUE}╔══════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║      WebScraper Pro - Auto Installer     ║${NC}"
-echo -e "${BLUE}╚══════════════════════════════════════════╝${NC}"
+echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║    WebScraper Pro v0.6.3b2 - Auto Installer  ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
 # ── Detect OS ──
@@ -91,6 +92,14 @@ check_python() {
 
     PY_VERSION=$($PYTHON --version 2>&1 | awk '{print $2}')
     info "Python version: $PY_VERSION"
+
+    # Check minimum version
+    PY_MAJOR=$($PYTHON -c "import sys; print(sys.version_info.major)")
+    PY_MINOR=$($PYTHON -c "import sys; print(sys.version_info.minor)")
+    if [[ "$PY_MAJOR" -lt 3 ]] || { [[ "$PY_MAJOR" -eq 3 ]] && [[ "$PY_MINOR" -lt 8 ]]; }; then
+        err "Python 3.8+ required (found $PY_VERSION)"
+        exit 1
+    fi
 }
 
 # ── Install CLI ──
@@ -99,7 +108,7 @@ install_cli() {
 
     cd "$SCRIPT_DIR/cli"
 
-    # Create virtual environment (optional, use --global flag to skip)
+    # Create virtual environment (use --global flag to skip)
     if [[ "${1:-}" != "--global" ]]; then
         VENV_DIR="$HOME/.webscraper-pro/venv"
         if [[ ! -d "$VENV_DIR" ]]; then
@@ -182,11 +191,61 @@ setup_extension() {
     # Package extension as .xpi (zip)
     info "Packaging extension as .xpi..."
     cd "$SCRIPT_DIR/extension"
-    zip -r "$SCRIPT_DIR/webscraper-pro.xpi" . -x "*.py" -x "__pycache__/*" -x "*.pyc" 2>/dev/null || true
+    zip -r "$SCRIPT_DIR/webscraper-pro.xpi" . -x "*.py" -x "__pycache__/*" -x "*.pyc" -x ".DS_Store" 2>/dev/null || true
     cd "$SCRIPT_DIR"
 
     if [[ -f "$SCRIPT_DIR/webscraper-pro.xpi" ]]; then
         ok "Extension packaged: $SCRIPT_DIR/webscraper-pro.xpi"
+    fi
+}
+
+# ── Verify Installation ──
+verify_install() {
+    info "Verifying installation..."
+    local checks=0
+    local passed=0
+
+    # Check CLI
+    checks=$((checks + 1))
+    if command -v scrape &>/dev/null; then
+        ok "CLI is accessible"
+        passed=$((passed + 1))
+    else
+        err "CLI not found in PATH"
+    fi
+
+    # Check version
+    checks=$((checks + 1))
+    if scrape --version &>/dev/null; then
+        ok "CLI runs correctly ($(scrape --version 2>/dev/null | head -1))"
+        passed=$((passed + 1))
+    else
+        err "CLI failed to execute"
+    fi
+
+    # Check extension
+    checks=$((checks + 1))
+    if [[ -f "$SCRIPT_DIR/extension/manifest.json" ]]; then
+        ok "Extension manifest present"
+        passed=$((passed + 1))
+    else
+        err "Extension manifest missing"
+    fi
+
+    # Check XPI
+    checks=$((checks + 1))
+    if [[ -f "$SCRIPT_DIR/webscraper-pro.xpi" ]]; then
+        ok "XPI package built ($(du -h "$SCRIPT_DIR/webscraper-pro.xpi" | cut -f1))"
+        passed=$((passed + 1))
+    else
+        warn "XPI not built"
+    fi
+
+    echo ""
+    if [[ $passed -eq $checks ]]; then
+        ok "All $checks checks passed!"
+    else
+        warn "$passed/$checks checks passed"
     fi
 }
 
@@ -198,15 +257,24 @@ main() {
     setup_extension
 
     echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║    Installation Complete!                ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+    verify_install
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║      Installation Complete!                   ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
     echo ""
     echo "Quick start:"
-    echo "  scrape --help          Show all commands"
+    echo "  scrape -h              Show all commands"
     echo "  scrape start           Start a scraping session"
+    echo "  scrape url <URL>       Scrape a URL directly"
     echo "  scrape config.upload   Configure HuggingFace"
     echo "  scrape status          Check status"
+    echo "  scrape doctor          Check system health"
+    echo "  scrape gui.start       Launch the GUI"
+    echo ""
+    echo "Update:      scrape -U"
+    echo "Uninstall:   scrape -rmv"
     echo ""
     echo "Firefox extension:"
     echo "  Load from: $SCRIPT_DIR/extension/manifest.json"
