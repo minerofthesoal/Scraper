@@ -1,4 +1,4 @@
-/* ── HuggingFace Upload Module v0.6.3b1 ── */
+/* ── HuggingFace Upload Module v0.6.3b3 ── */
 /* Correct API endpoints, retry logic, incremental uploads, progress tracking */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_HFUpload */
@@ -11,19 +11,43 @@ var WSP_HFUpload = {
 
   /**
    * Check if a HuggingFace token is valid.
+   * Tries /api/whoami-v2 first, falls back to /api/whoami.
+   * A 404 on whoami usually means the token is a fine-grained token
+   * that doesn't support the whoami endpoint - we verify by attempting
+   * a lightweight repos listing instead.
    */
   validateToken(token) {
     if (!token || !token.trim()) return Promise.reject(new Error("No HuggingFace token provided"));
     var cleanToken = token.trim();
-    return fetch(WSP_HF_API + "/whoami", {
-      headers: { Authorization: "Bearer " + cleanToken }
+    var authHeaders = { Authorization: "Bearer " + cleanToken };
+
+    return fetch(WSP_HF_API + "/whoami-v2", {
+      headers: authHeaders
     }).then(function (resp) {
+      if (resp.ok) return resp.json();
       if (resp.status === 401) throw new Error("Invalid HuggingFace token - check your token at huggingface.co/settings/tokens");
-      if (!resp.ok) {
-        console.warn("[WSP] HF API returned " + resp.status + " - proceeding anyway");
-        return { name: "unknown" };
+      /* whoami-v2 failed (404 etc), try legacy /whoami */
+      return fetch(WSP_HF_API + "/whoami", {
+        headers: authHeaders
+      });
+    }).then(function (resp) {
+      /* If we already got a JSON object from whoami-v2, pass through */
+      if (resp && typeof resp === "object" && !(resp instanceof Response)) return resp;
+      if (resp.ok) return resp.json();
+      if (resp.status === 401) throw new Error("Invalid HuggingFace token - check your token at huggingface.co/settings/tokens");
+      /* Both whoami endpoints failed (404/403) - try listing repos as a final check */
+      return fetch(WSP_HF_API + "/datasets?author=me&limit=1", {
+        headers: authHeaders
+      });
+    }).then(function (resp) {
+      if (resp && typeof resp === "object" && !(resp instanceof Response)) return resp;
+      if (resp.ok) {
+        console.info("[WSP] HF token validated via datasets listing");
+        return { name: "verified-user" };
       }
-      return resp.json();
+      if (resp.status === 401) throw new Error("Invalid HuggingFace token - check your token at huggingface.co/settings/tokens");
+      console.warn("[WSP] HF API returned " + resp.status + " on all endpoints - proceeding with token");
+      return { name: "unknown" };
     });
   },
 

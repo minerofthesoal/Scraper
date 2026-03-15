@@ -1,12 +1,12 @@
 @echo off
 REM ══════════════════════════════════════════════════════════════
-REM WebScraper Pro v0.6.3b2 - Auto Installer (Windows 10/11)
+REM WebScraper Pro v0.6.3b3 - Auto Installer (Windows 10/11)
 REM Installs the Python CLI and sets up the Firefox extension
 REM ══════════════════════════════════════════════════════════════
 
 echo.
 echo ╔══════════════════════════════════════════════╗
-echo ║    WebScraper Pro v0.6.3b2 - Auto Installer  ║
+echo ║    WebScraper Pro v0.6.3b3 - Auto Installer  ║
 echo ╚══════════════════════════════════════════════╝
 echo.
 

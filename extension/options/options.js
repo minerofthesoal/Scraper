@@ -246,19 +246,50 @@
     elements.tokenStatus.className = "status";
 
     try {
-      const resp = await fetch("https://huggingface.co/api/whoami", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (resp.ok) {
-        const data = await resp.json();
+      /* Try whoami-v2 first, then whoami, then datasets listing */
+      let data = null;
+      let validated = false;
+
+      for (const endpoint of [
+        "https://huggingface.co/api/whoami-v2",
+        "https://huggingface.co/api/whoami"
+      ]) {
+        const resp = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          data = await resp.json();
+          validated = true;
+          break;
+        }
+        if (resp.status === 401) {
+          elements.tokenStatus.textContent = "Invalid token - check your HF token at huggingface.co/settings/tokens";
+          elements.tokenStatus.className = "status error";
+          return;
+        }
+      }
+
+      if (!validated) {
+        /* whoami endpoints returned 404/other - try datasets listing as final check */
+        const resp = await fetch("https://huggingface.co/api/datasets?author=me&limit=1", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          validated = true;
+          data = { name: "verified-user" };
+        } else if (resp.status === 401) {
+          elements.tokenStatus.textContent = "Invalid token - check your HF token at huggingface.co/settings/tokens";
+          elements.tokenStatus.className = "status error";
+          return;
+        }
+      }
+
+      if (validated && data) {
         elements.tokenStatus.textContent = `Valid! User: ${data.name}`;
         elements.tokenStatus.className = "status success";
-      } else if (resp.status === 401) {
-        elements.tokenStatus.textContent = "Invalid token - check your HF token";
-        elements.tokenStatus.className = "status error";
       } else {
-        elements.tokenStatus.textContent = `HF API error (${resp.status}) - token may still be valid`;
-        elements.tokenStatus.className = "status error";
+        elements.tokenStatus.textContent = "Could not verify token - it may still work for uploads";
+        elements.tokenStatus.className = "status success";
       }
     } catch (err) {
       elements.tokenStatus.textContent = "Network error - could not reach HuggingFace";

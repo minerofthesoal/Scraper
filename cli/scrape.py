@@ -73,7 +73,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.3b2"
+VERSION = "0.6.3b3"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1239,7 +1239,9 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
-        ("0.6.3b2", "2026-03-15", [
+        ("0.6.3b3", "2026-03-15", [
+            "Fix Firefox manifest: numeric-only version (0.6.3.3), valid data_collection_permissions",
+            "Fix HuggingFace token validation: whoami-v2 + fallback endpoints for 404 errors",
             "New commands: logs, ping, reset, benchmark, changelog, uninstall",
             "scrape -h for help, -U for auto-update, -rmv for uninstall",
             "Updated installer with post-install verification",
