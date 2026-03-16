@@ -1,5 +1,5 @@
-/* ── HuggingFace Upload Module v0.6.6 ── */
-/* Correct API endpoints, retry logic, incremental uploads, progress tracking */
+/* ── HuggingFace Upload Module v0.6.6.1 ── */
+/* Fixed: NDJSON commit API format, base64 file encoding, proper fallbacks */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_HFUpload */
 var WSP_HF_API = "https://huggingface.co/api";
@@ -87,9 +87,173 @@ var WSP_HFUpload = {
   },
 
   /**
-   * Upload a single file using the HF Hub upload API.
+   * Helper: convert a string to base64 (handles Unicode safely).
    */
-  uploadFile(token, repoId, filePath, content, commitMsg) {
+  _toBase64(str) {
+    try {
+      /* TextEncoder + btoa for Unicode-safe base64 */
+      var bytes = new TextEncoder().encode(str);
+      var binary = "";
+      for (var i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    } catch (e) {
+      /* Fallback for simple ASCII */
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+  },
+
+  /**
+   * Helper: convert Blob to base64.
+   */
+  _blobToBase64(blob) {
+    var self = this;
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        /* reader.result is "data:...;base64,XXXXX" - extract the base64 part */
+        var dataUrl = reader.result;
+        var base64 = dataUrl.split(",")[1] || "";
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  },
+
+  /**
+   * Commit multiple files to a HF dataset repo using the NDJSON commit API.
+   *
+   * The HF commit API expects:
+   *   POST /api/datasets/{repo}/commit/{branch}
+   *   Content-Type: application/x-ndjson
+   *   Body: newline-delimited JSON lines:
+   *     {"key":"header","value":{"summary":"commit message"}}
+   *     {"key":"file","value":{"content":"base64data","path":"file.txt","encoding":"base64"}}
+   */
+  commitFiles(token, repoId, files, commitMessage) {
+    commitMessage = commitMessage || "Update dataset";
+    var self = this;
+    var url = WSP_HF_API + "/datasets/" + repoId + "/commit/main";
+
+    /* Build NDJSON payload: first encode all file contents to base64 */
+    var base64Promises = files.map(function (file) {
+      if (typeof file.content === "string") {
+        return Promise.resolve(self._toBase64(file.content));
+      } else {
+        /* Blob content */
+        return self._blobToBase64(file.content);
+      }
+    });
+
+    return Promise.all(base64Promises).then(function (base64Contents) {
+      /* Build NDJSON lines */
+      var lines = [];
+
+      /* Header line */
+      lines.push(JSON.stringify({
+        key: "header",
+        value: { summary: commitMessage }
+      }));
+
+      /* One line per file */
+      for (var i = 0; i < files.length; i++) {
+        lines.push(JSON.stringify({
+          key: "file",
+          value: {
+            content: base64Contents[i],
+            path: files[i].path,
+            encoding: "base64"
+          }
+        }));
+      }
+
+      var ndjsonBody = lines.join("\n");
+
+      return fetch(url, {
+        method: "POST",
+        credentials: "omit",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/x-ndjson",
+        },
+        body: ndjsonBody,
+      });
+    }).then(function (resp) {
+      if (resp.ok) {
+        console.info("[WSP] Commit API succeeded for " + files.length + " files");
+        return resp.json().catch(function () { return { success: true }; });
+      }
+
+      /* If NDJSON commit fails, try individual file uploads */
+      console.warn("[WSP] NDJSON commit API failed (" + resp.status + "), falling back to individual uploads");
+      return resp.text().then(function (errText) {
+        console.warn("[WSP] Commit error:", errText);
+      }).catch(function () {}).then(function () {
+        return self._uploadFilesIndividually(token, repoId, files, commitMessage);
+      });
+    });
+  },
+
+  /**
+   * Fallback: upload files one at a time using the simple upload endpoint.
+   * Uses PUT to /api/datasets/{repo}/upload/main/{path}
+   */
+  _uploadFilesIndividually(token, repoId, files, commitMessage) {
+    var self = this;
+    var errors = [];
+
+    function uploadSequentially(idx) {
+      if (idx >= files.length) {
+        if (errors.length === files.length) {
+          /* All uploads failed — try the JSON content API as last resort */
+          console.warn("[WSP] All individual uploads failed, trying JSON content API...");
+          return self._uploadViaContentAPI(token, repoId, files, commitMessage);
+        }
+        if (errors.length > 0) {
+          console.warn("[WSP] " + errors.length + "/" + files.length + " files failed:", errors);
+        }
+        return { success: true, errors: errors };
+      }
+
+      var file = files[idx];
+      var blob = typeof file.content === "string"
+        ? new Blob([file.content], { type: "text/plain" })
+        : file.content;
+
+      /* Use the raw file upload endpoint: PUT /api/datasets/{repo}/upload/main/{path} */
+      var uploadUrl = WSP_HF_API + "/datasets/" + repoId + "/upload/main/" + file.path;
+
+      return fetch(uploadUrl, {
+        method: "PUT",
+        credentials: "omit",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/octet-stream",
+        },
+        body: blob,
+      }).then(function (resp) {
+        if (!resp.ok) {
+          /* Fallback to POST /upload with FormData */
+          return self._uploadFileFormData(token, repoId, file.path, file.content, commitMessage);
+        }
+        return resp.json().catch(function () { return { success: true }; });
+      }).catch(function (e) {
+        console.error("[WSP] Individual upload failed for " + file.path + ":", e);
+        errors.push({ path: file.path, error: e.message });
+      }).then(function () {
+        return uploadSequentially(idx + 1);
+      });
+    }
+
+    return uploadSequentially(0);
+  },
+
+  /**
+   * Upload a single file using POST with FormData (legacy approach).
+   */
+  _uploadFileFormData(token, repoId, filePath, content, commitMsg) {
     var url = WSP_HF_API + "/datasets/" + repoId + "/upload/main";
 
     var formData = new FormData();
@@ -98,7 +262,6 @@ var WSP_HFUpload = {
       : content;
 
     formData.append("file", blob, filePath);
-    formData.append("path_in_repo", filePath);
     if (commitMsg) {
       formData.append("commit_message", commitMsg);
     }
@@ -124,110 +287,43 @@ var WSP_HFUpload = {
   },
 
   /**
-   * Commit multiple files to a HF dataset repo using the commit API.
-   */
-  commitFiles(token, repoId, files, commitMessage) {
-    commitMessage = commitMessage || "Update dataset";
-    var self = this;
-    var url = WSP_HF_API + "/datasets/" + repoId + "/commit/main";
-
-    var formData = new FormData();
-
-    // Commit header
-    var header = JSON.stringify({ summary: commitMessage });
-    formData.append("header", new Blob([header], { type: "application/json" }));
-
-    // Each file: an operation descriptor + the file content
-    for (var i = 0; i < files.length; i++) {
-      var file = files[i];
-      var opDescriptor = JSON.stringify({
-        key: "file",
-        value: { path: file.path },
-      });
-      formData.append("operations", new Blob([opDescriptor], { type: "application/json" }));
-
-      var fileBlob = typeof file.content === "string"
-        ? new Blob([file.content], { type: "text/plain" })
-        : file.content;
-      formData.append("files", fileBlob, file.path);
-    }
-
-    return fetch(url, {
-      method: "POST",
-      credentials: "omit",
-      headers: { Authorization: "Bearer " + token },
-      body: formData,
-    }).then(function (resp) {
-      if (resp.ok) {
-        return resp.json().catch(function () { return { success: true }; });
-      }
-
-      // If commit API fails, fall back to uploading files one at a time
-      console.warn("[WSP] Commit API failed (" + resp.status + "), falling back to individual uploads");
-      var errors = [];
-
-      function uploadSequentially(idx) {
-        if (idx >= files.length) {
-          if (errors.length === files.length) {
-            // All uploads failed — try the last resort: JSON API
-            console.warn("[WSP] All uploads failed, trying JSON content API...");
-            return self._uploadViaContentAPI(token, repoId, files, commitMessage);
-          }
-          if (errors.length > 0) {
-            console.warn("[WSP] " + errors.length + "/" + files.length + " files failed:", errors);
-          }
-          return { success: true, errors: errors };
-        }
-
-        return self.uploadFile(token, repoId, files[idx].path, files[idx].content, commitMessage)
-          .catch(function (e) {
-            console.error("[WSP] Individual upload failed for " + files[idx].path + ":", e);
-            errors.push({ path: files[idx].path, error: e.message });
-          })
-          .then(function () {
-            return uploadSequentially(idx + 1);
-          });
-      }
-
-      return uploadSequentially(0);
-    });
-  },
-
-  /**
-   * Last-resort upload method: uses the HF content creation API.
+   * Last-resort upload method: uses the HF JSON commit API with inline content.
    */
   _uploadViaContentAPI(token, repoId, files, commitMessage) {
     var self = this;
 
     function uploadOneByOne(idx) {
-      if (idx >= files.length) return Promise.resolve();
+      if (idx >= files.length) return Promise.resolve({ success: true });
 
       var file = files[idx];
       var contentPromise = typeof file.content === "string"
-        ? Promise.resolve(file.content)
-        : self._blobToText(file.content);
+        ? Promise.resolve(self._toBase64(file.content))
+        : self._blobToBase64(file.content);
 
-      return contentPromise.then(function (content) {
+      return contentPromise.then(function (b64Content) {
         var url = WSP_HF_API + "/datasets/" + repoId + "/commit/main";
 
-        var body = {
-          summary: commitMessage,
-          operations: [{
-            type: "create",
+        /* Single-file NDJSON commit */
+        var ndjson = JSON.stringify({
+          key: "header",
+          value: { summary: commitMessage + " (" + file.path + ")" }
+        }) + "\n" + JSON.stringify({
+          key: "file",
+          value: {
+            content: b64Content,
             path: file.path,
-            content: content,
-            encoding: "utf-8",
-          }],
-        };
+            encoding: "base64"
+          }
+        });
 
         return fetch(url, {
           method: "POST",
           credentials: "omit",
           headers: {
             Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-ndjson",
           },
-          body: JSON.stringify(body),
+          body: ndjson,
         });
       }).then(function (resp) {
         if (!resp.ok) {
@@ -235,6 +331,7 @@ var WSP_HFUpload = {
             throw new Error("Content API upload failed for " + file.path + ": " + errText);
           });
         }
+        return resp.json().catch(function () { return { success: true }; });
       }).then(function () {
         return uploadOneByOne(idx + 1);
       });
@@ -356,7 +453,7 @@ var WSP_HFUpload = {
       + "  - " + sizeCategory + "\n"
       + "---\n\n"
       + "# " + repoName + "\n\n"
-      + "> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.6.6\n\n"
+      + "> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.6.6.1\n\n"
       + "## Dataset Description\n\n"
       + "This dataset was collected using [WebScraper Pro](https://github.com/minerofthesoal/Scraper), an open-source Firefox extension and CLI tool for structured web data collection with automatic scroll-first pagination, MLA/APA citations, and HuggingFace integration.\n\n"
       + "### Dataset Summary\n\n"
@@ -430,8 +527,8 @@ var WSP_HFUpload = {
       + domainsStr + "\n\n"
       + citationsStr + "\n\n"
       + "## Licensing\n\n"
-      + "### Uni-S License v2.0 (Universal Scraping License)\n\n"
-      + "This dataset and the tool that collected it are governed by the **[Uni-S License v2.0](https://github.com/minerofthesoal/Scraper/blob/main/LICENSE)**.\n\n"
+      + "### Uni-S License v3.0 (Universal Scraping License)\n\n"
+      + "This dataset and the tool that collected it are governed by the **[Uni-S License v3.0](https://github.com/minerofthesoal/Scraper/blob/main/LICENSE)**.\n\n"
       + "**Key points:**\n\n"
       + "1. **We do NOT own any of this data.** All rights to scraped content belong to the original authors, creators, publishers, and rights holders.\n"
       + "2. **The Software (WebScraper Pro) is open source.** Standalone scraper forks must stay open source. Library use in other projects is unrestricted.\n"
@@ -456,14 +553,14 @@ var WSP_HFUpload = {
       + "- Personal information should be handled in accordance with applicable privacy laws\n\n"
       + "## Additional Information\n\n"
       + "### Collection Tool\n\n"
-      + "- **Tool:** [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.6.6\n"
+      + "- **Tool:** [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.6.6.1\n"
       + "- **Type:** Firefox Extension + Python CLI + GUI\n"
       + "- **Features:** Area selection, scroll-first auto-scan, MLA/APA citations, HuggingFace upload\n"
       + "- **Owner Dataset:** [ray0rf1re/Site.scraped](https://huggingface.co/datasets/ray0rf1re/Site.scraped)\n\n"
       + "### Contact\n\n"
       + "For questions about this dataset, please open an issue at [github.com/minerofthesoal/Scraper](https://github.com/minerofthesoal/Scraper/issues).\n\n"
       + "---\n\n"
-      + "*Generated by [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.6.6*\n";
+      + "*Generated by [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.6.6.1*\n";
 
     return md;
   },
