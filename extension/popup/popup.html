@@ -9,7 +9,7 @@
     <header>
       <div class="header-left">
         <h1>WebScraper Pro</h1>
-        <span id="version-tag" class="version">v0.6.5</span>
+        <span id="version-tag" class="version">v0.6.6</span>
       </div>
       <div class="header-right">
         <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
@@ -48,6 +48,14 @@
             Smart Extract
           </button>
         </div>
+        <div class="btn-row-2">
+          <button id="btn-scrape-tabs" class="btn btn-secondary" title="Scrape all open tabs">
+            All Tabs
+          </button>
+          <button id="btn-clipboard-scrape" class="btn btn-secondary" title="Scrape from clipboard">
+            Clipboard
+          </button>
+        </div>
         <button id="btn-stop" class="btn btn-danger hidden" title="Stop current operation">
           Stop
         </button>
@@ -62,6 +70,14 @@
         <label class="toggle-row">
           <input type="checkbox" id="chk-auto-next">
           <span>Auto-next page</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-cookie-dismiss">
+          <span>Auto-dismiss cookies</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-deobfuscate">
+          <span>Deobfuscate content</span>
         </label>
       </section>
 
@@ -221,7 +237,7 @@
     </div>
 
     <footer>
-      <small>v0.6.5 | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a> | Android supported</small>
+      <small>v0.6.6 | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a> | Android supported</small>
     </footer>
   </div>
   <script src="popup.js"></script>

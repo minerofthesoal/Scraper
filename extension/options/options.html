@@ -224,6 +224,35 @@
       </label>
     </section>
 
+    <!-- Security & Privacy -->
+    <section class="card">
+      <h2>Security &amp; Privacy</h2>
+      <small class="card-hint">Content sanitization and privacy features for safer scraping.</small>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-sanitize-content" checked>
+        <span>Sanitize scraped content (strip XSS, dangerous HTML)</span>
+      </label>
+      <small style="display:block;padding:0 36px;color:#888">Recommended. Removes script tags, event handlers, and dangerous URLs from scraped data.</small>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-validate-urls" checked>
+        <span>Validate URLs before scraping</span>
+      </label>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-cookie-dismiss">
+        <span>Auto-dismiss cookie consent banners</span>
+      </label>
+      <small style="display:block;padding:0 36px;color:#888">Automatically clicks "Accept" on cookie consent popups. Off by default.</small>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-deobfuscate">
+        <span>Detect and reverse content obfuscation</span>
+      </label>
+      <small style="display:block;padding:0 36px;color:#888">Attempts to decode Base64, hex, charCode, ROT13, and CSS-hidden text. Off by default.</small>
+    </section>
+
     <!-- AI Extraction (Optional) -->
     <section class="card">
       <h2>AI Extraction (Optional)</h2>

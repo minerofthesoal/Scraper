@@ -1,4 +1,4 @@
-/* ── Options Page Controller v0.6.5 ── */
+/* ── Options Page Controller v0.6.6 ── */
 (function () {
   "use strict";
 
@@ -74,6 +74,10 @@
     btnAICheck: $("#btn-ai-check"),
     aiServerStatus: $("#ai-server-status"),
     prettyPrint: $("#chk-pretty-print"),
+    sanitizeContent: $("#chk-sanitize-content"),
+    validateUrls: $("#chk-validate-urls"),
+    cookieDismiss: $("#chk-cookie-dismiss"),
+    deobfuscate: $("#chk-deobfuscate"),
   };
 
   /* ── Load settings ── */
@@ -86,6 +90,7 @@
     "rateLimitConfig", "domainAllowlist", "domainBlocklist", "regexPatterns",
     "rateEnabled",
     "aiEnabled", "aiServerUrl", "aiAutoDownload", "prettyPrint",
+    "sanitizeContent", "validateUrls", "cookieDismissEnabled", "deobfuscateEnabled",
   ]).then((cfg) => {
     setChecked(elements.autoStart, cfg.autoStart);
     setChecked(elements.autoScroll, cfg.autoScroll !== false);
@@ -137,6 +142,12 @@
 
     // Pretty-print
     setChecked(elements.prettyPrint, cfg.prettyPrint);
+
+    // Security & Privacy
+    setChecked(elements.sanitizeContent, cfg.sanitizeContent !== false);
+    setChecked(elements.validateUrls, cfg.validateUrls !== false);
+    setChecked(elements.cookieDismiss, cfg.cookieDismissEnabled);
+    setChecked(elements.deobfuscate, cfg.deobfuscateEnabled);
   }).catch((err) => {
     console.error("[WSP] Failed to load settings:", err);
   });
@@ -214,6 +225,11 @@
           aiServerUrl: getVal(elements.aiServer, "http://127.0.0.1:8377").trim(),
           // Pretty-print
           prettyPrint: getChecked(elements.prettyPrint),
+          // Security & Privacy
+          sanitizeContent: getChecked(elements.sanitizeContent),
+          validateUrls: getChecked(elements.validateUrls),
+          cookieDismissEnabled: getChecked(elements.cookieDismiss),
+          deobfuscateEnabled: getChecked(elements.deobfuscate),
         };
 
         // Regex patterns

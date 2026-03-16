@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.6.5 ── */
+/* ── WebScraper Pro Background Script v0.6.6 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -171,6 +171,39 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
       if (typeof WSP_Session !== "undefined") {
         WSP_Session.remove(msg.name).then(function () { notify("WebScraper Pro", 'Session "' + msg.name + '" deleted'); });
       }
+      break;
+
+    // ── Deobfuscation ──
+    case "DEOBFUSCATE_PAGE":
+      if (sender && sender.tab) {
+        browser.tabs.sendMessage(sender.tab.id, { action: "DEOBFUSCATE_PAGE" }).catch(function () {});
+      }
+      break;
+
+    case "DEOBFUSCATE_RESULT":
+      if (msg.data) {
+        notify("WebScraper Pro", "Deobfuscation found " + (msg.data.length || 0) + " obfuscated items");
+      }
+      return Promise.resolve({ received: true });
+
+    // ── Cookie dismiss ──
+    case "DISMISS_COOKIES":
+      if (sender && sender.tab) {
+        browser.tabs.sendMessage(sender.tab.id, { action: "DISMISS_COOKIES" }).catch(function () {});
+      }
+      break;
+
+    case "COOKIE_DISMISS_RESULT":
+      return Promise.resolve({ received: true });
+
+    // ── Tab scraping (scrape all open tabs) ──
+    case "SCRAPE_ALL_TABS":
+      scrapeAllTabs();
+      break;
+
+    // ── Clipboard scrape ──
+    case "CLIPBOARD_SCRAPE":
+      handleClipboardScrape(msg.text);
       break;
   }
 });
@@ -426,7 +459,7 @@ function exportData(format, options) {
 function toMarkdown(texts, images, links, audio, citationsList) {
   var md = "# WebScraper Pro Export\n\n";
   md += "**Generated:** " + new Date().toISOString() + "  \n";
-  md += "**Version:** v0.6.5  \n";
+  md += "**Version:** v0.6.6  \n";
   md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
   md += "---\n\n";
 
@@ -490,7 +523,7 @@ function toMarkdown(texts, images, links, audio, citationsList) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.5</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.6.6</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
@@ -752,6 +785,78 @@ function clearData() {
   lastUploadRecordCount = 0;
   persistState();
   broadcastStats();
+}
+
+/* ── Scrape all open tabs ── */
+function scrapeAllTabs() {
+  browser.tabs.query({}).then(function (tabs) {
+    var validTabs = tabs.filter(function (t) {
+      return t.url && (t.url.startsWith("http://") || t.url.startsWith("https://"));
+    });
+    if (validTabs.length === 0) {
+      notify("WebScraper Pro", "No valid tabs to scrape.");
+      return;
+    }
+    notify("WebScraper Pro", "Scraping " + validTabs.length + " tabs...");
+    var completed = 0;
+    for (var i = 0; i < validTabs.length; i++) {
+      browser.tabs.sendMessage(validTabs[i].id, { action: "SCRAPE_FULL_PAGE" })
+        .then(function () {
+          completed++;
+          if (completed === validTabs.length) {
+            notify("WebScraper Pro", "Finished scraping " + validTabs.length + " tabs.");
+          }
+        })
+        .catch(function () {
+          completed++;
+        });
+    }
+  });
+}
+
+/* ── Handle clipboard scrape ── */
+function handleClipboardScrape(text) {
+  if (!text || text.length < 5) {
+    notify("WebScraper Pro", "Clipboard is empty or too short to scrape.");
+    return;
+  }
+
+  function uid() {
+    return typeof WSP_Utils !== "undefined" ? WSP_Utils.uid() : Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  // Sanitize if available
+  if (typeof WSP_Sanitizer !== "undefined") {
+    var xssCheck = WSP_Sanitizer.detectXSS(text);
+    if (!xssCheck.safe) {
+      text = WSP_Sanitizer.sanitizeHTML(text);
+    }
+  }
+
+  var fp = _fingerprint(text);
+  var existing = scrapedRecords.some(function (r) { return r._fp === fp; });
+  if (existing) {
+    notify("WebScraper Pro", "Clipboard content already exists in records (duplicate).");
+    return;
+  }
+
+  scrapedRecords.push({
+    id: uid(),
+    _fp: fp,
+    type: "text",
+    text: text,
+    tag: "clipboard",
+    source_url: "clipboard://paste",
+    source_title: "Clipboard Paste",
+    author: "Unknown",
+    scraped_at: new Date().toISOString(),
+  });
+
+  sessionStats.words += text.split(/\s+/).length;
+  sessionStats.pages += 1;
+  persistState();
+  broadcastStats();
+  notify("WebScraper Pro", "Scraped " + text.split(/\s+/).length + " words from clipboard.");
 }
 
 /* ── Keyboard shortcut handler ── */

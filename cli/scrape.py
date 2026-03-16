@@ -73,7 +73,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.5"
+VERSION = "0.6.6"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1277,6 +1277,17 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.6", "2026-03-16", [
+            "Auto XPI build: build_xpi.sh script + scrape build.xpi CLI command",
+            "Deobfuscation engine: detect and reverse Base64, hex, charCode, ROT13, CSS-hidden text (disabled by default)",
+            "Content sanitizer: XSS detection, URL validation, HTML sanitization for scraped data",
+            "Cookie consent auto-dismiss: auto-click cookie banners from CookieBot, OneTrust, etc. (disabled by default)",
+            "Tab scraping: scrape all open tabs at once from the popup",
+            "Clipboard scrape: scrape content directly from clipboard",
+            "Uni-S License v3.0: clearer language, plain-English summaries, anti-abuse clauses, stronger ethics",
+            "Security: content sanitization on all scraped data, URL validation, XSS prevention",
+            "New settings: deobfuscation toggle, cookie dismiss toggle, tab scraping, clipboard scraping",
+        ]),
         ("0.6.5", "2026-03-15", [
             "Fix settings not saving: null-safe element access, error handling on save",
             "Fix HF token validation: credentials:omit prevents cookie leak (always showed logged-in user)",
@@ -1664,6 +1675,27 @@ def install_perm():
     else:
         console.print("[red]Failed to build .xpi[/red]")
         console.print("Run the GitHub Actions build or: python install.py")
+
+
+@cli.command("build.xpi")
+def build_xpi_cmd():
+    """Build the Firefox extension .xpi package."""
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    xpi_path = os.path.join(project_root, "webscraper-pro.xpi")
+
+    # Remove old XPI
+    if os.path.exists(xpi_path):
+        os.remove(xpi_path)
+
+    _build_xpi(project_root)
+
+    if os.path.exists(xpi_path):
+        size = os.path.getsize(xpi_path)
+        size_str = f"{size / 1024:.1f} KB" if size < 1048576 else f"{size / 1048576:.1f} MB"
+        console.print(f"[green]XPI built successfully:[/green] {xpi_path} ({size_str})")
+        log_history("build.xpi", f"Built {xpi_path} ({size_str})")
+    else:
+        console.print("[red]Failed to build XPI[/red]")
 
 
 def _build_xpi(project_root):
