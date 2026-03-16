@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "0.6.6.1"
+VERSION = "0.6.6.2"
 
 # Python version requirements for PyTorch compatibility
 # PyTorch 2.6+ supports Python 3.13, and 3.14 support is expected
@@ -32,24 +32,45 @@ def find_compatible_python():
     if MIN_PYTHON <= current <= MAX_PYTHON:
         return sys.executable
 
-    # Search for compatible Python versions
-    candidates = []
-    for minor in range(MAX_PYTHON[1], MIN_PYTHON[1] - 1, -1):
-        candidates.append(f"python3.{minor}")
+    def _check_python(path):
+        """Return path if it points to a compatible Python, else None."""
+        try:
+            result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                ver_str = result.stdout.strip().split()[-1]
+                parts = ver_str.split(".")
+                ver = (int(parts[0]), int(parts[1]))
+                if MIN_PYTHON <= ver <= MAX_PYTHON:
+                    return path
+        except Exception:
+            pass
+        return None
 
-    for cmd in candidates:
+    # Try generic names first — these are the most common
+    for cmd in ["python3", "python"]:
         path = shutil.which(cmd)
         if path:
-            try:
-                result = subprocess.run([path, "--version"], capture_output=True, text=True)
-                if result.returncode == 0:
-                    ver_str = result.stdout.strip().split()[-1]
-                    parts = ver_str.split(".")
-                    ver = (int(parts[0]), int(parts[1]))
-                    if MIN_PYTHON <= ver <= MAX_PYTHON:
-                        return path
-            except Exception:
-                continue
+            found = _check_python(path)
+            if found:
+                return found
+
+    # Then try versioned names (prefer newest)
+    for minor in range(MAX_PYTHON[1], MIN_PYTHON[1] - 1, -1):
+        path = shutil.which(f"python3.{minor}")
+        if path:
+            found = _check_python(path)
+            if found:
+                return found
+
+    # Last resort: check common absolute paths
+    if platform.system().lower() != "windows":
+        for prefix in ["/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"]:
+            for cmd in ["python3", "python"]:
+                candidate = os.path.join(prefix, cmd)
+                if os.path.isfile(candidate):
+                    found = _check_python(candidate)
+                    if found:
+                        return found
 
     return None
 
@@ -194,11 +215,7 @@ def install_cli(use_global=False):
         pip_cmd = [compatible_python, "-m", "pip"]
         python_cmd = compatible_python
     else:
-        if sys.platform == "win32":
-            venv_dir = Path.home() / ".webscraper-pro" / "venv"
-        else:
-            venv_dir = Path.home() / ".webscraper-pro" / "venv"
-
+        venv_dir = Path.home() / ".webscraper-pro" / "venv"
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
 
         if not venv_dir.exists():
@@ -349,7 +366,7 @@ def verify_installation():
 def main():
     print()
     print(colored("╔══════════════════════════════════════════════╗", "blue"))
-    print(colored("║  WebScraper Pro v0.6.6.1 - Auto Installer  ║", "blue"))
+    print(colored("║  WebScraper Pro v0.6.6.2 - Auto Installer  ║", "blue"))
     print(colored("╚══════════════════════════════════════════════╝", "blue"))
     print()
 
@@ -374,7 +391,7 @@ def main():
 
     print()
     print(colored("╔══════════════════════════════════════════════╗", "green"))
-    print(colored("║      Installation Complete!                   ║", "green"))
+    print(colored("║         Installation Complete!                ║", "green"))
     print(colored("╚══════════════════════════════════════════════╝", "green"))
     print()
     print("Quick start:")

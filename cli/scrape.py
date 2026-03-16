@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.6.1"
+VERSION = "0.6.6.2"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1290,6 +1290,13 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.6.2", "2026-03-16", [
+            "Fix Python detection: try python3/python before versioned names (python3.12, etc.)",
+            "Check common absolute paths (/usr/bin, /usr/local/bin, /opt/homebrew/bin) as last resort",
+            "Add timeout to Python version check subprocess calls",
+            "Remove redundant venv path branch in installer",
+            "Fix banner alignment in installer completion message",
+        ]),
         ("0.6.6.1", "2026-03-16", [
             "Fix HF upload: use NDJSON commit API with base64 encoding (files now actually upload)",
             "Python 3.13/3.14 support: PyTorch 2.6+ compat, removed 3.12 ceiling",
