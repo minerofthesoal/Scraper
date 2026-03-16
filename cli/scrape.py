@@ -47,6 +47,19 @@ Commands:
     scrape ping URL                  - Check if a URL is reachable
     scrape reset                     - Factory reset all data and config
     scrape benchmark URL             - Benchmark scraping speed for a URL
+    scrape diff URL                  - Compare current page to last scrape
+    scrape domains                   - List all scraped domains with counts
+    scrape sitemap URL               - Discover URLs from sitemap.xml
+    scrape robots URL                - Check robots.txt rules for a URL
+    scrape headers URL               - Show HTTP response headers for a URL
+    scrape extract.emails            - Extract emails from scraped data
+    scrape extract.phones            - Extract phone numbers from scraped data
+    scrape count                     - Count records by type
+    scrape top [N]                   - Show top N most-scraped domains
+    scrape tag FIELD VALUE           - Tag/annotate matching records
+    scrape sample [N]                - Show N random records
+    scrape summary                   - Generate text summary of scraped data
+    scrape env                       - Show environment and config diagnostics
 """
 
 import os
@@ -73,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.6"
+VERSION = "0.6.6.1"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1277,6 +1290,15 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.6.1", "2026-03-16", [
+            "Fix HF upload: use NDJSON commit API with base64 encoding (files now actually upload)",
+            "Python 3.13/3.14 support: PyTorch 2.6+ compat, removed 3.12 ceiling",
+            "New CLI commands: diff, domains, sitemap, robots, headers, extract.emails, extract.phones",
+            "New CLI commands: count, top, tag, sample, summary, env",
+            "Improved upload fallback chain: NDJSON -> PUT raw -> POST FormData -> JSON content API",
+            "Unicode-safe base64 encoding for non-ASCII scraped content",
+            "Updated Uni-S License reference to v3.0 in generated READMEs",
+        ]),
         ("0.6.6", "2026-03-16", [
             "Auto XPI build: build_xpi.sh script + scrape build.xpi CLI command",
             "Deobfuscation engine: detect and reverse Base64, hex, charCode, ROT13, CSS-hidden text (disabled by default)",
@@ -2321,12 +2343,10 @@ def doctor():
     # Python
     py_ver = sys.version.split()[0]
     py_minor = sys.version_info.minor
-    if 10 <= py_minor <= 12:
+    if py_minor >= 10:
         table.add_row("Python", "[green]OK[/green]", f"{py_ver} (PyTorch compatible)")
-    elif py_minor > 12:
-        table.add_row("Python", "[yellow]WARN[/yellow]", f"{py_ver} - PyTorch needs 3.10-3.12")
     else:
-        table.add_row("Python", "[yellow]WARN[/yellow]", f"{py_ver} - Upgrade to 3.10-3.12")
+        table.add_row("Python", "[yellow]WARN[/yellow]", f"{py_ver} - Upgrade to 3.10+")
 
     # Required packages
     packages = [
@@ -2367,8 +2387,8 @@ def doctor():
         else:
             table.add_row("PyTorch (AI)", "[green]OK[/green]", f"{torch_ver} | CPU only (no CUDA)")
     except ImportError:
-        if py_minor > 12:
-            table.add_row("PyTorch (AI)", "[red]UNAVAILABLE[/red]", f"Needs Python 3.10-3.12 (have {py_ver})")
+        if py_minor < 10:
+            table.add_row("PyTorch (AI)", "[red]UNAVAILABLE[/red]", f"Needs Python 3.10+ (have {py_ver})")
         else:
             table.add_row("PyTorch (AI)", "[yellow]MISSING[/yellow]", "pip install torch (optional, for AI)")
 
@@ -2749,17 +2769,11 @@ def ai_serve(gpu, port, model):
     Ampere (RTX 3000), Ada Lovelace (RTX 4000), Hopper.
 
     Requirements: pip install torch transformers
-    Requires Python 3.10-3.12 (PyTorch does not support 3.13+).
+    Requires Python 3.10+ (PyTorch 2.6+ supports 3.13, 3.14 support expected).
     Pascal GPUs (GTX 1070/1080): Use PyTorch <=2.4.1 with CUDA 11.8.
     """
     # Check Python version first
     py_minor = sys.version_info.minor
-    if py_minor > 12:
-        console.print(f"[red]Python {sys.version_info.major}.{py_minor} detected. PyTorch requires Python 3.10-3.12.[/red]")
-        console.print("[yellow]Install Python 3.10, 3.11, or 3.12 and reinstall:[/yellow]")
-        console.print("  python3.12 -m pip install torch transformers")
-        console.print("  python3.12 -m webscraper_pro ai.serve")
-        return
     if py_minor < 10:
         console.print(f"[red]Python {sys.version_info.major}.{py_minor} is too old. PyTorch requires Python 3.10+.[/red]")
         return
@@ -3148,7 +3162,8 @@ def ai_setup(gpu):
     This will install required dependencies and download the model.
     GPU mode requires CUDA-capable GPU (min GTX 1070 8GB).
     CPU mode works on any modern processor (i7-7660U, i7-7700HQ, etc.).
-    Requires Python 3.10-3.12 (PyTorch does not support 3.13+).
+    Requires Python 3.10+ (PyTorch 2.6+ supports 3.13, 3.14 expected).
+    Pascal GPUs (GTX 1070/1080): Use PyTorch <=2.4.1 with CUDA 11.8.
     """
     console.print("[bold blue]NuExtract AI Setup[/bold blue]\n")
 
@@ -3156,21 +3171,12 @@ def ai_setup(gpu):
     py_ver = sys.version_info
     console.print(f"  Python: [cyan]{py_ver.major}.{py_ver.minor}.{py_ver.micro}[/cyan]")
 
-    if py_ver.minor > 12:
-        console.print(f"  [red]Python {py_ver.major}.{py_ver.minor} is not supported by PyTorch.[/red]")
-        console.print("  [yellow]PyTorch requires Python 3.10, 3.11, or 3.12.[/yellow]")
-        console.print("  [dim]Install a compatible Python version and try again.[/dim]")
-        console.print("  [dim]  Arch: sudo pacman -S python311[/dim]")
-        console.print("  [dim]  Ubuntu: sudo apt install python3.12[/dim]")
-        console.print("  [dim]  macOS: brew install python@3.12[/dim]")
-        console.print("  [dim]  Windows: https://www.python.org/downloads/release/python-3120/[/dim]")
-        return
     if py_ver.minor < 10:
         console.print(f"  [red]Python {py_ver.major}.{py_ver.minor} is too old for PyTorch.[/red]")
-        console.print("  [yellow]Upgrade to Python 3.10-3.12.[/yellow]")
+        console.print("  [yellow]Upgrade to Python 3.10+.[/yellow]")
         return
 
-    console.print(f"  Python compatibility: [green]OK[/green] (3.10-3.12 range)")
+    console.print(f"  Python compatibility: [green]OK[/green] (3.10+)")
 
     # Check PyTorch
     try:
@@ -3409,6 +3415,615 @@ def images_export(format, output_dir, quality, limit):
         console.print(f"[yellow]{errors} images failed[/yellow]")
 
     log_history("images.export", f"Exported {exported} images as {format}")
+
+
+# ══════════════════════════════════════════
+# New Commands (v0.6.6.1)
+# ══════════════════════════════════════════
+
+# ── scrape diff ──
+@cli.command("diff")
+@click.argument("target_url")
+def diff_url(target_url):
+    """Compare current page content to last scrape of that URL."""
+    import requests as req_lib
+    from bs4 import BeautifulSoup
+    import difflib
+
+    cfg = load_config()
+    records = load_records(cfg)
+
+    # Find last scraped text for this URL
+    old_texts = [r.get("text", "") for r in records
+                 if r.get("source_url") == target_url and r.get("type") == "text"]
+
+    if not old_texts:
+        console.print(f"[yellow]No previous scrape found for {target_url}[/yellow]")
+        console.print("[dim]Scrape it first with: scrape url " + target_url + "[/dim]")
+        return
+
+    # Fetch current
+    try:
+        resp = req_lib.get(target_url, timeout=30, headers={"User-Agent": "WebScraperPro/1.0"})
+        soup = BeautifulSoup(resp.text, "html.parser")
+        new_texts = [tag.get_text(strip=True) for tag in
+                     soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6", "li"])
+                     if tag.get_text(strip=True) and len(tag.get_text(strip=True)) > 5]
+    except Exception as e:
+        console.print(f"[red]Failed to fetch {target_url}: {e}[/red]")
+        return
+
+    old_combined = "\n".join(old_texts)
+    new_combined = "\n".join(new_texts)
+
+    if old_combined == new_combined:
+        console.print(f"[green]No changes detected for {target_url}[/green]")
+        return
+
+    diff = difflib.unified_diff(
+        old_combined.splitlines(), new_combined.splitlines(),
+        fromfile="last_scrape", tofile="current", lineterm=""
+    )
+    diff_lines = list(diff)
+
+    added = sum(1 for l in diff_lines if l.startswith("+") and not l.startswith("+++"))
+    removed = sum(1 for l in diff_lines if l.startswith("-") and not l.startswith("---"))
+
+    console.print(f"[bold]Changes for {target_url}:[/bold]")
+    console.print(f"  [green]+{added} added[/green]  [red]-{removed} removed[/red]\n")
+
+    for line in diff_lines[:100]:
+        if line.startswith("+") and not line.startswith("+++"):
+            console.print(f"[green]{line}[/green]")
+        elif line.startswith("-") and not line.startswith("---"):
+            console.print(f"[red]{line}[/red]")
+        elif line.startswith("@@"):
+            console.print(f"[cyan]{line}[/cyan]")
+
+    if len(diff_lines) > 100:
+        console.print(f"\n[dim]... and {len(diff_lines) - 100} more lines[/dim]")
+
+
+# ── scrape domains ──
+@cli.command("domains")
+@click.option("--limit", "-n", default=50, help="Max domains to show")
+def domains(limit):
+    """List all scraped domains with record counts."""
+    cfg = load_config()
+    records = load_records(cfg)
+
+    if not records:
+        console.print("[yellow]No records.[/yellow]")
+        return
+
+    from urllib.parse import urlparse
+    domain_counts = {}
+    for r in records:
+        url = r.get("source_url", "")
+        if not url:
+            continue
+        try:
+            d = urlparse(url).hostname
+            if d:
+                domain_counts[d] = domain_counts.get(d, 0) + 1
+        except Exception:
+            pass
+
+    sorted_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)
+
+    table = Table(title=f"Scraped Domains ({len(sorted_domains)} total)")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Domain", style="cyan")
+    table.add_column("Records", style="white", justify="right")
+    table.add_column("Bar", style="green")
+
+    max_count = sorted_domains[0][1] if sorted_domains else 1
+    for i, (domain, count) in enumerate(sorted_domains[:limit], 1):
+        bar_len = int((count / max_count) * 30)
+        bar = "█" * bar_len
+        table.add_row(str(i), domain, str(count), bar)
+
+    console.print(table)
+    if len(sorted_domains) > limit:
+        console.print(f"[dim]Showing {limit} of {len(sorted_domains)} domains. Use --limit to show more.[/dim]")
+
+
+# ── scrape sitemap ──
+@cli.command("sitemap")
+@click.argument("target_url")
+@click.option("--limit", "-n", default=50, help="Max URLs to show")
+def sitemap(target_url, limit):
+    """Discover URLs from a site's sitemap.xml."""
+    import requests as req_lib
+    from urllib.parse import urlparse
+
+    parsed = urlparse(target_url)
+    base = f"{parsed.scheme}://{parsed.hostname}"
+    sitemap_urls = [
+        target_url if "sitemap" in target_url.lower() else base + "/sitemap.xml",
+        base + "/sitemap_index.xml",
+        base + "/sitemap.xml.gz",
+    ]
+
+    found_urls = []
+    for sm_url in sitemap_urls:
+        try:
+            resp = req_lib.get(sm_url, timeout=15, headers={"User-Agent": "WebScraperPro/1.0"})
+            if resp.ok and "<url" in resp.text.lower():
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(resp.text, "xml")
+                locs = soup.find_all("loc")
+                for loc in locs:
+                    if loc.string:
+                        found_urls.append(loc.string.strip())
+                if found_urls:
+                    console.print(f"[green]Found sitemap at {sm_url}[/green]")
+                    break
+        except Exception:
+            continue
+
+    if not found_urls:
+        console.print(f"[yellow]No sitemap found for {base}[/yellow]")
+        console.print("[dim]Tried: " + ", ".join(sitemap_urls) + "[/dim]")
+        return
+
+    console.print(f"\n[bold]Found {len(found_urls)} URLs in sitemap:[/bold]\n")
+    for i, url in enumerate(found_urls[:limit], 1):
+        console.print(f"  {i:4d}. {url}")
+
+    if len(found_urls) > limit:
+        console.print(f"\n[dim]... and {len(found_urls) - limit} more. Use --limit to show all.[/dim]")
+
+    console.print(f"\n[dim]Scrape all with: scrape url <URL> for each, or add to queue in the extension.[/dim]")
+
+
+# ── scrape robots ──
+@cli.command("robots")
+@click.argument("target_url")
+def robots(target_url):
+    """Check robots.txt rules for a URL."""
+    import requests as req_lib
+    from urllib.parse import urlparse
+
+    parsed = urlparse(target_url if target_url.startswith("http") else "https://" + target_url)
+    robots_url = f"{parsed.scheme}://{parsed.hostname}/robots.txt"
+
+    try:
+        resp = req_lib.get(robots_url, timeout=10, headers={"User-Agent": "WebScraperPro/1.0"})
+        if not resp.ok:
+            console.print(f"[yellow]No robots.txt found at {robots_url} (status {resp.status_code})[/yellow]")
+            console.print("[green]No restrictions detected.[/green]")
+            return
+
+        console.print(f"[bold]robots.txt for {parsed.hostname}:[/bold]\n")
+
+        lines = resp.text.splitlines()
+        current_agent = None
+        relevant = False
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                if stripped.startswith("#"):
+                    console.print(f"[dim]{stripped}[/dim]")
+                continue
+
+            if stripped.lower().startswith("user-agent:"):
+                agent = stripped.split(":", 1)[1].strip()
+                current_agent = agent
+                relevant = agent == "*" or "scraper" in agent.lower() or "bot" in agent.lower()
+                style = "bold cyan" if relevant else "dim"
+                console.print(f"[{style}]{stripped}[/{style}]")
+            elif stripped.lower().startswith("disallow:"):
+                path = stripped.split(":", 1)[1].strip()
+                if relevant and path:
+                    # Check if our target URL is disallowed
+                    target_path = parsed.path or "/"
+                    blocked = target_path.startswith(path)
+                    style = "red" if blocked else "yellow"
+                    console.print(f"  [{style}]{stripped}[/{style}]" +
+                                  (" [red]<-- BLOCKED[/red]" if blocked else ""))
+                else:
+                    console.print(f"  [dim]{stripped}[/dim]")
+            elif stripped.lower().startswith("allow:"):
+                console.print(f"  [green]{stripped}[/green]")
+            elif stripped.lower().startswith("sitemap:"):
+                console.print(f"[blue]{stripped}[/blue]")
+            elif stripped.lower().startswith("crawl-delay:"):
+                delay = stripped.split(":", 1)[1].strip()
+                console.print(f"[yellow]{stripped}[/yellow]")
+            else:
+                console.print(f"[dim]{stripped}[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error fetching robots.txt: {e}[/red]")
+
+
+# ── scrape headers ──
+@cli.command("headers")
+@click.argument("target_url")
+def headers(target_url):
+    """Show HTTP response headers for a URL."""
+    import requests as req_lib
+
+    if not target_url.startswith(("http://", "https://")):
+        target_url = "https://" + target_url
+
+    try:
+        resp = req_lib.head(target_url, timeout=15, allow_redirects=True,
+                            headers={"User-Agent": "WebScraperPro/1.0"})
+
+        table = Table(title=f"HTTP Headers: {target_url}")
+        table.add_column("Header", style="cyan")
+        table.add_column("Value", style="white")
+
+        for key, value in sorted(resp.headers.items()):
+            # Highlight security headers
+            style = "green" if key.lower() in ("strict-transport-security", "content-security-policy",
+                                                "x-frame-options", "x-content-type-options") else "white"
+            table.add_row(key, f"[{style}]{value[:120]}[/{style}]")
+
+        table.add_row("---", "---")
+        table.add_row("Status Code", str(resp.status_code))
+        table.add_row("Final URL", resp.url)
+        table.add_row("Redirects", str(len(resp.history)))
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+# ── scrape extract.emails ──
+@cli.command("extract.emails")
+@click.option("--output", "-o", default=None, help="Output file")
+def extract_emails(output):
+    """Extract all email addresses from scraped data."""
+    import re
+
+    cfg = load_config()
+    records = load_records(cfg)
+
+    if not records:
+        console.print("[yellow]No records to search.[/yellow]")
+        return
+
+    email_pattern = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+    emails = set()
+
+    for r in records:
+        searchable = json.dumps(r)
+        found = email_pattern.findall(searchable)
+        emails.update(found)
+
+    if not emails:
+        console.print("[yellow]No email addresses found in scraped data.[/yellow]")
+        return
+
+    sorted_emails = sorted(emails)
+
+    if output:
+        with open(output, "w") as f:
+            for email in sorted_emails:
+                f.write(email + "\n")
+        console.print(f"[green]Saved {len(sorted_emails)} emails to {output}[/green]")
+    else:
+        console.print(f"[bold]Found {len(sorted_emails)} unique email addresses:[/bold]\n")
+        for email in sorted_emails:
+            console.print(f"  {email}")
+
+    log_history("extract.emails", f"Found {len(sorted_emails)} emails")
+
+
+# ── scrape extract.phones ──
+@cli.command("extract.phones")
+@click.option("--output", "-o", default=None, help="Output file")
+def extract_phones(output):
+    """Extract phone numbers from scraped data."""
+    import re
+
+    cfg = load_config()
+    records = load_records(cfg)
+
+    if not records:
+        console.print("[yellow]No records to search.[/yellow]")
+        return
+
+    # Common phone patterns: +1-xxx-xxx-xxxx, (xxx) xxx-xxxx, xxx.xxx.xxxx, etc.
+    phone_pattern = re.compile(
+        r'(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+        r'|\+\d{1,3}[-.\s]?\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}'
+    )
+    phones = set()
+
+    for r in records:
+        text = r.get("text", "") or ""
+        found = phone_pattern.findall(text)
+        phones.update(found)
+
+    if not phones:
+        console.print("[yellow]No phone numbers found in scraped data.[/yellow]")
+        return
+
+    sorted_phones = sorted(phones)
+
+    if output:
+        with open(output, "w") as f:
+            for phone in sorted_phones:
+                f.write(phone + "\n")
+        console.print(f"[green]Saved {len(sorted_phones)} phone numbers to {output}[/green]")
+    else:
+        console.print(f"[bold]Found {len(sorted_phones)} phone numbers:[/bold]\n")
+        for phone in sorted_phones:
+            console.print(f"  {phone}")
+
+    log_history("extract.phones", f"Found {len(sorted_phones)} phones")
+
+
+# ── scrape count ──
+@cli.command("count")
+def count():
+    """Count records by type."""
+    cfg = load_config()
+    records = load_records(cfg)
+
+    if not records:
+        console.print("[yellow]No records.[/yellow]")
+        return
+
+    counts = {}
+    for r in records:
+        rtype = r.get("type", "unknown")
+        counts[rtype] = counts.get(rtype, 0) + 1
+
+    table = Table(title="Record Counts")
+    table.add_column("Type", style="cyan")
+    table.add_column("Count", style="white", justify="right")
+    table.add_column("Percentage", style="dim")
+
+    total = len(records)
+    for rtype, cnt in sorted(counts.items(), key=lambda x: x[1], reverse=True):
+        pct = f"{cnt / total * 100:.1f}%"
+        table.add_row(rtype, str(cnt), pct)
+
+    table.add_row("─" * 10, "─" * 5, "─" * 5)
+    table.add_row("[bold]Total[/bold]", f"[bold]{total}[/bold]", "100%")
+
+    console.print(table)
+
+
+# ── scrape top ──
+@cli.command("top")
+@click.argument("n", default=10, type=int)
+def top(n):
+    """Show top N most-scraped domains."""
+    cfg = load_config()
+    records = load_records(cfg)
+
+    if not records:
+        console.print("[yellow]No records.[/yellow]")
+        return
+
+    from urllib.parse import urlparse
+    domain_counts = {}
+    for r in records:
+        url = r.get("source_url", "")
+        try:
+            d = urlparse(url).hostname
+            if d:
+                domain_counts[d] = domain_counts.get(d, 0) + 1
+        except Exception:
+            pass
+
+    sorted_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:n]
+
+    console.print(f"\n[bold]Top {min(n, len(sorted_domains))} domains:[/bold]\n")
+    max_count = sorted_domains[0][1] if sorted_domains else 1
+
+    for i, (domain, cnt) in enumerate(sorted_domains, 1):
+        bar_len = int((cnt / max_count) * 40)
+        bar = "█" * bar_len
+        console.print(f"  {i:3d}. {domain:40s} {cnt:6d}  [green]{bar}[/green]")
+
+
+# ── scrape tag ──
+@cli.command("tag")
+@click.argument("field")
+@click.argument("value")
+@click.option("--tag-name", "-t", required=True, help="Tag name to apply")
+@click.option("--output", "-o", default=None, help="Output file for tagged records")
+def tag(field, value, tag_name, output):
+    """Tag/annotate records matching a field value."""
+    cfg = load_config()
+    records = load_records(cfg)
+
+    if not records:
+        console.print("[yellow]No records.[/yellow]")
+        return
+
+    tagged = 0
+    tagged_records = []
+    for r in records:
+        if value.lower() in str(r.get(field, "")).lower():
+            r["_tag"] = tag_name
+            tagged += 1
+            tagged_records.append(r)
+
+    if tagged == 0:
+        console.print(f"[yellow]No records match {field}={value}[/yellow]")
+        return
+
+    if output:
+        with open(output, "w") as f:
+            for r in tagged_records:
+                f.write(json.dumps(r) + "\n")
+        console.print(f"[green]Tagged {tagged} records with '{tag_name}' -> {output}[/green]")
+    else:
+        console.print(f"[green]Found {tagged} records matching {field}={value}[/green]")
+        for r in tagged_records[:5]:
+            content = r.get("text", r.get("src", r.get("href", "")))[:80]
+            console.print(f"  [{tag_name}] {r.get('type', '?'):6s} {content}")
+        if tagged > 5:
+            console.print(f"  [dim]... and {tagged - 5} more. Use --output to save all.[/dim]")
+
+    log_history("tag", f"Tagged {tagged} records as '{tag_name}' where {field}={value}")
+
+
+# ── scrape sample ──
+@cli.command("sample")
+@click.argument("n", default=5, type=int)
+@click.option("--type", "-t", "record_type", default=None, help="Filter by type")
+def sample(n, record_type):
+    """Show N random records from scraped data."""
+    import random
+
+    cfg = load_config()
+    records = load_records(cfg)
+
+    if record_type:
+        records = [r for r in records if r.get("type") == record_type]
+
+    if not records:
+        console.print("[yellow]No records found.[/yellow]")
+        return
+
+    samples = random.sample(records, min(n, len(records)))
+
+    console.print(f"[bold]Random sample ({len(samples)} of {len(records)} records):[/bold]\n")
+
+    for i, r in enumerate(samples, 1):
+        rtype = r.get("type", "?")
+        source = r.get("source_url", "")[:60]
+        console.print(f"[bold cyan]── Record {i} ({rtype}) ──[/bold cyan]")
+        console.print(f"  Source: [dim]{source}[/dim]")
+
+        if rtype == "text":
+            text = r.get("text", "")
+            if len(text) > 200:
+                text = text[:200] + "..."
+            console.print(f"  {text}")
+        elif rtype == "image":
+            console.print(f"  Image: {r.get('src', '?')[:80]}")
+            console.print(f"  Alt: {r.get('alt', 'none')}")
+        elif rtype == "link":
+            console.print(f"  URL: {r.get('href', '?')[:80]}")
+            console.print(f"  Text: {r.get('text', 'none')}")
+        elif rtype == "audio":
+            console.print(f"  Audio: {r.get('src', '?')[:80]}")
+
+        if r.get("citation_mla"):
+            console.print(f"  [dim]Citation: {r['citation_mla'][:100]}[/dim]")
+        console.print()
+
+
+# ── scrape summary ──
+@cli.command("summary")
+def summary():
+    """Generate a text summary of all scraped data."""
+    cfg = load_config()
+    records = load_records(cfg)
+    files = get_scraped_files(cfg)
+
+    if not records:
+        console.print("[yellow]No data to summarize.[/yellow]")
+        return
+
+    from urllib.parse import urlparse
+    from collections import Counter
+
+    types = Counter(r.get("type", "unknown") for r in records)
+    domains = Counter()
+    total_words = 0
+    date_range = [None, None]
+
+    for r in records:
+        url = r.get("source_url", "")
+        try:
+            d = urlparse(url).hostname
+            if d:
+                domains[d] += 1
+        except Exception:
+            pass
+
+        if r.get("type") == "text":
+            total_words += len((r.get("text", "") or "").split())
+
+        ts = r.get("scraped_at", "")
+        if ts:
+            if date_range[0] is None or ts < date_range[0]:
+                date_range[0] = ts
+            if date_range[1] is None or ts > date_range[1]:
+                date_range[1] = ts
+
+    total_size = sum(os.path.getsize(f) for f in files) if files else 0
+
+    console.print(Panel(
+        f"[bold blue]WebScraper Pro Data Summary[/bold blue]\n"
+        f"  Version: v{VERSION}\n\n"
+        f"  [bold]Records:[/bold] {len(records):,}\n"
+        f"  [bold]Data Files:[/bold] {len(files)}\n"
+        f"  [bold]Total Size:[/bold] {format_bytes(total_size)}\n"
+        f"  [bold]Total Words:[/bold] {total_words:,}\n"
+        f"  [bold]Unique Domains:[/bold] {len(domains)}\n\n"
+        f"  [bold]By Type:[/bold]\n"
+        + "".join(f"    {t}: {c:,}\n" for t, c in types.most_common())
+        + f"\n  [bold]Top 5 Domains:[/bold]\n"
+        + "".join(f"    {d}: {c:,}\n" for d, c in domains.most_common(5))
+        + f"\n  [bold]Date Range:[/bold]\n"
+        f"    First: {(date_range[0] or 'N/A')[:19]}\n"
+        f"    Last:  {(date_range[1] or 'N/A')[:19]}",
+        title="Data Summary",
+        border_style="blue"
+    ))
+
+
+# ── scrape env ──
+@cli.command("env")
+def env():
+    """Show environment and configuration diagnostics."""
+    table = Table(title="Environment Diagnostics")
+    table.add_column("Key", style="cyan")
+    table.add_column("Value", style="white")
+
+    import platform as plat
+
+    table.add_row("WebScraper Pro", f"v{VERSION}")
+    table.add_row("Python", sys.version.split()[0])
+    table.add_row("Python Path", sys.executable)
+    table.add_row("Platform", plat.platform())
+    table.add_row("Architecture", plat.machine())
+    table.add_row("OS", f"{plat.system()} {plat.release()}")
+
+    table.add_row("─" * 15, "─" * 40)
+    table.add_row("Config Dir", get_config_dir())
+    table.add_row("Data Dir", get_data_dir())
+    table.add_row("Config File", CONFIG_FILE)
+    table.add_row("Config Exists", str(os.path.exists(CONFIG_FILE)))
+
+    cfg = load_config()
+    table.add_row("Save Path", cfg.get("save_path", "N/A"))
+    table.add_row("Data Format", cfg.get("data_format", "jsonl"))
+    table.add_row("HF Repo", cfg.get("hf_repo_id") or "Not configured")
+    table.add_row("HF Token", ("Set (" + cfg["hf_token"][:4] + "...)")
+                  if cfg.get("hf_token") else "Not set")
+
+    table.add_row("─" * 15, "─" * 40)
+
+    # Check key tools
+    for tool in ["git", "firefox", "ffmpeg", "curl"]:
+        path = shutil.which(tool)
+        table.add_row(tool, path or "[yellow]not found[/yellow]")
+
+    # Venv info
+    venv = os.environ.get("VIRTUAL_ENV", "")
+    table.add_row("Virtual Env", venv or "None")
+
+    # PATH
+    path_entries = os.environ.get("PATH", "").split(os.pathsep)
+    local_bin = os.path.join(os.path.expanduser("~"), ".local", "bin")
+    table.add_row("~/.local/bin in PATH", "Yes" if local_bin in path_entries else "[yellow]No[/yellow]")
+
+    console.print(table)
 
 
 # ── Entry point ──

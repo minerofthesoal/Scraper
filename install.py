@@ -18,15 +18,16 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "0.6.6"
+VERSION = "0.6.6.1"
 
 # Python version requirements for PyTorch compatibility
+# PyTorch 2.6+ supports Python 3.13, and 3.14 support is expected
 MIN_PYTHON = (3, 10)
-MAX_PYTHON = (3, 12)
+MAX_PYTHON = (3, 14)
 
 
 def find_compatible_python():
-    """Find a Python 3.10-3.12 interpreter. PyTorch doesn't support 3.13+."""
+    """Find a Python 3.10-3.14 interpreter."""
     current = (sys.version_info.major, sys.version_info.minor)
     if MIN_PYTHON <= current <= MAX_PYTHON:
         return sys.executable
@@ -54,8 +55,8 @@ def find_compatible_python():
 
 
 def install_python312():
-    """Auto-install Python 3.12 using the system package manager."""
-    info("Auto-installing Python 3.12 for PyTorch compatibility...")
+    """Auto-install Python 3.12 using the system package manager (fallback)."""
+    info("Auto-installing Python 3.12 as a fallback...")
 
     system = platform.system().lower()
 
@@ -176,7 +177,7 @@ def install_cli(use_global=False):
     compatible_python = find_compatible_python()
     if not compatible_python:
         current = f"{sys.version_info.major}.{sys.version_info.minor}"
-        warn(f"Python {current} detected. PyTorch requires Python 3.10-3.12.")
+        warn(f"Python {current} detected. Requires Python 3.10-3.14.")
         info("Attempting to auto-install Python 3.12...")
         if install_python312():
             compatible_python = find_compatible_python()
@@ -348,7 +349,7 @@ def verify_installation():
 def main():
     print()
     print(colored("╔══════════════════════════════════════════════╗", "blue"))
-    print(colored("║    WebScraper Pro v0.6.6 - Auto Installer  ║", "blue"))
+    print(colored("║  WebScraper Pro v0.6.6.1 - Auto Installer  ║", "blue"))
     print(colored("╚══════════════════════════════════════════════╝", "blue"))
     print()
 
