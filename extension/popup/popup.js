@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.5 ── */
+/* ── Popup Controller v0.6.6 ── */
 (function () {
   "use strict";
 
@@ -47,6 +47,8 @@
   const btnStop = $("#btn-stop");
   const chkAutoScroll = $("#chk-auto-scroll");
   const chkAutoNext = $("#chk-auto-next");
+  const chkCookieDismiss = $("#chk-cookie-dismiss");
+  const chkDeobfuscate = $("#chk-deobfuscate");
   const selFormat = $("#sel-format");
 
   /* ── Session Timer ── */
@@ -82,10 +84,13 @@
 
   /* ── Load saved config ── */
   browser.storage.local.get([
-    "autoScroll", "autoNext", "dataFormat", "sessionStats", "scrapeActive"
+    "autoScroll", "autoNext", "dataFormat", "sessionStats", "scrapeActive",
+    "cookieDismissEnabled", "deobfuscateEnabled"
   ]).then((cfg) => {
     if (chkAutoScroll) chkAutoScroll.checked = cfg.autoScroll !== false;
     if (chkAutoNext) chkAutoNext.checked = cfg.autoNext !== false;
+    if (chkCookieDismiss) chkCookieDismiss.checked = !!cfg.cookieDismissEnabled;
+    if (chkDeobfuscate) chkDeobfuscate.checked = !!cfg.deobfuscateEnabled;
     if (selFormat) selFormat.value = cfg.dataFormat || "jsonl";
     updateStats(cfg.sessionStats || {});
     updateStatus(cfg.scrapeActive ? "scraping" : "idle");
@@ -97,10 +102,12 @@
     browser.storage.local.set({
       autoScroll: chkAutoScroll ? chkAutoScroll.checked : true,
       autoNext: chkAutoNext ? chkAutoNext.checked : true,
+      cookieDismissEnabled: chkCookieDismiss ? chkCookieDismiss.checked : false,
+      deobfuscateEnabled: chkDeobfuscate ? chkDeobfuscate.checked : false,
       dataFormat: selFormat ? selFormat.value : "jsonl",
     });
   }
-  [chkAutoScroll, chkAutoNext, selFormat].forEach(el => {
+  [chkAutoScroll, chkAutoNext, chkCookieDismiss, chkDeobfuscate, selFormat].forEach(el => {
     if (el) el.addEventListener("change", saveQuickSettings);
   });
 
@@ -286,6 +293,27 @@
   bindClick("#btn-smart-extract", () => {
     sendToTab("SMART_EXTRACT_ARTICLE");
     updateStatus("scraping");
+  });
+
+  bindClick("#btn-scrape-tabs", () => {
+    sendToBackground("SCRAPE_ALL_TABS");
+    updateStatus("scraping");
+    if (btnStop) btnStop.classList.remove("hidden");
+  });
+
+  bindClick("#btn-clipboard-scrape", () => {
+    navigator.clipboard.readText().then(text => {
+      if (text && text.trim().length > 0) {
+        sendToBackground("CLIPBOARD_SCRAPE", { text: text.trim() });
+        updateStatus("scraping");
+      } else {
+        const el = $("#export-status");
+        if (el) { el.textContent = "Clipboard is empty"; setTimeout(() => { el.textContent = ""; }, 2000); }
+      }
+    }).catch(() => {
+      const el = $("#export-status");
+      if (el) { el.textContent = "Clipboard access denied"; setTimeout(() => { el.textContent = ""; }, 2000); }
+    });
   });
 
   if (btnStop) {

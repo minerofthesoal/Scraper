@@ -1,8 +1,8 @@
 # WebScraper Pro
 
-**v0.6.5** | Firefox Extension + Python CLI + Full GUI | Android supported
+**v0.6.6** | Firefox Extension + Python CLI + Full GUI | Android supported
 
-A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Now with Android/Fenix support, Markdown export, pretty-print JSON/JSONL, and auto LLM downloading.
+A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Now with content sanitization, deobfuscation, cookie auto-dismiss, tab scraping, clipboard scraping, and auto XPI builds.
 
 [![Build & Release](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml)
 [![Lint & Validate](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml)
@@ -69,6 +69,11 @@ scrape export jsonl
 | **Download Manager** | Batch download images and audio with conversion |
 | **Robots.txt Checker** | Automatic robots.txt compliance checking |
 | **Record Details** | Modal view with domain stats and dedup tracking |
+| **Tab Scraping** | Scrape all open tabs at once |
+| **Clipboard Scrape** | Scrape content directly from clipboard |
+| **Cookie Auto-Dismiss** | Auto-click cookie consent banners (disabled by default) |
+| **Deobfuscation** | Detect and reverse Base64, hex, ROT13, CSS-hidden text (disabled by default) |
+| **Content Sanitizer** | XSS detection, URL validation, HTML sanitization |
 
 ### Data Collection
 
@@ -279,6 +284,12 @@ Or: Firefox -> `about:addons` -> gear icon -> **Install Add-on From File** -> se
 | `scrape ai.setup` | Download and configure NuExtract model |
 | `scrape ai.batch` | Batch AI extraction |
 
+### Build & Package
+
+| Command | Description |
+|---------|-------------|
+| `scrape build.xpi` | Build the Firefox extension .xpi package |
+
 ### Image & Audio
 
 | Command | Description |
@@ -347,6 +358,8 @@ Scraper/
 │   │   ├── auto_scan.js         # Auto-pagination (scroll-first)
 │   │   ├── download_manager.js  # Batch downloads
 │   │   ├── robots_checker.js    # robots.txt compliance
+│   │   ├── deobfuscator.js     # Content deobfuscation engine
+│   │   ├── cookie_dismiss.js   # Cookie consent auto-dismiss
 │   │   └── overlay.css          # Selection overlay styles
 │   ├── background/              # Background service worker
 │   ├── lib/                     # Shared libraries
@@ -356,7 +369,8 @@ Scraper/
 │   │   ├── rate_limiter.js      # Per-domain rate limiting
 │   │   ├── session_manager.js   # Session, queue, domain filtering
 │   │   ├── image_export.js      # Image processing and export
-│   │   └── ai_extract.js        # AI extraction integration
+│   │   ├── ai_extract.js        # AI extraction integration
+│   │   └── sanitizer.js        # Content security sanitizer
 │   └── icons/                   # Extension icons (auto-generated)
 ├── cli/                         # Python CLI + GUI
 │   ├── scrape.py                # CLI with 55+ commands
@@ -366,8 +380,9 @@ Scraper/
 │   └── arch/PKGBUILD            # Arch Linux native package
 ├── install.sh                   # Linux/macOS installer
 ├── install.bat                  # Windows installer
+├── build_xpi.sh                 # Auto XPI builder script
 ├── install.py                   # Cross-platform Python installer
-├── LICENSE                      # Uni-S License v2.1
+├── LICENSE                      # Uni-S License v3.0
 └── README.md
 ```
 
@@ -404,7 +419,7 @@ Please ensure your code passes the lint and build workflows before submitting.
 
 ## License
 
-**[Uni-S License v2.1](LICENSE)** (Universal Scraping License)
+**[Uni-S License v3.0](LICENSE)** (Universal Scraping License)
 
 | What | Rule |
 |------|------|

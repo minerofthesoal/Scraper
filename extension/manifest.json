@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebScraper Pro",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Scrape text, images, links, and audio with smart extraction, AI-powered extraction, batch queuing, session management, HuggingFace upload, and MLA/APA citations.",
   "author": "WebScraper Pro Team",
   "homepage_url": "https://github.com/minerofthesoal/Scraper",
@@ -53,6 +53,7 @@
       "lib/hf_upload.js",
       "lib/image_export.js",
       "lib/ai_extract.js",
+      "lib/sanitizer.js",
       "background/background.js"
     ],
     "persistent": true
@@ -67,7 +68,9 @@
         "content/scraper.js",
         "content/smart_extract.js",
         "content/auto_scan.js",
-        "content/download_manager.js"
+        "content/download_manager.js",
+        "content/deobfuscator.js",
+        "content/cookie_dismiss.js"
       ],
       "css": ["content/overlay.css"],
       "run_at": "document_idle"
