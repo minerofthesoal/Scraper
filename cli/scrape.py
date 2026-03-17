@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.7"
+VERSION = "0.6.7.0.1"
 
 # ── Config paths ──
 def get_config_dir():
@@ -2849,15 +2849,40 @@ def ai_serve(gpu, port, model):
     if device == "cuda":
         gpu_info = get_gpu_info()
         gpu_arch = gpu_info.get("arch", "")
+        cc_str = gpu_info.get("compute_cap", "0.0")
+        cc_major = int(cc_str.split(".")[0]) if cc_str else 0
 
-        # Pascal (GTX 1070/1080) and older: use float16, no bfloat16/flash_attn
-        # Ampere+: can use bfloat16 but float16 is universally safe
-        model_obj = AutoModelForVision2Seq.from_pretrained(
-            model,
-            trust_remote_code=True,
-            torch_dtype=torch.float16,
-            device_map="auto",
-        )
+        # Ampere+ (cc >= 8.0): use bfloat16 + flash_attention_2 if available
+        # Pascal/Volta/Turing (cc < 8.0): use float16, eager attention
+        if cc_major >= 8:
+            use_dtype = torch.bfloat16
+            # Try flash_attention_2, fall back to sdpa/eager
+            try:
+                model_obj = AutoModelForVision2Seq.from_pretrained(
+                    model,
+                    trust_remote_code=True,
+                    torch_dtype=use_dtype,
+                    attn_implementation="flash_attention_2",
+                    device_map="auto",
+                )
+                console.print("  [dim]Using bfloat16 + flash_attention_2[/dim]")
+            except (ImportError, ValueError):
+                model_obj = AutoModelForVision2Seq.from_pretrained(
+                    model,
+                    trust_remote_code=True,
+                    torch_dtype=use_dtype,
+                    device_map="auto",
+                )
+                console.print("  [dim]Using bfloat16 (flash_attention_2 not available)[/dim]")
+        else:
+            use_dtype = torch.float16
+            model_obj = AutoModelForVision2Seq.from_pretrained(
+                model,
+                trust_remote_code=True,
+                torch_dtype=use_dtype,
+                device_map="auto",
+            )
+            console.print(f"  [dim]Using float16 (compute capability {cc_str})[/dim]")
     else:
         # CPU mode — use float32, no device_map
         model_obj = AutoModelForVision2Seq.from_pretrained(
@@ -2867,7 +2892,7 @@ def ai_serve(gpu, port, model):
         )
         model_obj = model_obj.to("cpu")
 
-    processor = AutoProcessor.from_pretrained(model, trust_remote_code=True)
+    processor = AutoProcessor.from_pretrained(model, trust_remote_code=True, padding_side="left", use_fast=True)
     console.print("[green]Model loaded successfully![/green]")
     console.print(f"[bold]Server starting at http://127.0.0.1:{port}[/bold]")
     console.print("[dim]Press Ctrl+C to stop[/dim]\n")
@@ -2962,36 +2987,53 @@ def ai_serve(gpu, port, model):
 
 
 def _run_extraction(model_obj, processor, text, template, max_tokens, device):
-    """Run NuExtract extraction on text with a given template."""
+    """Run NuExtract 2.0 extraction on text with a given template.
+
+    Uses the Qwen2-VL based chat template format required by NuExtract 2.0.
+    """
     import torch
     import json as json_mod
 
-    template_str = json_mod.dumps(template, indent=2) if isinstance(template, dict) else str(template)
+    template_str = json_mod.dumps(template) if isinstance(template, dict) else str(template)
 
-    # NuExtract-2.0 prompt format: template + text, model fills the template
-    prompt = (
-        "<|input|>\n"
-        "### Template:\n" + template_str + "\n"
-        "### Text:\n" + text + "\n"
-        "<|output|>\n"
+    # NuExtract 2.0 uses apply_chat_template with template parameter (Qwen2-VL based)
+    messages = [{"role": "user", "content": text}]
+
+    prompt = processor.tokenizer.apply_chat_template(
+        messages,
+        template=template_str,
+        tokenize=False,
+        add_generation_prompt=True,
     )
 
-    inputs = processor.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=4096)
+    # Process inputs — images=None for text-only extraction
+    inputs = processor(
+        text=[prompt],
+        images=None,
+        padding=True,
+        return_tensors="pt",
+    )
     if device == "cuda":
-        inputs = {k: v.to("cuda") if hasattr(v, "to") else v for k, v in inputs.items()}
+        inputs = inputs.to("cuda")
+    elif device == "cpu":
+        inputs = inputs.to("cpu")
 
     with torch.no_grad():
-        generated = model_obj.generate(
+        generated_ids = model_obj.generate(
             **inputs,
             do_sample=False,
             num_beams=1,
             max_new_tokens=max_tokens,
         )
 
-    # Decode only the new tokens
-    input_len = inputs["input_ids"].shape[1]
-    output_ids = generated[0][input_len:]
-    result_text = processor.tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+    # Decode only the newly generated tokens (trim input prefix)
+    generated_ids_trimmed = [
+        out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+    ]
+    output_texts = processor.batch_decode(
+        generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )
+    result_text = output_texts[0].strip() if output_texts else ""
 
     # Try to parse as JSON
     try:
@@ -3342,6 +3384,20 @@ def ai_setup(gpu):
             console.print("[yellow]Installed but needs restart. Run 'scrape ai.setup' again.[/yellow]")
             return
 
+    # Check qwen_vl_utils (needed by NuExtract 2.0 Qwen2-VL processor)
+    try:
+        import qwen_vl_utils  # noqa: F401
+        console.print(f"  qwen_vl_utils: [green]OK[/green]")
+    except ImportError:
+        console.print("  qwen_vl_utils: [yellow]Not installed[/yellow]")
+        console.print("\n[yellow]Installing qwen_vl_utils (needed by NuExtract 2.0 processor)...[/yellow]")
+        import subprocess as _sp
+        result = _sp.run([sys.executable, "-m", "pip", "install", "qwen-vl-utils"], capture_output=False, text=True)
+        if result.returncode != 0:
+            console.print("[yellow]qwen_vl_utils install failed — text extraction will still work, image extraction may not.[/yellow]")
+        else:
+            console.print("[green]qwen_vl_utils installed![/green]")
+
     # Try to download model
     console.print(f"\n[yellow]Downloading NuExtract-2.0-2B model...[/yellow]")
     console.print("[dim]This may take a few minutes on first run (~4GB download)[/dim]")
@@ -3350,7 +3406,7 @@ def ai_setup(gpu):
         from transformers import AutoProcessor, AutoModelForVision2Seq
 
         console.print("[dim]Downloading processor...[/dim]")
-        AutoProcessor.from_pretrained("numind/NuExtract-2.0-2B", trust_remote_code=True)
+        AutoProcessor.from_pretrained("numind/NuExtract-2.0-2B", trust_remote_code=True, padding_side="left", use_fast=True)
 
         console.print("[dim]Downloading model...[/dim]")
         if gpu is False:
@@ -3360,10 +3416,12 @@ def ai_setup(gpu):
                 torch_dtype=torch.float32,
             )
         else:
+            # Use bfloat16 for download/cache — actual dtype selected at serve time
+            use_dtype = torch.bfloat16 if hasattr(torch, 'bfloat16') else torch.float16
             AutoModelForVision2Seq.from_pretrained(
                 "numind/NuExtract-2.0-2B",
                 trust_remote_code=True,
-                torch_dtype=torch.float16,
+                torch_dtype=use_dtype,
             )
 
         console.print("\n[green]Setup complete! Model downloaded successfully.[/green]")
