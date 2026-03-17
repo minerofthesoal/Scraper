@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.6.2"
+VERSION = "0.6.7"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1290,6 +1290,17 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.6.7", "2026-03-17", [
+            "AI setup auto-install: 'scrape ai.setup' now auto-installs PyTorch and transformers (auto-detects GPU)",
+            "New AI tab in popup: dedicated tab with server status, results viewer, custom template input",
+            "Custom AI templates: paste any JSON schema for custom extraction in both popup and CLI",
+            "New templates: job posting and review/rating extraction",
+            "Better NuExtract prompt format: improved structured extraction with JSON recovery fallback",
+            "New CLI command: 'scrape ai.templates' to list/preview all extraction templates",
+            "Popup redesign: updated color scheme, better spacing, glow effects, focus rings, backdrop blur on modals",
+            "Download images toggle: new quick setting in popup scrape tab",
+            "Popup width increased to 400px for better readability",
+        ]),
         ("0.6.6.2", "2026-03-16", [
             "Fix Python detection: try python3/python before versioned names (python3.12, etc.)",
             "Check common absolute paths (/usr/bin, /usr/local/bin, /opt/homebrew/bin) as last resort",
@@ -2788,18 +2799,13 @@ def ai_serve(gpu, port, model):
     try:
         import torch
     except ImportError:
-        console.print("[red]PyTorch not installed.[/red]")
-        console.print(f"[dim]Python {sys.version_info.major}.{py_minor} detected (compatible).[/dim]")
-        console.print("[yellow]Install PyTorch:[/yellow]")
-        console.print("[dim]  Pascal GPU (GTX 1070/1080):  pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu118[/dim]")
-        console.print("[dim]  Turing+ GPU (RTX 2000+):     pip install torch --index-url https://download.pytorch.org/whl/cu121[/dim]")
-        console.print("[dim]  CPU only:                    pip install torch --index-url https://download.pytorch.org/whl/cpu[/dim]")
+        console.print("[red]PyTorch not installed. Run 'scrape ai.setup' to auto-install.[/red]")
         return
 
     try:
         from transformers import AutoProcessor, AutoModelForVision2Seq
     except ImportError:
-        console.print("[red]Transformers not installed. Run:[/red] pip install transformers")
+        console.print("[red]Transformers not installed. Run 'scrape ai.setup' to auto-install.[/red]")
         return
 
     # Determine device
@@ -2960,17 +2966,17 @@ def _run_extraction(model_obj, processor, text, template, max_tokens, device):
     import torch
     import json as json_mod
 
-    template_str = json_mod.dumps(template) if isinstance(template, dict) else str(template)
+    template_str = json_mod.dumps(template, indent=2) if isinstance(template, dict) else str(template)
 
-    messages = [{"role": "user", "content": text}]
-    rendered = processor.tokenizer.apply_chat_template(
-        messages,
-        template=template_str,
-        tokenize=False,
-        add_generation_prompt=True,
+    # NuExtract-2.0 prompt format: template + text, model fills the template
+    prompt = (
+        "<|input|>\n"
+        "### Template:\n" + template_str + "\n"
+        "### Text:\n" + text + "\n"
+        "<|output|>\n"
     )
 
-    inputs = processor(text=[rendered], padding=True, return_tensors="pt")
+    inputs = processor.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=4096)
     if device == "cuda":
         inputs = {k: v.to("cuda") if hasattr(v, "to") else v for k, v in inputs.items()}
 
@@ -2985,13 +2991,20 @@ def _run_extraction(model_obj, processor, text, template, max_tokens, device):
     # Decode only the new tokens
     input_len = inputs["input_ids"].shape[1]
     output_ids = generated[0][input_len:]
-    result_text = processor.tokenizer.decode(output_ids, skip_special_tokens=True)
+    result_text = processor.tokenizer.decode(output_ids, skip_special_tokens=True).strip()
 
     # Try to parse as JSON
     try:
         return json_mod.loads(result_text)
     except json_mod.JSONDecodeError:
-        # Return raw text if not valid JSON
+        # Try to extract JSON from the output (model may add extra text)
+        import re
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', result_text, re.DOTALL)
+        if json_match:
+            try:
+                return json_mod.loads(json_match.group())
+            except json_mod.JSONDecodeError:
+                pass
         return {"raw_output": result_text}
 
 
@@ -3049,6 +3062,30 @@ def _get_ai_templates():
             "publication_date": "date-time",
             "doi": "verbatim-string",
         },
+        "job": {
+            "job_title": "verbatim-string",
+            "company": "verbatim-string",
+            "location": "string",
+            "salary_range": "string",
+            "employment_type": ["Full-time", "Part-time", "Contract", "Freelance", "Internship", "Remote"],
+            "experience_level": ["Entry", "Mid", "Senior", "Lead", "Executive"],
+            "required_skills": ["verbatim-string"],
+            "description": "string",
+            "benefits": ["string"],
+            "application_url": "verbatim-string",
+        },
+        "review": {
+            "product_name": "verbatim-string",
+            "reviewer": "verbatim-string",
+            "rating": "number",
+            "rating_max": "number",
+            "title": "verbatim-string",
+            "pros": ["string"],
+            "cons": ["string"],
+            "summary": "string",
+            "verified_purchase": ["Yes", "No", "Unknown"],
+            "date": "date-time",
+        },
     }
 
 
@@ -3062,7 +3099,7 @@ def _get_ai_templates():
 def ai_extract(template_name, input_file, text, server, output):
     """Extract structured data from text using NuExtract AI.
 
-    TEMPLATE_NAME can be: article, product, contact, event, recipe, research
+    TEMPLATE_NAME can be: article, product, contact, event, recipe, research, job, review
     Or a path to a JSON template file.
     """
     import requests
@@ -3211,13 +3248,78 @@ def ai_setup(gpu):
                 console.print(f"  [yellow]{compat_msg}[/yellow]")
     except ImportError:
         console.print("  PyTorch: [red]Not installed[/red]")
-        console.print(f"\n[yellow]Install PyTorch (Python {py_ver.major}.{py_ver.minor} is compatible):[/yellow]")
-        if gpu is True or gpu is None:
-            console.print("  [bold]Pascal GPU (GTX 1070/1080):[/bold]  pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu118")
-            console.print("  [bold]Turing+ GPU (RTX 2000+):[/bold]     pip install torch --index-url https://download.pytorch.org/whl/cu121")
-        if gpu is False or gpu is None:
-            console.print("  [bold]CPU only:[/bold]                    pip install torch --index-url https://download.pytorch.org/whl/cpu")
-        return
+        console.print()
+
+        # Auto-detect GPU to pick the right install command
+        gpu_mode = gpu  # True=gpu, False=cpu, None=auto
+        install_url = None
+        torch_pin = ""
+
+        if gpu_mode is not False:
+            # Try to detect NVIDIA GPU via nvidia-smi
+            try:
+                import subprocess as _sp
+                nv = _sp.run(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader"],
+                             capture_output=True, text=True, timeout=10)
+                if nv.returncode == 0 and nv.stdout.strip():
+                    line = nv.stdout.strip().split("\n")[0]
+                    parts = [p.strip() for p in line.split(",")]
+                    gpu_name = parts[0] if parts else "Unknown"
+                    cc_str = parts[1] if len(parts) > 1 else "0.0"
+                    cc_major = int(cc_str.split(".")[0])
+                    console.print(f"  GPU detected: [cyan]{gpu_name}[/cyan] (compute {cc_str})")
+                    if cc_major <= 6:
+                        # Pascal or older
+                        install_url = "https://download.pytorch.org/whl/cu118"
+                        torch_pin = "==2.4.1"
+                        console.print("  [dim]Pascal GPU detected - using PyTorch 2.4.1 + CUDA 11.8[/dim]")
+                    else:
+                        install_url = "https://download.pytorch.org/whl/cu121"
+                        console.print("  [dim]Modern GPU detected - using latest PyTorch + CUDA 12.1[/dim]")
+                else:
+                    if gpu_mode is True:
+                        console.print("  [yellow]No NVIDIA GPU detected but --gpu was specified[/yellow]")
+                        install_url = "https://download.pytorch.org/whl/cu121"
+                    else:
+                        console.print("  [dim]No NVIDIA GPU found, installing CPU-only PyTorch[/dim]")
+                        install_url = "https://download.pytorch.org/whl/cpu"
+            except FileNotFoundError:
+                if gpu_mode is True:
+                    console.print("  [yellow]nvidia-smi not found but --gpu was specified[/yellow]")
+                    install_url = "https://download.pytorch.org/whl/cu121"
+                else:
+                    console.print("  [dim]nvidia-smi not found, installing CPU-only PyTorch[/dim]")
+                    install_url = "https://download.pytorch.org/whl/cpu"
+            except Exception:
+                install_url = "https://download.pytorch.org/whl/cpu"
+        else:
+            install_url = "https://download.pytorch.org/whl/cpu"
+            console.print("  [dim]CPU mode requested[/dim]")
+
+        pip_cmd = f"torch{torch_pin}"
+        full_cmd = [sys.executable, "-m", "pip", "install", pip_cmd, "--index-url", install_url]
+        console.print(f"\n[yellow]Installing PyTorch...[/yellow]")
+        console.print(f"[dim]  {' '.join(full_cmd)}[/dim]")
+
+        import subprocess as _sp
+        result = _sp.run(full_cmd, capture_output=False, text=True)
+        if result.returncode != 0:
+            console.print("[red]PyTorch installation failed.[/red]")
+            console.print("[dim]Try manually:[/dim]")
+            console.print(f"[dim]  pip install {pip_cmd} --index-url {install_url}[/dim]")
+            return
+
+        console.print("[green]PyTorch installed successfully![/green]")
+
+        # Re-check after install
+        try:
+            import importlib
+            import torch
+            importlib.reload(torch)
+            console.print(f"  PyTorch: [green]{torch.__version__}[/green]")
+        except Exception:
+            console.print("[yellow]PyTorch installed but needs a restart. Run 'scrape ai.setup' again.[/yellow]")
+            return
 
     # Check transformers
     try:
@@ -3225,9 +3327,20 @@ def ai_setup(gpu):
         console.print(f"  Transformers: [green]{transformers.__version__}[/green]")
     except ImportError:
         console.print("  Transformers: [red]Not installed[/red]")
-        console.print("\n[yellow]Install transformers:[/yellow]")
-        console.print("  pip install transformers")
-        return
+        console.print("\n[yellow]Installing transformers...[/yellow]")
+        import subprocess as _sp
+        result = _sp.run([sys.executable, "-m", "pip", "install", "transformers"], capture_output=False, text=True)
+        if result.returncode != 0:
+            console.print("[red]Transformers installation failed.[/red]")
+            console.print("[dim]Try manually: pip install transformers[/dim]")
+            return
+        console.print("[green]Transformers installed![/green]")
+        try:
+            import transformers
+            console.print(f"  Transformers: [green]{transformers.__version__}[/green]")
+        except Exception:
+            console.print("[yellow]Installed but needs restart. Run 'scrape ai.setup' again.[/yellow]")
+            return
 
     # Try to download model
     console.print(f"\n[yellow]Downloading NuExtract-2.0-2B model...[/yellow]")
@@ -3327,7 +3440,56 @@ def ai_batch(template_name, server, output, limit):
             console.print(f"[dim]... and {len(results) - 5} more. Use --output to save all.[/dim]")
 
 
-# ── 57. scrape images.export ──
+# ── 57. scrape ai.templates ──
+@cli.command("ai.templates")
+@click.argument("template_name", default=None, required=False)
+def ai_templates(template_name):
+    """List available AI extraction templates, or show a specific one.
+
+    Examples:
+        scrape ai.templates          - List all templates
+        scrape ai.templates article  - Show the article template
+        scrape ai.templates job      - Show the job posting template
+    """
+    templates = _get_ai_templates()
+
+    if template_name:
+        if template_name not in templates:
+            console.print(f"[red]Unknown template '{template_name}'[/red]")
+            console.print(f"[dim]Available: {', '.join(templates.keys())}[/dim]")
+            return
+        console.print(f"\n[bold blue]{template_name}[/bold blue] template:\n")
+        console.print(json.dumps(templates[template_name], indent=2))
+        return
+
+    table = Table(title="AI Extraction Templates")
+    table.add_column("Template", style="cyan", no_wrap=True)
+    table.add_column("Fields", style="white")
+    table.add_column("Use Case", style="dim")
+
+    use_cases = {
+        "article": "News articles, blog posts, editorials",
+        "product": "E-commerce product pages, listings",
+        "contact": "Contact pages, directories, team pages",
+        "event": "Event listings, schedules, calendars",
+        "recipe": "Cooking recipes, food blogs",
+        "research": "Academic papers, research articles",
+        "job": "Job postings, career listings",
+        "review": "Product/service reviews, ratings",
+    }
+
+    for name, tmpl in templates.items():
+        fields = ", ".join(list(tmpl.keys())[:5])
+        if len(tmpl) > 5:
+            fields += f" (+{len(tmpl) - 5})"
+        table.add_row(name, fields, use_cases.get(name, ""))
+
+    console.print(table)
+    console.print(f"\n[dim]Show template details: scrape ai.templates <name>[/dim]")
+    console.print(f"[dim]Use custom JSON file:  scrape ai.extract /path/to/template.json[/dim]")
+
+
+# ── 58. scrape images.export ──
 @cli.command("images.export")
 @click.argument("format", default="png", type=click.Choice(["png", "webp", "jpeg", "bmp"]))
 @click.option("--output-dir", "-o", default=None, help="Output directory")

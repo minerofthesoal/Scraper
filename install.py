@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "0.6.6.2"
+VERSION = "0.6.7"
 
 # Python version requirements for PyTorch compatibility
 # PyTorch 2.6+ supports Python 3.13, and 3.14 support is expected
@@ -366,7 +366,7 @@ def verify_installation():
 def main():
     print()
     print(colored("╔══════════════════════════════════════════════╗", "blue"))
-    print(colored("║  WebScraper Pro v0.6.6.2 - Auto Installer  ║", "blue"))
+    print(colored("║    WebScraper Pro v0.6.7 - Auto Installer   ║", "blue"))
     print(colored("╚══════════════════════════════════════════════╝", "blue"))
     print()
 
