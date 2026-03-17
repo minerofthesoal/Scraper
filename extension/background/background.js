@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.6.6.1 ── */
+/* ── WebScraper Pro Background Script v0.6.7.0.1 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -459,7 +459,7 @@ function exportData(format, options) {
 function toMarkdown(texts, images, links, audio, citationsList) {
   var md = "# WebScraper Pro Export\n\n";
   md += "**Generated:** " + new Date().toISOString() + "  \n";
-  md += "**Version:** v0.6.6.1  \n";
+  md += "**Version:** v0.6.7.0.1  \n";
   md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
   md += "---\n\n";
 
@@ -523,7 +523,7 @@ function toMarkdown(texts, images, links, audio, citationsList) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.6.1</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.6.7.0.1</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
@@ -888,44 +888,54 @@ if (browser.commands && browser.commands.onCommand) {
 }
 
 /* ── Context menu ── */
-browser.contextMenus.create({
-  id: "wsp-scrape-selection",
-  title: "Scrape Selected Area",
-  contexts: ["page", "selection", "image", "link"],
-});
+/* Use browser.menus (Firefox) with browser.contextMenus fallback (Chrome compat) */
+var _menus = browser.menus || browser.contextMenus;
+if (_menus) {
+  try {
+    _menus.create({
+      id: "wsp-scrape-selection",
+      title: "Scrape Selected Area",
+      contexts: ["page", "selection", "image", "link"],
+    });
 
-browser.contextMenus.create({
-  id: "wsp-scrape-page",
-  title: "Scrape Full Page",
-  contexts: ["page"],
-});
+    _menus.create({
+      id: "wsp-scrape-page",
+      title: "Scrape Full Page",
+      contexts: ["page"],
+    });
 
-browser.contextMenus.create({
-  id: "wsp-scroll-scrape",
-  title: "Scroll & Scrape Entire Page",
-  contexts: ["page"],
-});
+    _menus.create({
+      id: "wsp-scroll-scrape",
+      title: "Scroll & Scrape Entire Page",
+      contexts: ["page"],
+    });
 
-browser.contextMenus.create({
-  id: "wsp-smart-extract",
-  title: "Smart Extract Article",
-  contexts: ["page"],
-});
-
-browser.contextMenus.onClicked.addListener(function (info, tab) {
-  if (!tab) return;
-  switch (info.menuItemId) {
-    case "wsp-scrape-selection":
-      browser.tabs.sendMessage(tab.id, { action: "START_SELECTION" });
-      break;
-    case "wsp-scrape-page":
-      browser.tabs.sendMessage(tab.id, { action: "SCRAPE_FULL_PAGE" });
-      break;
-    case "wsp-scroll-scrape":
-      browser.tabs.sendMessage(tab.id, { action: "SCRAPE_WITH_SCROLL" });
-      break;
-    case "wsp-smart-extract":
-      browser.tabs.sendMessage(tab.id, { action: "SMART_EXTRACT_ARTICLE" });
-      break;
+    _menus.create({
+      id: "wsp-smart-extract",
+      title: "Smart Extract Article",
+      contexts: ["page"],
+    });
+  } catch (e) {
+    console.warn("[WSP] Failed to create context menus:", e);
   }
-});
+
+  _menus.onClicked.addListener(function (info, tab) {
+    if (!tab) return;
+    switch (info.menuItemId) {
+      case "wsp-scrape-selection":
+        browser.tabs.sendMessage(tab.id, { action: "START_SELECTION" });
+        break;
+      case "wsp-scrape-page":
+        browser.tabs.sendMessage(tab.id, { action: "SCRAPE_FULL_PAGE" });
+        break;
+      case "wsp-scroll-scrape":
+        browser.tabs.sendMessage(tab.id, { action: "SCRAPE_WITH_SCROLL" });
+        break;
+      case "wsp-smart-extract":
+        browser.tabs.sendMessage(tab.id, { action: "SMART_EXTRACT_ARTICLE" });
+        break;
+    }
+  });
+} else {
+  console.warn("[WSP] Context menus API not available — check that 'menus' permission is declared");
+}

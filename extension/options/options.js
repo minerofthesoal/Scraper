@@ -1,4 +1,4 @@
-/* ── Options Page Controller v0.6.6 ── */
+/* ── Options Page Controller v0.6.7.0.1 ── */
 (function () {
   "use strict";
 

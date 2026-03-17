@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.7 ── */
+/* ── Popup Controller v0.6.7.0.1 ── */
 (function () {
   "use strict";
 
