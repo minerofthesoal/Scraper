@@ -1,5 +1,5 @@
-/* ── AI Extraction Module v0.6.6 ── */
-/* Optional NuExtract-2.0-2B integration for structured data extraction */
+/* ── AI Extraction Module v0.6.7 ── */
+/* NuExtract-2.0-2B integration for structured data extraction */
 /* Supports auto-download (no server needed) or remote server mode */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_AI */
@@ -12,6 +12,7 @@ var WSP_AI = {
   _autoDownload: false,
   _status: "disconnected", // disconnected, connecting, ready, downloading, error
   _downloadProgress: 0,
+  _lastResults: [],
 
   /**
    * Initialize from stored config.
@@ -38,14 +39,11 @@ var WSP_AI = {
 
   /**
    * Initialize auto-download mode (model runs via CLI subprocess).
-   * Sends a message to background to start/check the local model process.
    */
   _initAutoMode() {
     var self = this;
     self._status = "connecting";
 
-    // In auto-download mode, try to reach the local server first
-    // If not running, signal the CLI to start it automatically
     fetch(self._serverUrl + "/health", { method: "GET" })
       .then(function (resp) {
         if (resp.ok) {
@@ -63,14 +61,12 @@ var WSP_AI = {
 
   /**
    * Signal background script to auto-start the AI model via native messaging.
-   * The CLI handles downloading (~1.5GB) and launching the inference server.
    */
   _triggerAutoStart() {
     var self = this;
     self._status = "downloading";
     self._downloadProgress = 0;
 
-    // Attempt native messaging to CLI for auto-start
     try {
       browser.runtime.sendMessage({
         action: "AI_AUTO_START",
@@ -78,7 +74,6 @@ var WSP_AI = {
       }).then(function (resp) {
         if (resp && resp.status === "started") {
           self._status = "connecting";
-          // Poll until server is ready (model loading takes time)
           self._pollServerReady(0);
         } else if (resp && resp.status === "already_running") {
           self._status = "ready";
@@ -87,10 +82,9 @@ var WSP_AI = {
           self._status = "error";
           console.warn("[WSP] AI auto-start failed:", resp);
         }
-      }).catch(function (err) {
-        // Native messaging not available - try CLI command hint
+      }).catch(function () {
         self._status = "disconnected";
-        console.info("[WSP] Auto-start unavailable. Run: scrape ai.serve --auto-download");
+        console.info("[WSP] Auto-start unavailable. Run: scrape ai.serve");
       });
     } catch (e) {
       self._status = "disconnected";
@@ -137,7 +131,7 @@ var WSP_AI = {
           return resp.json().then(function (data) {
             self._status = "ready";
             self._modelInfo = data;
-            return { status: "ready", model: data.model || "NuExtract-2.0-2B", device: data.device || "unknown" };
+            return { status: "ready", model: data.model || "NuExtract-2.0-2B", device: data.device || "unknown", gpu: data.gpu || null };
           });
         }
         self._status = "error";
@@ -161,7 +155,6 @@ var WSP_AI = {
     var self = this;
     if (!self._enabled) return Promise.reject(new Error("AI extraction is not enabled. Enable it in Settings."));
     if (self._status !== "ready") {
-      // In auto-download mode, try to start if not ready
       if (self._autoDownload && self._status === "disconnected") {
         self._initAutoMode();
         return Promise.reject(new Error("AI model is starting up. Please wait and try again."));
@@ -193,8 +186,17 @@ var WSP_AI = {
    * Extract structured data from a scraped page.
    * Uses predefined templates for common extraction tasks.
    */
-  extractFromPage(text, extractionType) {
-    var template = this.getTemplate(extractionType);
+  extractFromPage(text, extractionType, customTemplate) {
+    var template;
+    if (extractionType === "custom" && customTemplate) {
+      try {
+        template = typeof customTemplate === "string" ? JSON.parse(customTemplate) : customTemplate;
+      } catch (e) {
+        return Promise.reject(new Error("Invalid custom template JSON: " + e.message));
+      }
+    } else {
+      template = this.getTemplate(extractionType);
+    }
     return this.extract(text, template);
   },
 
@@ -258,6 +260,30 @@ var WSP_AI = {
         "doi": "verbatim-string",
         "fields": [["Computer Science", "Biology", "Physics", "Chemistry", "Medicine", "Psychology", "Economics", "Other"]],
       },
+      "job": {
+        "job_title": "verbatim-string",
+        "company": "verbatim-string",
+        "location": "string",
+        "salary_range": "string",
+        "employment_type": ["Full-time", "Part-time", "Contract", "Freelance", "Internship", "Remote"],
+        "experience_level": ["Entry", "Mid", "Senior", "Lead", "Executive"],
+        "required_skills": ["verbatim-string"],
+        "description": "string",
+        "benefits": ["string"],
+        "application_url": "verbatim-string",
+      },
+      "review": {
+        "product_name": "verbatim-string",
+        "reviewer": "verbatim-string",
+        "rating": "number",
+        "rating_max": "number",
+        "title": "verbatim-string",
+        "pros": ["string"],
+        "cons": ["string"],
+        "summary": "string",
+        "verified_purchase": ["Yes", "No", "Unknown"],
+        "date": "date-time",
+      },
     };
 
     return templates[type] || templates["article"];
@@ -267,7 +293,7 @@ var WSP_AI = {
    * Get list of available templates.
    */
   getTemplateList() {
-    return ["article", "product", "contact", "event", "recipe", "research"];
+    return ["article", "product", "contact", "event", "recipe", "research", "job", "review"];
   },
 
   /**
@@ -282,7 +308,9 @@ var WSP_AI = {
       mode: this._autoDownload ? "local" : "server",
       model: this._modelInfo ? this._modelInfo.model : null,
       device: this._modelInfo ? this._modelInfo.device : null,
+      gpu: this._modelInfo ? this._modelInfo.gpu : null,
       downloadProgress: this._downloadProgress,
+      lastResultCount: this._lastResults.length,
     };
   },
 
@@ -296,6 +324,7 @@ var WSP_AI = {
 
     function processNext(i) {
       if (i >= records.length) {
+        self._lastResults = results;
         return Promise.resolve({ results: results, errors: errors, total: records.length });
       }
 

@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.6 ── */
+/* ── Popup Controller v0.6.7 ── */
 (function () {
   "use strict";
 
@@ -16,6 +16,7 @@
       if (btn.dataset.tab === "data") loadDataPreview();
       if (btn.dataset.tab === "sessions") loadSessions();
       if (btn.dataset.tab === "queue") loadQueue();
+      if (btn.dataset.tab === "ai") refreshAIStatus();
     });
   }
 
@@ -49,6 +50,7 @@
   const chkAutoNext = $("#chk-auto-next");
   const chkCookieDismiss = $("#chk-cookie-dismiss");
   const chkDeobfuscate = $("#chk-deobfuscate");
+  const chkDownloadImages = $("#chk-download-images");
   const selFormat = $("#sel-format");
 
   /* ── Session Timer ── */
@@ -85,12 +87,13 @@
   /* ── Load saved config ── */
   browser.storage.local.get([
     "autoScroll", "autoNext", "dataFormat", "sessionStats", "scrapeActive",
-    "cookieDismissEnabled", "deobfuscateEnabled"
+    "cookieDismissEnabled", "deobfuscateEnabled", "downloadImages"
   ]).then((cfg) => {
     if (chkAutoScroll) chkAutoScroll.checked = cfg.autoScroll !== false;
     if (chkAutoNext) chkAutoNext.checked = cfg.autoNext !== false;
     if (chkCookieDismiss) chkCookieDismiss.checked = !!cfg.cookieDismissEnabled;
     if (chkDeobfuscate) chkDeobfuscate.checked = !!cfg.deobfuscateEnabled;
+    if (chkDownloadImages) chkDownloadImages.checked = !!cfg.downloadImages;
     if (selFormat) selFormat.value = cfg.dataFormat || "jsonl";
     updateStats(cfg.sessionStats || {});
     updateStatus(cfg.scrapeActive ? "scraping" : "idle");
@@ -104,10 +107,11 @@
       autoNext: chkAutoNext ? chkAutoNext.checked : true,
       cookieDismissEnabled: chkCookieDismiss ? chkCookieDismiss.checked : false,
       deobfuscateEnabled: chkDeobfuscate ? chkDeobfuscate.checked : false,
+      downloadImages: chkDownloadImages ? chkDownloadImages.checked : false,
       dataFormat: selFormat ? selFormat.value : "jsonl",
     });
   }
-  [chkAutoScroll, chkAutoNext, chkCookieDismiss, chkDeobfuscate, selFormat].forEach(el => {
+  [chkAutoScroll, chkAutoNext, chkCookieDismiss, chkDeobfuscate, chkDownloadImages, selFormat].forEach(el => {
     if (el) el.addEventListener("change", saveQuickSettings);
   });
 
@@ -200,7 +204,7 @@
       bodyEl.innerHTML = entries.map(([k, v]) => {
         let val = v;
         if (typeof v === "object" && v !== null) val = JSON.stringify(v, null, 2);
-        if (typeof val === "string" && val.length > 500) val = val.slice(0, 500) + "…";
+        if (typeof val === "string" && val.length > 500) val = val.slice(0, 500) + "\u2026";
         return '<div class="modal-field"><strong>' + escapeHtml(k) + ':</strong> <span>' + escapeHtml(String(val)) + '</span></div>';
       }).join("");
     }
@@ -357,28 +361,119 @@
     setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 8000);
   });
 
-  /* ── AI Extract ── */
+  /* ── AI Tab ── */
   const aiDot = $("#ai-status-dot");
 
-  browser.runtime.sendMessage({ action: "AI_STATUS" }).then(resp => {
-    if (resp && resp.status === "ready") {
-      if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI ready (" + (resp.device || "?") + ")"; }
-    }
-    const modeLabel = $("#ai-mode-label");
-    if (modeLabel && resp) {
-      if (resp.mode === "local") modeLabel.textContent = "Mode: Local (auto-downloaded)";
-      else if (resp.status === "ready") modeLabel.textContent = "Mode: Server (" + (resp.device || "?") + ")";
-      else modeLabel.textContent = "Mode: Not connected";
-    }
-  }).catch(() => {});
+  // Custom template toggle
+  const selAiTemplate = $("#sel-ai-template");
+  const customSection = $("#custom-template-section");
+  if (selAiTemplate) {
+    selAiTemplate.addEventListener("change", () => {
+      if (customSection) {
+        customSection.classList.toggle("hidden", selAiTemplate.value !== "custom");
+      }
+    });
+  }
+
+  function refreshAIStatus() {
+    browser.runtime.sendMessage({ action: "AI_STATUS" }).then(resp => {
+      if (!resp) return;
+      const modeLabel = $("#ai-mode-label");
+      const infoModel = $("#ai-info-model");
+      const infoDevice = $("#ai-info-device");
+      const infoStatus = $("#ai-info-status");
+
+      if (resp.status === "ready") {
+        if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI ready (" + (resp.device || "?") + ")"; }
+        if (modeLabel) modeLabel.textContent = "Connected";
+        if (infoModel) infoModel.textContent = resp.model || "NuExtract-2.0-2B";
+        if (infoDevice) infoDevice.textContent = (resp.device || "unknown").toUpperCase() + (resp.gpu ? " (" + resp.gpu + ")" : "");
+        if (infoStatus) { infoStatus.textContent = "Ready"; infoStatus.style.color = "var(--green)"; }
+      } else if (resp.status === "connecting") {
+        if (aiDot) aiDot.className = "ai-dot ai-dot-connecting";
+        if (modeLabel) modeLabel.textContent = "Connecting...";
+        if (infoStatus) { infoStatus.textContent = "Connecting..."; infoStatus.style.color = "var(--orange)"; }
+      } else {
+        if (aiDot) aiDot.className = "ai-dot ai-dot-off";
+        if (modeLabel) modeLabel.textContent = "Not connected";
+        if (infoStatus) { infoStatus.textContent = "Disconnected"; infoStatus.style.color = ""; }
+      }
+    }).catch(() => {});
+  }
+
+  // Initial AI status check
+  refreshAIStatus();
 
   bindClick("#btn-ai-extract", () => {
-    const template = ($("#sel-ai-template") || {}).value || "article";
+    const templateSel = ($("#sel-ai-template") || {}).value || "article";
     const statusEl = $("#ai-extract-status");
     if (statusEl) statusEl.textContent = "Running AI extraction...";
-    sendToTab("AI_EXTRACT_PAGE", { template });
+
+    if (templateSel === "custom") {
+      const customInput = $("#ai-custom-template");
+      const customText = customInput ? customInput.value.trim() : "";
+      if (!customText) {
+        if (statusEl) statusEl.textContent = "Please enter a custom JSON template";
+        return;
+      }
+      try {
+        JSON.parse(customText);
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "Invalid JSON template: " + e.message;
+        return;
+      }
+      sendToTab("AI_EXTRACT_PAGE", { template: "custom", customTemplate: customText });
+    } else {
+      sendToTab("AI_EXTRACT_PAGE", { template: templateSel });
+    }
     setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 15000);
   });
+
+  bindClick("#btn-ai-batch", () => {
+    const templateSel = ($("#sel-ai-template") || {}).value || "article";
+    const statusEl = $("#ai-extract-status");
+    if (statusEl) statusEl.textContent = "Running batch extraction...";
+    sendToBackground("AI_BATCH_EXTRACT", { template: templateSel });
+    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 30000);
+  });
+
+  // Listen for AI results
+  function renderAIResults(results) {
+    const container = $("#ai-results");
+    const countEl = $("#ai-result-count");
+    if (!container) return;
+
+    if (!results || results.length === 0) {
+      container.innerHTML = '<div class="data-empty">No results yet</div>';
+      if (countEl) countEl.textContent = "";
+      return;
+    }
+
+    if (countEl) countEl.textContent = results.length + " result" + (results.length > 1 ? "s" : "");
+
+    container.innerHTML = results.map((result, idx) => {
+      const data = result.data || result;
+      const entries = Object.entries(data).filter(([k]) => !k.startsWith("_"));
+      return '<div class="ai-result-item" data-idx="' + idx + '">'
+        + entries.slice(0, 6).map(([k, v]) => {
+          let val = v;
+          if (Array.isArray(v)) val = v.join(", ");
+          if (typeof v === "object" && v !== null && !Array.isArray(v)) val = JSON.stringify(v);
+          if (typeof val === "string" && val.length > 120) val = val.slice(0, 120) + "\u2026";
+          return '<div class="ai-result-field"><span class="ai-result-key">' + escapeHtml(k) + ':</span> <span class="ai-result-value">' + escapeHtml(String(val || "")) + '</span></div>';
+        }).join("")
+        + (entries.length > 6 ? '<div class="ai-result-field"><span class="ai-result-key">...</span> <span class="ai-result-value">' + (entries.length - 6) + ' more fields</span></div>' : '')
+        + '</div>';
+    }).join("");
+
+    // Click to view full result
+    for (const item of container.querySelectorAll(".ai-result-item")) {
+      item.addEventListener("click", () => {
+        const idx = parseInt(item.dataset.idx);
+        if (results[idx]) openModal(Object.assign({ type: "ai_extract" }, results[idx].data || results[idx]));
+      });
+    }
+  }
 
   /* ── Queue Tab ── */
   bindClick("#btn-queue-add", () => {
@@ -493,7 +588,7 @@
           const typeClass = "dr-type-" + (r.type || "text");
           const content = r.text || r.src || r.href || r.template || "";
           const source = safeDomain(r.source_url);
-          return '<div class="data-record" data-idx="' + (start + idx) + '" title="Click to copy">'
+          return '<div class="data-record" data-idx="' + (start + idx) + '" title="Click to view details">'
             + '<span class="dr-type ' + typeClass + '">' + (r.type || "?") + '</span>'
             + '<span class="dr-source">' + escapeHtml(source) + '</span>'
             + '<div class="dr-content">' + escapeHtml(content.slice(0, 150)) + '</div>'
@@ -660,6 +755,15 @@
     }
     if (msg.action === "QUEUE_UPDATE") {
       loadQueue();
+    }
+    if (msg.action === "AI_RESULTS") {
+      renderAIResults(msg.results || []);
+      const statusEl = $("#ai-extract-status");
+      if (statusEl) statusEl.textContent = "Extraction complete!";
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+    }
+    if (msg.action === "AI_STATUS_UPDATE") {
+      refreshAIStatus();
     }
   });
 
