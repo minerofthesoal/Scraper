@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebScraper Pro - Global Web of Scraped Sites</title>
+  <link rel="stylesheet" href="gwss.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar -->
+    <header id="topbar">
+      <div class="topbar-left">
+        <h1>GwSS</h1>
+        <span class="subtitle">Global Web of Scraped Sites</span>
+        <span id="node-count" class="node-count">0 sites</span>
+      </div>
+      <div class="topbar-right">
+        <button id="btn-fit" class="tb-btn" title="Fit all nodes">Fit</button>
+        <button id="btn-reset" class="tb-btn" title="Reset view">Reset</button>
+        <div class="export-group">
+          <button id="btn-export-svg" class="tb-btn tb-export">SVG</button>
+          <button id="btn-export-png" class="tb-btn tb-export">PNG</button>
+          <button id="btn-export-csv" class="tb-btn tb-export">CSV</button>
+        </div>
+        <label class="tb-toggle" title="Export SSDg alongside GwSS">
+          <input type="checkbox" id="chk-bundle-ssdg">
+          <span>Bundle SSDg</span>
+        </label>
+        <button id="btn-theme" class="tb-btn" title="Toggle theme">&#9790;</button>
+      </div>
+    </header>
+
+    <!-- Main Canvas Area -->
+    <div id="canvas-wrap">
+      <canvas id="gwss-canvas"></canvas>
+      <!-- Tooltip overlay -->
+      <div id="tooltip" class="tooltip hidden"></div>
+      <!-- Zoom indicator -->
+      <div id="zoom-level" class="zoom-indicator">100%</div>
+    </div>
+
+    <!-- Side Panel (appears when a node is clicked) -->
+    <div id="side-panel" class="side-panel hidden">
+      <div class="sp-header">
+        <h2 id="sp-title">Site Details</h2>
+        <button id="sp-close" class="btn-icon">&times;</button>
+      </div>
+
+      <!-- Site overview -->
+      <div id="sp-overview" class="sp-section">
+        <div class="sp-meta-grid">
+          <span class="sp-label">Domain</span><span id="sp-domain" class="sp-value">--</span>
+          <span class="sp-label">Records</span><span id="sp-records" class="sp-value">--</span>
+          <span class="sp-label">Data Size</span><span id="sp-size" class="sp-value">--</span>
+          <span class="sp-label">Time Taken</span><span id="sp-time" class="sp-value">--</span>
+          <span class="sp-label">Data Types</span><span id="sp-types" class="sp-value">--</span>
+        </div>
+      </div>
+
+      <!-- Image previews -->
+      <div id="sp-images" class="sp-section hidden">
+        <h3>Image Previews</h3>
+        <div id="sp-image-grid" class="sp-image-grid"></div>
+      </div>
+
+      <!-- SSDg flowchart (Single Site Data Graph) -->
+      <div id="sp-ssdg" class="sp-section">
+        <h3>Data Flow <small>(SSDg)</small></h3>
+        <canvas id="ssdg-canvas" width="340" height="300"></canvas>
+      </div>
+
+      <!-- Record list -->
+      <div id="sp-records-list" class="sp-section">
+        <h3>Records <span id="sp-rec-count" class="sp-count"></span></h3>
+        <div id="sp-rec-list" class="sp-rec-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="gwss.js"></script>
+</body>
+</html>

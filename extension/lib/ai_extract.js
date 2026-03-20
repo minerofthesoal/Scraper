@@ -1,4 +1,4 @@
-/* ── AI Extraction Module v0.6.7.0.1 ── */
+/* ── AI Extraction Module v0.7 ── */
 /* NuExtract-2.0-2B integration for structured data extraction */
 /* Supports auto-download (no server needed) or remote server mode */
 /* eslint-env browser, webextensions */

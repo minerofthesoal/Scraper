@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.6.7.0.1"
+VERSION = "0.7.0"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1432,9 +1432,10 @@ _PYTORCH_CUDA_URLS = {
     "Hopper": "https://download.pytorch.org/whl/cu124",
 }
 
-# Max PyTorch version known to support each architecture in prebuilt wheels
+# Max PyTorch version per arch for cu121/cu124 wheels (cu118 still has sm_61)
 _PYTORCH_MAX_VER = {
-    "Pascal": "2.4.1",   # PyTorch 2.5+ dropped sm_61 from cu121/cu124 wheels
+    # Pascal: cu121/cu124 dropped sm_61 in 2.5+, but cu118 wheels still work.
+    # Don't limit version — just ensure cu118 index URL is used for Pascal.
 }
 
 
@@ -2803,7 +2804,11 @@ def ai_serve(gpu, port, model):
         return
 
     try:
-        from transformers import AutoProcessor, AutoModelForVision2Seq
+        from transformers import AutoProcessor
+        try:
+            from transformers import AutoModelForImageTextToText as AutoVisionModel
+        except ImportError:
+            from transformers import AutoModelForVision2Seq as AutoVisionModel
     except ImportError:
         console.print("[red]Transformers not installed. Run 'scrape ai.setup' to auto-install.[/red]")
         return
@@ -2858,7 +2863,7 @@ def ai_serve(gpu, port, model):
             use_dtype = torch.bfloat16
             # Try flash_attention_2, fall back to sdpa/eager
             try:
-                model_obj = AutoModelForVision2Seq.from_pretrained(
+                model_obj = AutoVisionModel.from_pretrained(
                     model,
                     trust_remote_code=True,
                     torch_dtype=use_dtype,
@@ -2867,7 +2872,7 @@ def ai_serve(gpu, port, model):
                 )
                 console.print("  [dim]Using bfloat16 + flash_attention_2[/dim]")
             except (ImportError, ValueError):
-                model_obj = AutoModelForVision2Seq.from_pretrained(
+                model_obj = AutoVisionModel.from_pretrained(
                     model,
                     trust_remote_code=True,
                     torch_dtype=use_dtype,
@@ -2876,7 +2881,7 @@ def ai_serve(gpu, port, model):
                 console.print("  [dim]Using bfloat16 (flash_attention_2 not available)[/dim]")
         else:
             use_dtype = torch.float16
-            model_obj = AutoModelForVision2Seq.from_pretrained(
+            model_obj = AutoVisionModel.from_pretrained(
                 model,
                 trust_remote_code=True,
                 torch_dtype=use_dtype,
@@ -2885,7 +2890,7 @@ def ai_serve(gpu, port, model):
             console.print(f"  [dim]Using float16 (compute capability {cc_str})[/dim]")
     else:
         # CPU mode — use float32, no device_map
-        model_obj = AutoModelForVision2Seq.from_pretrained(
+        model_obj = AutoVisionModel.from_pretrained(
             model,
             trust_remote_code=True,
             torch_dtype=torch.float32,
@@ -3311,10 +3316,10 @@ def ai_setup(gpu):
                     cc_major = int(cc_str.split(".")[0])
                     console.print(f"  GPU detected: [cyan]{gpu_name}[/cyan] (compute {cc_str})")
                     if cc_major <= 6:
-                        # Pascal or older
+                        # Pascal or older — cu118 wheels include sm_61 support
+                        # Don't pin version: 2.4.1 doesn't support Python 3.13+
                         install_url = "https://download.pytorch.org/whl/cu118"
-                        torch_pin = "==2.4.1"
-                        console.print("  [dim]Pascal GPU detected - using PyTorch 2.4.1 + CUDA 11.8[/dim]")
+                        console.print("  [dim]Pascal GPU detected - using CUDA 11.8 wheels (sm_61 support)[/dim]")
                     else:
                         install_url = "https://download.pytorch.org/whl/cu121"
                         console.print("  [dim]Modern GPU detected - using latest PyTorch + CUDA 12.1[/dim]")
@@ -3403,14 +3408,18 @@ def ai_setup(gpu):
     console.print("[dim]This may take a few minutes on first run (~4GB download)[/dim]")
 
     try:
-        from transformers import AutoProcessor, AutoModelForVision2Seq
+        from transformers import AutoProcessor
+        try:
+            from transformers import AutoModelForImageTextToText as AutoVisionModel
+        except ImportError:
+            from transformers import AutoModelForVision2Seq as AutoVisionModel
 
         console.print("[dim]Downloading processor...[/dim]")
         AutoProcessor.from_pretrained("numind/NuExtract-2.0-2B", trust_remote_code=True, padding_side="left", use_fast=True)
 
         console.print("[dim]Downloading model...[/dim]")
         if gpu is False:
-            AutoModelForVision2Seq.from_pretrained(
+            AutoVisionModel.from_pretrained(
                 "numind/NuExtract-2.0-2B",
                 trust_remote_code=True,
                 torch_dtype=torch.float32,
@@ -3418,7 +3427,7 @@ def ai_setup(gpu):
         else:
             # Use bfloat16 for download/cache — actual dtype selected at serve time
             use_dtype = torch.bfloat16 if hasattr(torch, 'bfloat16') else torch.float16
-            AutoModelForVision2Seq.from_pretrained(
+            AutoVisionModel.from_pretrained(
                 "numind/NuExtract-2.0-2B",
                 trust_remote_code=True,
                 torch_dtype=use_dtype,
