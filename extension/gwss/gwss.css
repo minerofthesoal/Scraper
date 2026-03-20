@@ -1,4 +1,4 @@
-/* ── GwSS & SSDg Styles v0.7 ── */
+/* ── GwSS & SSDg Styles v0.7.1 ── */
 :root {
   --bg-primary: #0d1117;
   --bg-secondary: #161b22;
@@ -66,11 +66,11 @@ body {
 .topbar-left { display: flex; align-items: center; gap: 10px; }
 .topbar-left h1 { font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
 .subtitle { font-size: 11px; color: var(--text-muted); }
-.node-count {
+.node-count, .edge-count {
   font-size: 10px; background: var(--bg-tertiary); color: var(--text-secondary);
   padding: 2px 8px; border-radius: 10px; font-weight: 600;
 }
-.topbar-right { display: flex; align-items: center; gap: 6px; }
+.topbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tb-btn {
   background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border);
   padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
@@ -80,6 +80,12 @@ body {
 .tb-export { background: var(--accent); color: #fff; border-color: var(--accent); }
 .tb-export:hover { background: var(--accent-hover); }
 .export-group { display: flex; gap: 3px; }
+
+/* Lock button states */
+.tb-lock { transition: all 0.25s; }
+.tb-lock.locked { background: var(--orange); color: #fff; border-color: var(--orange); }
+.tb-lock.locked:hover { background: #d97706; }
+
 .tb-toggle {
   display: flex; align-items: center; gap: 4px; font-size: 11px;
   color: var(--text-muted); cursor: pointer; padding: 4px 8px;
@@ -102,6 +108,14 @@ body {
   color: var(--text-muted); padding: 3px 10px; border-radius: 6px;
   font-size: 11px; font-weight: 600; pointer-events: none;
 }
+.physics-badge {
+  position: absolute; bottom: 12px; left: 90px;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  color: var(--green); padding: 3px 10px; border-radius: 6px;
+  font-size: 10px; font-weight: 600; pointer-events: none;
+  transition: color 0.2s;
+}
+.physics-badge.off { color: var(--text-muted); }
 
 /* ── Tooltip ── */
 .tooltip {
@@ -109,18 +123,24 @@ body {
   background: var(--bg-secondary); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 12px; font-size: 11px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  max-width: 260px;
+  max-width: 280px;
+  transition: opacity 0.15s;
 }
 .tooltip.hidden { display: none; }
 .tooltip .tt-domain { font-weight: 700; color: var(--accent); margin-bottom: 4px; display: block; }
 .tooltip .tt-meta { color: var(--text-secondary); line-height: 1.5; }
+.tooltip .tt-tags { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+.tooltip .tt-tag {
+  font-size: 9px; background: var(--bg-tertiary); color: var(--accent);
+  padding: 1px 6px; border-radius: 8px; font-weight: 600;
+}
 
 /* ── Side Panel ── */
 .side-panel {
   position: fixed; top: 0; right: 0; width: 380px; height: 100vh;
   background: var(--bg-primary); border-left: 1px solid var(--border);
   z-index: 30; overflow-y: auto; display: flex; flex-direction: column;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.3); transition: transform 0.25s;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.3); transition: transform 0.25s ease;
 }
 .side-panel.hidden { transform: translateX(100%); pointer-events: none; }
 .sp-header {
@@ -150,6 +170,11 @@ body {
 }
 .sp-label { color: var(--text-muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 .sp-value { color: var(--text-secondary); }
+.sp-tags-wrap { display: flex; flex-wrap: wrap; gap: 3px; }
+.sp-tag {
+  font-size: 9px; background: var(--accent); color: #fff;
+  padding: 2px 7px; border-radius: 10px; font-weight: 600;
+}
 
 /* Image grid */
 .sp-image-grid {

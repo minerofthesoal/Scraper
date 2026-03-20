@@ -13,14 +13,19 @@
         <h1>GwSS</h1>
         <span class="subtitle">Global Web of Scraped Sites</span>
         <span id="node-count" class="node-count">0 sites</span>
+        <span id="edge-count" class="edge-count">0 links</span>
       </div>
       <div class="topbar-right">
+        <!-- Physics lock toggle -->
+        <button id="btn-lock" class="tb-btn tb-lock" title="Lock/Unlock node movement">&#128274; Lock</button>
         <button id="btn-fit" class="tb-btn" title="Fit all nodes">Fit</button>
         <button id="btn-reset" class="tb-btn" title="Reset view">Reset</button>
         <div class="export-group">
           <button id="btn-export-svg" class="tb-btn tb-export">SVG</button>
           <button id="btn-export-png" class="tb-btn tb-export">PNG</button>
           <button id="btn-export-csv" class="tb-btn tb-export">CSV</button>
+          <button id="btn-export-json" class="tb-btn tb-export">JSON</button>
+          <button id="btn-export-graphml" class="tb-btn tb-export">GraphML</button>
         </div>
         <label class="tb-toggle" title="Export SSDg alongside GwSS">
           <input type="checkbox" id="chk-bundle-ssdg">
@@ -37,6 +42,8 @@
       <div id="tooltip" class="tooltip hidden"></div>
       <!-- Zoom indicator -->
       <div id="zoom-level" class="zoom-indicator">100%</div>
+      <!-- Physics status badge -->
+      <div id="physics-badge" class="physics-badge">Physics: ON</div>
     </div>
 
     <!-- Side Panel (appears when a node is clicked) -->
@@ -54,6 +61,7 @@
           <span class="sp-label">Data Size</span><span id="sp-size" class="sp-value">--</span>
           <span class="sp-label">Time Taken</span><span id="sp-time" class="sp-value">--</span>
           <span class="sp-label">Data Types</span><span id="sp-types" class="sp-value">--</span>
+          <span class="sp-label">Tags</span><span id="sp-tags" class="sp-value sp-tags-wrap">--</span>
         </div>
       </div>
 

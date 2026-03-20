@@ -253,6 +253,77 @@
       <small style="display:block;padding:0 36px;color:#888">Attempts to decode Base64, hex, charCode, ROT13, and CSS-hidden text. Off by default.</small>
     </section>
 
+    <!-- Sensitive Content Filter -->
+    <section class="card">
+      <h2>Sensitive Content Filter</h2>
+      <small class="card-hint">Automatically detect and filter out sensitive data from scraped content. All categories are customizable.</small>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-filter-enabled">
+        <span>Enable sensitive content filtering</span>
+      </label>
+
+      <div id="filter-options" style="margin-top:8px">
+        <div class="field">
+          <label for="sel-redact-mode">When sensitive content is found:</label>
+          <select id="sel-redact-mode">
+            <option value="remove">Remove it entirely</option>
+            <option value="redact">Replace with [REDACTED] tags</option>
+            <option value="flag">Keep it but flag for review</option>
+          </select>
+        </div>
+
+        <h3 style="font-size:12px;margin:10px 0 6px;color:var(--text-secondary)">Filter Categories</h3>
+
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-emails" checked>
+          <span>Email addresses</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-phones" checked>
+          <span>Phone numbers</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-credit-cards" checked>
+          <span>Credit/debit card numbers</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-ssn" checked>
+          <span>Social Security Numbers (SSN)</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-addresses" checked>
+          <span>Physical addresses</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-passwords" checked>
+          <span>Passwords (password=, pwd=, pass:)</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-api-keys" checked>
+          <span>API keys, access tokens, secret keys</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-2fa" checked>
+          <span>2FA/OTP codes and backup codes</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-slurs" checked>
+          <span>Slurs and hate speech</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-filter-nsfw">
+          <span>NSFW/inappropriate image URLs</span>
+        </label>
+
+        <div class="field" style="margin-top:8px">
+          <label for="txt-custom-filter-patterns">Custom filter patterns (JSON array):</label>
+          <textarea id="txt-custom-filter-patterns" class="field-textarea code-textarea" rows="3" placeholder='[&#10;  {"name": "Custom PII", "pattern": "\\bSSN:\\s*\\d+", "flags": "gi"}&#10;]'></textarea>
+          <small>Add your own regex patterns. Each object needs "name", "pattern", and optional "flags".</small>
+        </div>
+      </div>
+    </section>
+
     <!-- AI Extraction (Optional) -->
     <section class="card">
       <h2>AI Extraction (Optional)</h2>

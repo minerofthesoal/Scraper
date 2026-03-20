@@ -78,6 +78,20 @@
     validateUrls: $("#chk-validate-urls"),
     cookieDismiss: $("#chk-cookie-dismiss"),
     deobfuscate: $("#chk-deobfuscate"),
+    /* Content filter */
+    filterEnabled: $("#chk-filter-enabled"),
+    redactMode: $("#sel-redact-mode"),
+    filterEmails: $("#chk-filter-emails"),
+    filterPhones: $("#chk-filter-phones"),
+    filterCreditCards: $("#chk-filter-credit-cards"),
+    filterSSN: $("#chk-filter-ssn"),
+    filterAddresses: $("#chk-filter-addresses"),
+    filterPasswords: $("#chk-filter-passwords"),
+    filterAPIKeys: $("#chk-filter-api-keys"),
+    filter2FA: $("#chk-filter-2fa"),
+    filterSlurs: $("#chk-filter-slurs"),
+    filterNSFW: $("#chk-filter-nsfw"),
+    customFilterPatterns: $("#txt-custom-filter-patterns"),
   };
 
   /* ── Load settings ── */
@@ -151,6 +165,27 @@
   }).catch((err) => {
     console.error("[WSP] Failed to load settings:", err);
   });
+
+  /* ── Load content filter config ── */
+  browser.runtime.sendMessage({ action: "CONTENT_FILTER_GET" }).then(resp => {
+    if (!resp || !resp.config) return;
+    const fc = resp.config;
+    setChecked(elements.filterEnabled, fc.enabled);
+    setVal(elements.redactMode, fc.redactMode || "remove");
+    setChecked(elements.filterEmails, fc.filterEmails !== false);
+    setChecked(elements.filterPhones, fc.filterPhones !== false);
+    setChecked(elements.filterCreditCards, fc.filterCreditCards !== false);
+    setChecked(elements.filterSSN, fc.filterSSN !== false);
+    setChecked(elements.filterAddresses, fc.filterAddresses !== false);
+    setChecked(elements.filterPasswords, fc.filterPasswords !== false);
+    setChecked(elements.filterAPIKeys, fc.filterAPIKeys !== false);
+    setChecked(elements.filter2FA, fc.filter2FA !== false);
+    setChecked(elements.filterSlurs, fc.filterSlurs !== false);
+    setChecked(elements.filterNSFW, fc.filterNSFW);
+    if (elements.customFilterPatterns && fc.customPatterns && fc.customPatterns.length > 0) {
+      elements.customFilterPatterns.value = JSON.stringify(fc.customPatterns, null, 2);
+    }
+  }).catch(() => {});
 
   /* ── Load stats ── */
   browser.runtime.sendMessage({ action: "GET_STATS" }).then((resp) => {
@@ -254,6 +289,28 @@
         } else if (elements.hfToken && elements.hfToken.dataset.hadToken === "true") {
           settings.hfToken = "";
         }
+
+        /* Save content filter config separately via message */
+        var filterConfig = {
+          enabled: getChecked(elements.filterEnabled),
+          redactMode: getVal(elements.redactMode, "remove"),
+          filterEmails: getChecked(elements.filterEmails),
+          filterPhones: getChecked(elements.filterPhones),
+          filterCreditCards: getChecked(elements.filterCreditCards),
+          filterSSN: getChecked(elements.filterSSN),
+          filterAddresses: getChecked(elements.filterAddresses),
+          filterPasswords: getChecked(elements.filterPasswords),
+          filterAPIKeys: getChecked(elements.filterAPIKeys),
+          filter2FA: getChecked(elements.filter2FA),
+          filterSlurs: getChecked(elements.filterSlurs),
+          filterNSFW: getChecked(elements.filterNSFW),
+          customPatterns: [],
+        };
+        var cpVal = getVal(elements.customFilterPatterns).trim();
+        if (cpVal) {
+          try { filterConfig.customPatterns = JSON.parse(cpVal); } catch (e) { /* ignore */ }
+        }
+        browser.runtime.sendMessage({ action: "CONTENT_FILTER_SAVE", config: filterConfig }).catch(() => {});
 
         browser.storage.local.set(settings).then(() => {
           if (elements.saveStatus) {

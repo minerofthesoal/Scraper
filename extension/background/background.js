@@ -91,7 +91,14 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
     // ── AI extraction ──
     case "AI_STATUS":
       if (typeof WSP_AI !== "undefined") {
-        return WSP_AI.checkServer();
+        /* Refresh enabled flag from storage before returning status so the
+           popup always shows the correct state after a settings save. */
+        return WSP_AI.refreshEnabled().then(function () {
+          if (!WSP_AI._enabled) {
+            return { status: "disabled", message: "AI extraction is disabled. Enable it in Settings > AI Extraction, then Save." };
+          }
+          return WSP_AI.checkServer();
+        });
       }
       return Promise.resolve({ status: "disabled", message: "AI module not loaded" });
 
@@ -173,6 +180,19 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
       }
       break;
 
+    // ── Content filter config ──
+    case "CONTENT_FILTER_GET":
+      if (typeof WSP_ContentFilter !== "undefined") {
+        return WSP_ContentFilter.getConfig().then(function (cfg) { return { config: cfg }; });
+      }
+      return Promise.resolve({ config: null });
+
+    case "CONTENT_FILTER_SAVE":
+      if (typeof WSP_ContentFilter !== "undefined") {
+        return WSP_ContentFilter.saveConfig(msg.config).then(function () { return { saved: true }; });
+      }
+      return Promise.resolve({ saved: false });
+
     // ── Deobfuscation ──
     case "DEOBFUSCATE_PAGE":
       if (sender && sender.tab) {
@@ -216,6 +236,16 @@ function handleScrapedData(data) {
   // Mark as actively scraping
   browser.storage.local.set({ scrapeActive: true });
 
+  /* ── Sensitive content filter ── */
+  if (typeof WSP_ContentFilter !== "undefined") {
+    var filterResult = WSP_ContentFilter.filterScrapeResult(data, null);
+    if (filterResult.report && filterResult.report.filtered) {
+      var rpt = filterResult.report;
+      console.info("[WSP] Content filter: " + rpt.totalDetections + " items filtered", rpt.categories);
+      data = filterResult.data;
+    }
+  }
+
   // Generate citation (MLA + APA) — guard against WSP_Citation not loaded
   if (typeof WSP_Citation === "undefined") {
     console.error("[WSP] WSP_Citation not loaded — cannot generate citations");
@@ -245,6 +275,15 @@ function handleScrapedData(data) {
     return typeof WSP_Utils !== "undefined" ? WSP_Utils.extractDomain(url) : url;
   }
 
+  // Grab favicon URL from the page meta
+  var faviconUrl = meta.favicon || "";
+  if (!faviconUrl && meta.url) {
+    try {
+      var origin = new URL(meta.url).origin;
+      faviconUrl = origin + "/favicon.ico";
+    } catch (e) { /* skip */ }
+  }
+
   // Process text records
   if (data.texts) {
     for (var ti = 0; ti < data.texts.length; ti++) {
@@ -266,6 +305,7 @@ function handleScrapedData(data) {
         scraped_at: data.scrapedAt,
         citation_mla: citation.mla,
         citation_apa: citation.apa || "",
+        favicon: faviconUrl,
       });
     }
     sessionStats.words += data.totalWords || data.texts.reduce(function (sum, t) { return sum + (t.text || "").split(/\s+/).length; }, 0);
@@ -731,22 +771,37 @@ function handleAIExtractRequest(msg) {
     notify("WebScraper Pro", "AI module not loaded. Reload the extension.");
     return;
   }
-  if (!WSP_AI._enabled) {
-    notify("WebScraper Pro", "AI extraction is disabled. Enable it in Settings.");
-    return;
-  }
 
-  var template = WSP_AI.getTemplate(msg.template || "article");
+  /* Always refresh enabled state from storage before checking — this fixes
+     the bug where settings changes don't take effect until extension reload. */
+  WSP_AI.refreshEnabled().then(function (enabled) {
+    if (!enabled) {
+      notify("WebScraper Pro", "AI extraction is disabled. Enable it in Settings > AI Extraction, then Save.");
+      return;
+    }
 
-  WSP_AI.extract(msg.text, template).then(function (result) {
-    handleAIExtractResult({
-      template: msg.template,
-      result: result,
-      source_url: msg.source_url,
-      source_title: msg.source_title,
+    var template;
+    if (msg.template === "custom" && msg.customTemplate) {
+      try {
+        template = typeof msg.customTemplate === "string" ? JSON.parse(msg.customTemplate) : msg.customTemplate;
+      } catch (e) {
+        notify("WebScraper Pro - Error", "Invalid custom template: " + e.message);
+        return;
+      }
+    } else {
+      template = WSP_AI.getTemplate(msg.template || "article");
+    }
+
+    WSP_AI.extract(msg.text, template).then(function (result) {
+      handleAIExtractResult({
+        template: msg.template,
+        result: result,
+        source_url: msg.source_url,
+        source_title: msg.source_title,
+      });
+    }).catch(function (err) {
+      notify("WebScraper Pro - Error", "AI extraction failed: " + err.message);
     });
-  }).catch(function (err) {
-    notify("WebScraper Pro - Error", "AI extraction failed: " + err.message);
   });
 }
 

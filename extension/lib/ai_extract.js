@@ -144,6 +144,19 @@ var WSP_AI = {
   },
 
   /**
+   * Refresh _enabled from storage (fixes out-of-sync state after settings save).
+   */
+  refreshEnabled() {
+    var self = this;
+    return browser.storage.local.get(["aiEnabled", "aiServerUrl", "aiAutoDownload"]).then(function (cfg) {
+      self._enabled = !!cfg.aiEnabled;
+      self._autoDownload = !!cfg.aiAutoDownload;
+      if (cfg.aiServerUrl) self._serverUrl = cfg.aiServerUrl;
+      return self._enabled;
+    });
+  },
+
+  /**
    * Extract structured data from text using NuExtract.
    *
    * @param {string} text - The text to extract from
@@ -153,15 +166,34 @@ var WSP_AI = {
    */
   extract(text, template, maxTokens) {
     var self = this;
-    if (!self._enabled) return Promise.reject(new Error("AI extraction is not enabled. Enable it in Settings."));
-    if (self._status !== "ready") {
-      if (self._autoDownload && self._status === "disconnected") {
-        self._initAutoMode();
-        return Promise.reject(new Error("AI model is starting up. Please wait and try again."));
-      }
-      return Promise.reject(new Error("AI server not ready. Status: " + self._status));
-    }
 
+    /* Re-read enabled state from storage every time to stay in sync
+       with options page saves (fixes "disabled" false-negative bug). */
+    return self.refreshEnabled().then(function (enabled) {
+      if (!enabled) return Promise.reject(new Error("AI extraction is not enabled. Enable it in Settings > AI Extraction."));
+      if (self._status !== "ready") {
+        if (self._autoDownload && self._status === "disconnected") {
+          self._initAutoMode();
+          return Promise.reject(new Error("AI model is starting up. Please wait and try again."));
+        }
+        /* If server status is stale, try a quick health check before failing */
+        return self.checkServer().then(function (result) {
+          if (result.status === "ready") {
+            return self._doExtract(text, template, maxTokens);
+          }
+          return Promise.reject(new Error("AI server not ready. Status: " + self._status + ". Start with: scrape ai.serve"));
+        });
+      }
+      return self._doExtract(text, template, maxTokens);
+    });
+
+  },
+
+  /**
+   * Internal: perform the actual HTTP extraction call.
+   */
+  _doExtract(text, template, maxTokens) {
+    var self = this;
     maxTokens = maxTokens || 2048;
 
     return fetch(self._serverUrl + "/extract", {
