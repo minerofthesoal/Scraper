@@ -44,6 +44,10 @@
     });
   }
 
+  /* ── Spinner HTML (smooth animated SVG) ── */
+  const SPINNER_SVG = '<span class="scrape-spinner"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle></svg></span>';
+  const LOADING_HTML = '<div class="loading-spinner"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle></svg></div>';
+
   /* ── Elements ── */
   const statusBadge = $("#status-badge");
   const btnStop = $("#btn-stop");
@@ -119,14 +123,29 @@
   /* ── Helpers ── */
   function updateStatus(state) {
     if (!statusBadge) return;
-    statusBadge.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+    if (state === "scraping") {
+      statusBadge.innerHTML = SPINNER_SVG + "Scraping";
+      startSessionTimer();
+    } else {
+      statusBadge.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+    }
     statusBadge.className = "badge badge-" + state;
-    if (state === "scraping") startSessionTimer();
   }
 
   function updateStats(s) {
     if (!s) return;
-    const set = (id, val) => { const el = $(id); if (el) el.textContent = formatNum(val); };
+    const set = (id, val) => {
+      const el = $(id);
+      if (!el) return;
+      const newVal = formatNum(val);
+      if (el.textContent !== newVal) {
+        el.textContent = newVal;
+        /* Pop animation on value change */
+        el.classList.remove("updated");
+        void el.offsetWidth; /* force reflow to restart animation */
+        el.classList.add("updated");
+      }
+    };
     set("#stat-words", s.words || 0);
     set("#stat-pages", s.pages || 0);
     set("#stat-images", s.images || 0);

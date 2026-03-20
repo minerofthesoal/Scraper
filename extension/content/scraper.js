@@ -498,6 +498,14 @@
     // Language
     meta.lang = document.documentElement.lang || "en";
 
+    // Favicon detection (multiple strategies)
+    const iconLink = document.querySelector('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]');
+    if (iconLink && iconLink.href) {
+      meta.favicon = iconLink.href;
+    } else {
+      try { meta.favicon = new URL("/favicon.ico", window.location.origin).href; } catch (e) { /* skip */ }
+    }
+
     return meta;
   }
 
