@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║    WebScraper Pro v0.6.6 - Auto Installer  ║${NC}"
+echo -e "${BLUE}║    WebScraper Pro v0.7 - Auto Installer      ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -188,33 +188,9 @@ check_python() {
         exit 1
     fi
 
-    # Check for PyTorch-compatible Python (3.10-3.12)
-    if [[ "$PY_MINOR" -gt 12 ]] || [[ "$PY_MINOR" -lt 10 ]]; then
-        warn "Python $PY_VERSION detected. PyTorch requires Python 3.10-3.12."
-        COMPAT_PYTHON=$(find_compatible_python)
-        if [[ -n "$COMPAT_PYTHON" ]]; then
-            local compat_ver
-            compat_ver=$($COMPAT_PYTHON --version 2>&1 | awk '{print $2}')
-            ok "Found compatible Python: $compat_ver ($COMPAT_PYTHON)"
-            PYTHON="$COMPAT_PYTHON"
-            PY_VERSION="$compat_ver"
-        else
-            info "No Python 3.10-3.12 found. Attempting auto-install..."
-            if install_python312; then
-                COMPAT_PYTHON=$(find_compatible_python)
-                if [[ -n "$COMPAT_PYTHON" ]]; then
-                    local compat_ver
-                    compat_ver=$($COMPAT_PYTHON --version 2>&1 | awk '{print $2}')
-                    ok "Now using Python $compat_ver ($COMPAT_PYTHON)"
-                    PYTHON="$COMPAT_PYTHON"
-                    PY_VERSION="$compat_ver"
-                fi
-            else
-                warn "Auto-install failed. AI features (NuExtract) will not work."
-                info "Continuing with Python $PY_VERSION for non-AI features..."
-            fi
-        fi
-    fi
+    # PyTorch 2.6+ supports Python 3.13+, cu118 wheels have Pascal sm_61 support
+    # No need to restrict to 3.10-3.12 anymore
+    ok "Python $PY_VERSION - compatible with PyTorch"
 }
 
 # ── Install CLI ──
@@ -239,7 +215,7 @@ install_cli() {
 
     # Install dependencies
     $PIP install --upgrade pip setuptools wheel 2>/dev/null
-    $PIP install -e . 2>/dev/null || $PIP install click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm
+    $PIP install -e . 2>/dev/null || $PIP install click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm transformers qwen-vl-utils
 
     # Create symlink for easy access
     SCRAPE_BIN="$VENV_DIR/bin/scrape"

@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Popup v0.6.7 ── */
+/* ── WebScraper Pro Popup v0.7 ── */
 /* Dark-first theme with light mode toggle */
 
 :root {
@@ -570,6 +570,37 @@ header h1 { font-size: 15px; font-weight: 700; color: var(--accent); letter-spac
 
 /* ── AI Mode ── */
 .ai-mode-label { font-size: 10px; color: var(--text-muted); }
+
+/* ── Graph Tab (GwSS) ── */
+.graph-hero { margin-bottom: 10px; }
+.graph-header-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.graph-header-row h2 { font-size: 14px; color: var(--accent); font-weight: 700; }
+.graph-subtitle { font-size: 10px; color: var(--text-muted); }
+.graph-desc { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.4; }
+
+.graph-preview { margin-bottom: 10px; }
+.graph-preview h2 { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600; }
+.graph-domain-list { max-height: 180px; overflow-y: auto; }
+.graph-domain-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-secondary); border: 1px solid var(--border-subtle);
+  border-radius: 8px; padding: 7px 10px; margin-bottom: 3px;
+  font-size: 11px; cursor: pointer; transition: border-color 0.15s;
+}
+.graph-domain-item:hover { border-color: var(--accent); }
+.gdi-domain { font-weight: 600; color: var(--text-primary); flex: 1; }
+.gdi-count { color: var(--accent); font-weight: 700; font-size: 12px; margin-left: 8px; }
+.gdi-types { display: flex; gap: 3px; margin-left: 8px; }
+.gdi-type-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+.graph-stats-section { margin-bottom: 8px; }
+.graph-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.graph-stat {
+  text-align: center; background: var(--bg-secondary); border-radius: 8px;
+  padding: 8px 4px; border: 1px solid var(--border-subtle);
+}
+.graph-stat-num { display: block; font-size: 18px; font-weight: 700; color: var(--accent); }
+.graph-stat small { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
 /* ── Footer ── */
 footer { text-align: center; color: var(--text-muted); padding-top: 6px; margin-top: 4px; border-top: 1px solid var(--border); }

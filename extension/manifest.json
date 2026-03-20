@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "WebScraper Pro",
-  "version": "0.6.7.1",
-  "description": "Scrape text, images, links, and audio with smart extraction, AI-powered extraction, batch queuing, session management, HuggingFace upload, and MLA/APA citations.",
+  "version": "0.7.0",
+  "description": "Scrape text, images, links, and audio with smart extraction, AI-powered extraction, batch queuing, session management, GwSS visualization, HuggingFace upload, and MLA/APA citations.",
   "author": "WebScraper Pro Team",
   "homepage_url": "https://github.com/minerofthesoal/Scraper",
 
@@ -85,7 +85,8 @@
   },
 
   "web_accessible_resources": [
-    "icons/*"
+    "icons/*",
+    "gwss/*"
   ],
 
   "commands": {

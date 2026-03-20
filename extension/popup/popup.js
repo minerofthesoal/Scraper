@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.6.7.0.1 ── */
+/* ── Popup Controller v0.7 ── */
 (function () {
   "use strict";
 
@@ -17,6 +17,7 @@
       if (btn.dataset.tab === "sessions") loadSessions();
       if (btn.dataset.tab === "queue") loadQueue();
       if (btn.dataset.tab === "ai") refreshAIStatus();
+      if (btn.dataset.tab === "graph") loadGraphPreview();
     });
   }
 
@@ -766,6 +767,56 @@
       refreshAIStatus();
     }
   });
+
+  /* ── Graph Tab (GwSS) ── */
+  bindClick("#btn-open-gwss", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("gwss/gwss.html") });
+  });
+
+  function loadGraphPreview() {
+    browser.runtime.sendMessage({ action: "GET_ALL_DATA" }).then(resp => {
+      if (!resp) return;
+      var records = resp.records || [];
+      var domainMap = {};
+      records.forEach(r => {
+        var d = safeDomain(r.source_url || "");
+        if (!d) return;
+        if (!domainMap[d]) domainMap[d] = { count: 0, types: {}, size: 0 };
+        domainMap[d].count++;
+        var t = r.type || "text";
+        domainMap[d].types[t] = (domainMap[d].types[t] || 0) + 1;
+        domainMap[d].size += JSON.stringify(r).length;
+      });
+
+      var domains = Object.entries(domainMap).sort((a, b) => b[1].count - a[1].count);
+      var list = $("#graph-domain-list");
+      if (list) {
+        if (domains.length === 0) {
+          list.innerHTML = '<div class="data-empty">No scraped data yet</div>';
+        } else {
+          var typeColors = { text: "var(--accent)", image: "var(--orange)", link: "var(--green)", audio: "#8b5cf6", ai_extract: "var(--pink)" };
+          list.innerHTML = domains.slice(0, 20).map(([d, info]) => {
+            var dots = Object.keys(info.types).map(t =>
+              '<span class="gdi-type-dot" style="background:' + (typeColors[t] || "var(--accent)") + '" title="' + t + ': ' + info.types[t] + '"></span>'
+            ).join("");
+            return '<div class="graph-domain-item">'
+              + '<span class="gdi-domain">' + escapeHtml(d) + '</span>'
+              + '<span class="gdi-types">' + dots + '</span>'
+              + '<span class="gdi-count">' + info.count + '</span></div>';
+          }).join("");
+        }
+      }
+
+      // Stats
+      var gsDomains = $("#gs-domains");
+      var gsRecords = $("#gs-records");
+      var gsSize = $("#gs-size");
+      if (gsDomains) gsDomains.textContent = domains.length;
+      if (gsRecords) gsRecords.textContent = formatNum(records.length);
+      var totalSize = domains.reduce((sum, d) => sum + d[1].size, 0);
+      if (gsSize) gsSize.textContent = formatBytes(totalSize);
+    }).catch(() => {});
+  }
 
   /* ── Keyboard Navigation ── */
   document.addEventListener("keydown", (e) => {
