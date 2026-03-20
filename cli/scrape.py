@@ -2787,7 +2787,7 @@ def ai_serve(gpu, port, model):
     Supported GPUs: Pascal (GTX 1070/1080/1080 Ti), Volta, Turing (RTX 2000),
     Ampere (RTX 3000), Ada Lovelace (RTX 4000), Hopper.
 
-    Requirements: pip install torch transformers
+    Requirements: pip install torch torchvision transformers
     Requires Python 3.10+ (PyTorch 2.6+ supports 3.13, 3.14 support expected).
     Pascal GPUs (GTX 1070/1080): Use PyTorch <=2.4.1 with CUDA 11.8.
     """
@@ -2801,6 +2801,12 @@ def ai_serve(gpu, port, model):
         import torch
     except ImportError:
         console.print("[red]PyTorch not installed. Run 'scrape ai.setup' to auto-install.[/red]")
+        return
+
+    try:
+        import torchvision  # noqa: F401
+    except ImportError:
+        console.print("[red]torchvision not installed. Run 'scrape ai.setup' or: pip install torchvision[/red]")
         return
 
     try:
@@ -3344,7 +3350,7 @@ def ai_setup(gpu):
             console.print("  [dim]CPU mode requested[/dim]")
 
         pip_cmd = f"torch{torch_pin}"
-        full_cmd = [sys.executable, "-m", "pip", "install", pip_cmd, "--index-url", install_url]
+        full_cmd = [sys.executable, "-m", "pip", "install", pip_cmd, "torchvision", "--index-url", install_url]
         console.print(f"\n[yellow]Installing PyTorch...[/yellow]")
         console.print(f"[dim]  {' '.join(full_cmd)}[/dim]")
 
@@ -3367,6 +3373,43 @@ def ai_setup(gpu):
         except Exception:
             console.print("[yellow]PyTorch installed but needs a restart. Run 'scrape ai.setup' again.[/yellow]")
             return
+
+    # Check torchvision (required by Qwen2VLProcessor)
+    try:
+        import torchvision  # noqa: F401
+        console.print(f"  torchvision: [green]{torchvision.__version__}[/green]")
+    except ImportError:
+        console.print("  torchvision: [red]Not installed[/red]")
+        console.print("\n[yellow]Installing torchvision (required by Qwen2VL processor)...[/yellow]")
+        import subprocess as _sp
+        # Use the same CUDA index URL as torch for compatible builds
+        tv_cmd = [sys.executable, "-m", "pip", "install", "torchvision"]
+        # Detect torch CUDA variant for matching torchvision
+        try:
+            tv_url = None
+            if torch.cuda.is_available():
+                cuda_ver = torch.version.cuda
+                if cuda_ver and cuda_ver.startswith("11"):
+                    tv_url = "https://download.pytorch.org/whl/cu118"
+                elif cuda_ver and cuda_ver.startswith("12.1"):
+                    tv_url = "https://download.pytorch.org/whl/cu121"
+                elif cuda_ver:
+                    tv_url = "https://download.pytorch.org/whl/cu124"
+            else:
+                tv_url = "https://download.pytorch.org/whl/cpu"
+            if tv_url:
+                tv_cmd += ["--index-url", tv_url]
+        except Exception:
+            pass
+        result = _sp.run(tv_cmd, capture_output=False, text=True)
+        if result.returncode != 0:
+            console.print("[yellow]torchvision install failed. Trying without index URL...[/yellow]")
+            result = _sp.run([sys.executable, "-m", "pip", "install", "torchvision"], capture_output=False, text=True)
+            if result.returncode != 0:
+                console.print("[red]torchvision installation failed.[/red]")
+                console.print("[dim]Try manually: pip install torchvision[/dim]")
+                return
+        console.print("[green]torchvision installed![/green]")
 
     # Check transformers
     try:
