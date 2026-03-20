@@ -762,6 +762,15 @@ function handleAIExtractResult(data) {
 
   persistState();
   broadcastStats();
+
+  /* Send AI_RESULTS back to popup so it can display the extraction */
+  try {
+    browser.runtime.sendMessage({
+      action: "AI_RESULTS",
+      results: [{ template: data.template, result: data.result, source_url: data.source_url }]
+    }).catch(function () { /* popup may be closed */ });
+  } catch (e) { /* ignore */ }
+
   notify("WebScraper Pro", "AI extraction complete for " + (data.source_url || "page"));
 }
 
