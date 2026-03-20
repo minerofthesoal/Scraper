@@ -318,6 +318,36 @@ var WSP_AI = {
       },
     };
 
+      "all": {
+        "title": "verbatim-string",
+        "author": "verbatim-string",
+        "date_published": "date-time",
+        "summary": "string",
+        "key_points": ["string"],
+        "topics": [["Technology", "Science", "Politics", "Business", "Health", "Sports", "Entertainment", "Education", "Environment", "Other"]],
+        "sentiment": ["Positive", "Negative", "Neutral", "Mixed"],
+        "product_name": "verbatim-string",
+        "price": "number",
+        "currency": "verbatim-string",
+        "brand": "verbatim-string",
+        "description": "string",
+        "rating": "number",
+        "features": ["string"],
+        "names": ["verbatim-string"],
+        "emails": ["verbatim-string"],
+        "phone_numbers": ["verbatim-string"],
+        "addresses": ["string"],
+        "companies": ["verbatim-string"],
+        "job_titles": ["verbatim-string"],
+        "event_name": "verbatim-string",
+        "event_date": "date-time",
+        "location": "string",
+        "organizer": "verbatim-string",
+        "ingredients": ["string"],
+        "instructions": ["string"],
+      },
+    };
+
     return templates[type] || templates["article"];
   },
 
@@ -325,7 +355,7 @@ var WSP_AI = {
    * Get list of available templates.
    */
   getTemplateList() {
-    return ["article", "product", "contact", "event", "recipe", "research", "job", "review"];
+    return ["all", "article", "product", "contact", "event", "recipe", "research", "job", "review"];
   },
 
   /**

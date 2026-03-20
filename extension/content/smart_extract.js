@@ -336,13 +336,16 @@
       const template = msg.template || "article";
 
       // Send to background to forward to AI server
-      browser.runtime.sendMessage({
+      var payload = {
         action: "AI_EXTRACT_REQUEST",
         text: text.slice(0, 4000),
         template: template,
         source_url: window.location.href,
         source_title: document.title,
-      });
+      };
+      /* Forward custom template if provided */
+      if (msg.customTemplate) payload.customTemplate = msg.customTemplate;
+      browser.runtime.sendMessage(payload);
       return Promise.resolve({ sent: true });
     }
   });
