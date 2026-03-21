@@ -20,6 +20,11 @@ setup(
         "rich>=12.0.0",
         "click>=8.0.0",
     ],
+    extras_require={
+        "parquet": ["pyarrow>=12.0.0"],
+        "ai": ["torch", "transformers"],
+        "all": ["pyarrow>=12.0.0", "torch", "transformers"],
+    },
     entry_points={
         "console_scripts": [
             "scrape=scrape:cli",

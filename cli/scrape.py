@@ -368,11 +368,14 @@ def config_reset():
 
 # ── 9. scrape export ──
 @cli.command("export")
-@click.argument("format", default="jsonl", type=click.Choice(["jsonl", "json", "csv", "xml", "md"]))
+@click.argument("format", default="jsonl", type=click.Choice(["jsonl", "json", "csv", "xml", "md", "parquet"]))
 @click.option("--output", "-o", default=None, help="Output file path")
 @click.option("--pretty", "-p", is_flag=True, help="Pretty-print JSON/JSONL output")
-def export_data(format, output, pretty):
-    """Export scraped data in specified format."""
+@click.option("--compression", "-c", default="snappy",
+              type=click.Choice(["snappy", "gzip", "zstd", "none"]),
+              help="Parquet compression (default: snappy)")
+def export_data(format, output, pretty, compression):
+    """Export scraped data in specified format (JSONL, JSON, CSV, XML, MD, Parquet)."""
     cfg = load_config()
     records = load_records(cfg)
 
@@ -382,7 +385,8 @@ def export_data(format, output, pretty):
 
     if not output:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output = f"export_{timestamp}.{format}"
+        ext = "parquet" if format == "parquet" else format
+        output = f"export_{timestamp}.{ext}"
 
     if format == "jsonl":
         with open(output, "w") as f:
@@ -436,6 +440,46 @@ def export_data(format, output, pretty):
                             f.write(f"- **{k}:** {v}\n")
                     f.write("\n")
                 f.write("---\n\n")
+    elif format == "parquet":
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+        except ImportError:
+            console.print("[red]pyarrow not installed. Run:[/red] pip install pyarrow")
+            return
+
+        # Flatten records: convert nested dicts/lists to JSON strings for parquet
+        flat_records = []
+        for r in records:
+            flat = {}
+            for k, v in r.items():
+                if isinstance(v, (dict, list)):
+                    flat[k] = json.dumps(v, ensure_ascii=False)
+                else:
+                    flat[k] = v
+            flat_records.append(flat)
+
+        # Build table from records
+        all_keys = sorted(set().union(*(r.keys() for r in flat_records)))
+        columns = {}
+        for key in all_keys:
+            vals = [r.get(key) for r in flat_records]
+            # Determine type from first non-None value
+            sample = next((v for v in vals if v is not None), "")
+            if isinstance(sample, int):
+                columns[key] = pa.array([v if isinstance(v, int) else None for v in vals], type=pa.int64())
+            elif isinstance(sample, float):
+                columns[key] = pa.array([v if isinstance(v, (int, float)) else None for v in vals], type=pa.float64())
+            else:
+                columns[key] = pa.array([str(v) if v is not None else None for v in vals], type=pa.string())
+
+        table = pa.table(columns)
+        comp = None if compression == "none" else compression
+        pq.write_table(table, output, compression=comp)
+        file_size = os.path.getsize(output)
+        console.print(f"[blue]Parquet: {len(all_keys)} columns, "
+                       f"compression={compression}, "
+                       f"size={file_size / 1024:.1f} KB[/blue]")
 
     log_history("export", f"Exported {len(records)} records to {output}")
     console.print(f"[green]Exported {len(records)} records to {output}[/green]")
