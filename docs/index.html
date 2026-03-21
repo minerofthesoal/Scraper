@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebScraper Pro - Firefox Extension for Smart Web Scraping</title>
+  <meta name="description" content="WebScraper Pro is a powerful Firefox extension for scraping text, images, links, audio, and video with AI extraction, batch queuing, GwSS visualization, and HuggingFace upload.">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg2: #161b22;
+      --bg3: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --accent: #818cf8;
+      --accent2: #6366f1;
+      --green: #10b981;
+      --orange: #f59e0b;
+      --purple: #8b5cf6;
+      --pink: #ec4899;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .hero {
+      text-align: center;
+      padding: 80px 20px 60px;
+      background: linear-gradient(135deg, var(--bg) 0%, #1a1040 50%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(90deg, var(--accent), var(--pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .tagline {
+      font-size: 1.2rem;
+      color: var(--text2);
+      margin: 12px 0 30px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero .version {
+      display: inline-block;
+      background: var(--bg3);
+      color: var(--accent);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent2); text-decoration: none; }
+    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); text-decoration: none; }
+
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+
+    .features {
+      padding: 60px 20px;
+    }
+    .features h2 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 40px;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .feature-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent); }
+    .feature-card .icon {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .feature-card h3 {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--text2);
+      line-height: 1.5;
+    }
+
+    .section {
+      padding: 50px 20px;
+      border-top: 1px solid var(--border);
+    }
+    .section h2 {
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+    }
+
+    .install-steps {
+      list-style: none;
+      counter-reset: step;
+    }
+    .install-steps li {
+      counter-increment: step;
+      padding: 12px 0 12px 50px;
+      position: relative;
+      border-left: 2px solid var(--border);
+      margin-left: 16px;
+    }
+    .install-steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: -14px;
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .install-steps li strong { color: var(--text); }
+    .install-steps li { color: var(--text2); }
+
+    code {
+      background: var(--bg3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: var(--orange);
+    }
+
+    .cli-section pre {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      color: var(--green);
+      line-height: 1.8;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 30px 20px;
+      border-top: 1px solid var(--border);
+      color: var(--text2);
+      font-size: 0.85rem;
+    }
+    .footer a { color: var(--accent); }
+
+    .badges { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 12px;
+      color: #fff;
+    }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2rem; }
+      .hero .tagline { font-size: 1rem; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <span class="version">v0.7.2</span>
+    <h1>WebScraper Pro</h1>
+    <p class="tagline">
+      A powerful Firefox extension for smart web scraping with AI extraction, batch queuing, interactive graph visualization, and HuggingFace dataset upload.
+    </p>
+    <div class="btn-row">
+      <a href="https://github.com/minerofthesoal/Scraper/releases" class="btn btn-primary">Download Latest Release</a>
+      <a href="https://github.com/minerofthesoal/Scraper" class="btn btn-secondary">View on GitHub</a>
+    </div>
+    <div class="badges">
+      <span class="badge" style="background: var(--accent)">Firefox Extension</span>
+      <span class="badge" style="background: var(--green)">Open Source</span>
+      <span class="badge" style="background: var(--orange)">Python CLI</span>
+      <span class="badge" style="background: var(--purple)">AI Powered</span>
+    </div>
+  </div>
+
+  <section class="features">
+    <div class="container">
+      <h2>Features</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="icon" style="color:var(--accent)">&#128196;</span>
+          <h3>Universal Text Extraction</h3>
+          <p>Scrapes text from any site including SPAs, shadow DOM, web components, and dynamically-loaded content with multi-strategy fallback.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--orange)">&#128248;</span>
+          <h3>Image &amp; Media Scraping</h3>
+          <p>Extracts images (including lazy-loaded, CSS backgrounds, srcset), audio sources, and video files with YouTube filtering toggle.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--green)">&#128279;</span>
+          <h3>Link Discovery</h3>
+          <p>Finds all links including onclick navigation, data-href attributes, role="link" elements, and JavaScript-rendered URLs.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--purple)">&#129302;</span>
+          <h3>AI-Powered Extraction</h3>
+          <p>Uses NuExtract-2.0-2B for intelligent structured data extraction. Supports custom templates, local regex fallback, and combined "All" mode.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--pink)">&#128202;</span>
+          <h3>GwSS Visualization</h3>
+          <p>Interactive force-directed graph showing all scraped sites with live physics, favicons, unique composite edge patterns, and per-site data flow diagrams (SSDg).</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--orange)">&#128640;</span>
+          <h3>HuggingFace Upload</h3>
+          <p>One-click upload to HuggingFace datasets with automatic JSONL sharding, MLA/APA citations, and community dataset support.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--green)">&#9889;</span>
+          <h3>Batch Queue &amp; Auto-Scan</h3>
+          <p>Queue multiple URLs for background scraping. Auto-scan crawls linked pages automatically with configurable rate limiting and domain filtering.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--accent)">&#128737;</span>
+          <h3>Privacy &amp; Security</h3>
+          <p>Content sanitization, robots.txt respect, sensitive data filtering (PII, API keys, slurs), and configurable redaction modes.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" style="color:var(--purple)">&#128187;</span>
+          <h3>Python CLI</h3>
+          <p>Full-featured command-line interface with 55+ commands for data management, AI model serving, HuggingFace operations, and export formatting.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2>Installation</h2>
+      <ol class="install-steps">
+        <li><strong>Download</strong> the latest <code>.xpi</code> file from the <a href="https://github.com/minerofthesoal/Scraper/releases">Releases page</a></li>
+        <li><strong>Open Firefox</strong> and navigate to <code>about:addons</code></li>
+        <li><strong>Click the gear icon</strong> and select "Install Add-on From File..."</li>
+        <li><strong>Select the .xpi file</strong> and approve the permissions</li>
+        <li><strong>Optional:</strong> Install the CLI with <code>python install.py</code> for additional features</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section cli-section">
+    <div class="container">
+      <h2>CLI Quick Start</h2>
+<pre>
+# Install the CLI tool
+python install.py
+
+# View all commands
+scrape help
+
+# Export scraped data
+scrape export --format jsonl
+
+# Start AI extraction server
+scrape ai.serve
+
+# Upload to HuggingFace
+scrape hf.push
+
+# View scraping statistics
+scrape stats
+</pre>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2>Keyboard Shortcuts</h2>
+      <div class="feature-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">
+        <div class="feature-card">
+          <h3><code>Ctrl+Shift+S</code></h3>
+          <p>Start area selection</p>
+        </div>
+        <div class="feature-card">
+          <h3><code>Ctrl+Shift+P</code></h3>
+          <p>Scrape full page</p>
+        </div>
+        <div class="feature-card">
+          <h3><code>Ctrl+Shift+L</code></h3>
+          <p>Scroll &amp; scrape entire page</p>
+        </div>
+        <div class="feature-card">
+          <h3><code>Ctrl+Shift+A</code></h3>
+          <p>Start auto-scan</p>
+        </div>
+        <div class="feature-card">
+          <h3><code>Ctrl+Shift+X</code></h3>
+          <p>Stop all scraping</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>
+      WebScraper Pro &copy; 2024-2026 &middot;
+      <a href="https://github.com/minerofthesoal/Scraper">GitHub</a> &middot;
+      <a href="https://huggingface.co/datasets/ray0rf1re/Site.scraped">Community Dataset</a> &middot;
+      Made by <a href="https://github.com/minerofthesoal">minerofthesoal</a>
+    </p>
+  </footer>
+</body>
+</html>
