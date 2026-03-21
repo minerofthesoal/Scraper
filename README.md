@@ -1,8 +1,10 @@
 # WebScraper Pro
 
-**v0.6.6** | Firefox Extension + Python CLI + Full GUI | Android supported
+**v0.7.2** | Firefox Extension + Python CLI + Full GUI | Android supported
 
-A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Now with content sanitization, deobfuscation, cookie auto-dismiss, tab scraping, clipboard scraping, and auto XPI builds.
+A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, video, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Features GwSS interactive graph visualization, content sanitization, deobfuscation, cookie auto-dismiss, tab scraping, clipboard scraping, and auto XPI builds.
+
+**[Homepage](https://minerofthesoal.github.io/Scraper/)** | **[Releases](https://github.com/minerofthesoal/Scraper/releases)** | **[Community Dataset](https://huggingface.co/datasets/ray0rf1re/Site.scraped)**
 
 [![Build & Release](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml)
 [![Lint & Validate](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml)
@@ -64,7 +66,7 @@ scrape export jsonl
 | **Dark/Light Theme** | Theme toggle for popup and options pages |
 | **Data Preview** | Search, filter, and paginate scraped records |
 | **Session Timer** | Live elapsed-time tracker |
-| **Keyboard Shortcuts** | Alt+S, Alt+P, Alt+Shift+S, Alt+A, Alt+X |
+| **Keyboard Shortcuts** | Ctrl+Shift+S/P/L/A/X (no Firefox conflicts) |
 | **Context Menu** | Right-click scraping for all modes |
 | **Download Manager** | Batch download images and audio with conversion |
 | **Robots.txt Checker** | Automatic robots.txt compliance checking |
@@ -74,13 +76,18 @@ scrape export jsonl
 | **Cookie Auto-Dismiss** | Auto-click cookie consent banners (disabled by default) |
 | **Deobfuscation** | Detect and reverse Base64, hex, ROT13, CSS-hidden text (disabled by default) |
 | **Content Sanitizer** | XSS detection, URL validation, HTML sanitization |
+| **GwSS Visualization** | Interactive force-directed graph of all scraped sites with live physics, favicons, unique composite edge patterns, SSDg per-site data flow diagrams, SVG/PNG/CSV/JSON/GraphML export |
+| **Sensitive Content Filter** | Auto-detect and redact PII, API keys, credit cards, SSNs, slurs |
+| **Auto-Save** | Automatic session persistence with periodic backups |
 
 ### Data Collection
 
 - **Text** - 4 extraction strategies: semantic tags, leaf nodes, TreeWalker, shadow DOM
 - **Images** - `<img>`, `<picture>`, CSS backgrounds, lazy-load `data-src`, canvas, video posters
 - **Links** - `<a>` tags, `onclick` URLs, `data-href`/`data-url`, `role="link"` elements
-- **Audio/Video** - `<audio>`, `<video>`, `<source>` children, `embed`/`object`
+- **Audio** - `<audio>`, `<source>` children, `embed`/`object` audio types
+- **Video** - `<video>` sources, embedded players (Vimeo, Dailymotion, etc.), `<track>` subtitles, YouTube filtering toggle
+- **JS Content** - Shadow DOM, web components, `__NEXT_DATA__`/`__NUXT__` state, microdata, `<template>`, `[slot]` elements
 - **Structured Data** - JSON-LD, Open Graph, Twitter Cards, HTML tables
 - **Metadata** - Author, publish date, site name, copyright via meta tags and JSON-LD
 - **Content Fingerprinting** - djb2 hash-based deduplication across sessions
@@ -103,6 +110,7 @@ Pretty-print JSON/JSONL exports are supported for human-readable output.
 - Auto-create repositories (public or private)
 - Upload to your own repo or the [shared community dataset](https://huggingface.co/datasets/ray0rf1re/Site.scraped)
 - Auto-generate README with dataset cards, statistics, and citations
+- Automatic JSONL file sharding (500KB per shard) to avoid upload size limits
 - Exponential backoff retry with incremental upload support
 
 ### Citations
@@ -113,9 +121,10 @@ Pretty-print JSON/JSONL exports are supported for human-readable output.
 
 ### AI-Powered Extraction
 
-- **NuExtract** integration for structured data extraction
+- **NuExtract-2.0-2B** integration for structured data extraction
 - Auto-download model (~1.5GB) - no separate server needed
-- Template-based extraction with custom schemas
+- Template-based extraction with custom schemas and "All (Combined)" mode
+- Local regex fallback when server is unavailable (emails, phones, names, dates, prices, etc.)
 - Local GPU/CPU inference (server or auto mode)
 - Batch processing support
 
@@ -347,6 +356,8 @@ Scraper/
 ├── .github/workflows/           # CI/CD pipelines
 │   ├── build.yml                # Multi-platform build, test, release
 │   └── lint.yml                 # Linting and validation
+├── docs/                        # GitHub Pages homepage
+│   └── index.html               # Landing page
 ├── extension/                   # Firefox extension (Manifest V2)
 │   ├── manifest.json            # Extension manifest
 │   ├── popup/                   # Popup menu UI (tabbed, themed)
@@ -370,7 +381,12 @@ Scraper/
 │   │   ├── session_manager.js   # Session, queue, domain filtering
 │   │   ├── image_export.js      # Image processing and export
 │   │   ├── ai_extract.js        # AI extraction integration
-│   │   └── sanitizer.js        # Content security sanitizer
+│   │   ├── sanitizer.js        # Content security sanitizer
+│   │   └── content_filter.js   # Sensitive data filtering
+│   ├── gwss/                    # GwSS visualization page
+│   │   ├── gwss.html            # Graph viewer
+│   │   ├── gwss.js              # Force-directed engine + SSDg
+│   │   └── gwss.css             # Graph styles
 │   └── icons/                   # Extension icons (auto-generated)
 ├── cli/                         # Python CLI + GUI
 │   ├── scrape.py                # CLI with 55+ commands
