@@ -1,4 +1,4 @@
-/* ── HuggingFace Upload Module v0.7.1.1 ── */
+/* ── HuggingFace Upload Module v0.7.2 ── */
 /* Fixed: NDJSON commit API format, base64 file encoding, proper fallbacks */
 /* Added: Shard large files to avoid HF max document length errors */
 /* eslint-env browser, webextensions */
@@ -449,13 +449,50 @@ var WSP_HFUpload = {
   },
 
   /**
-   * Generate a comprehensive README.md for the dataset.
+   * Get the current extension version from manifest.
    */
-  generateReadme(config, citations, stats) {
+  _getExtensionVersion() {
+    try {
+      var manifest = browser.runtime.getManifest();
+      return manifest.version || "0.7.2";
+    } catch (e) {
+      return "0.7.2";
+    }
+  },
+
+  /**
+   * Build the version line for the README.
+   * If existingReadme has "Made with v0.6.x", preserve it and append current.
+   */
+  _buildVersionLine(existingReadme) {
+    var currentVer = this._getExtensionVersion();
+    var currentLine = "v" + currentVer;
+
+    if (existingReadme) {
+      // Look for existing "Collected with ... vX.Y.Z" or "Made with ... vX.Y.Z"
+      var versionMatch = existingReadme.match(/(?:Collected|Made) with \[WebScraper Pro\][^\n]*?(v[\d.]+(?:\s+and\s+v[\d.]+)*)/i);
+      if (versionMatch) {
+        var oldVersions = versionMatch[1];
+        // Don't duplicate if current version is already there
+        if (oldVersions.indexOf(currentLine) === -1) {
+          return oldVersions + " and " + currentLine;
+        }
+        return oldVersions;
+      }
+    }
+    return currentLine;
+  },
+
+  /**
+   * Generate a comprehensive README.md for the dataset.
+   * If existingReadme is provided, preserves old version references.
+   */
+  generateReadme(config, citations, stats, existingReadme) {
     var repoName = config.hfRepoId ? config.hfRepoId.split("/").pop() : "web-scraped-dataset";
     var now = new Date();
     var totalRecords = stats.totalRecords || 0;
     var totalWords = stats.words || 0;
+    var versionStr = this._buildVersionLine(existingReadme);
 
     var sourceLicenses = new Set();
     var sourceAuthors = new Set();
@@ -507,7 +544,7 @@ var WSP_HFUpload = {
       + "  - " + sizeCategory + "\n"
       + "---\n\n"
       + "# " + repoName + "\n\n"
-      + "> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v0.6.6.1\n\n"
+      + "> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) " + versionStr + "\n\n"
       + "## Dataset Description\n\n"
       + "This dataset was collected using [WebScraper Pro](https://github.com/minerofthesoal/Scraper), an open-source Firefox extension and CLI tool for structured web data collection with automatic scroll-first pagination, MLA/APA citations, and HuggingFace integration.\n\n"
       + "### Dataset Summary\n\n"

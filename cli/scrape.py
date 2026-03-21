@@ -526,9 +526,43 @@ def upload():
         save_path = cfg["save_path"]
         os.makedirs(save_path, exist_ok=True)
 
-        # Generate README first (always uploaded)
+        # Try fetching existing README to preserve version history
+        progress.update(task, description="Checking existing README...")
+        existing_readme = None
+        try:
+            import requests as req_lib
+            resp = req_lib.get(
+                f"https://huggingface.co/{cfg['hf_repo_id']}/raw/main/README.md",
+                headers={"Authorization": f"Bearer {cfg['hf_token']}"},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                existing_readme = resp.text
+        except Exception:
+            pass
+
+        # Generate README (preserves old version references if found)
         progress.update(task, description="Generating README...")
         readme = generate_readme_cli(cfg, records)
+        # If existing README had a version line, preserve it
+        if existing_readme:
+            import re as re_mod
+            old_match = re_mod.search(
+                r'Collected with \[WebScraper Pro\][^\n]*?(v[\d.]+(?:\s+and\s+v[\d.]+)*)',
+                existing_readme
+            )
+            if old_match:
+                old_ver = old_match.group(1)
+                current_ver = f"v{VERSION}"
+                if current_ver not in old_ver:
+                    new_ver = f"{old_ver} and {current_ver}"
+                else:
+                    new_ver = old_ver
+                readme = readme.replace(
+                    f"v{VERSION}",
+                    new_ver,
+                    1  # only replace first occurrence (the collection line)
+                )
         readme_file = os.path.join(save_path, "README.md")
         with open(readme_file, "w") as f:
             f.write(readme)
@@ -1662,7 +1696,9 @@ size_categories:
 
 ## Dataset Description
 
-This dataset was collected using [WebScraper Pro](https://github.com/minerofthesoal/Scraper), an open-source Firefox extension and CLI tool for structured web data collection with automatic pagination support.
+> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v{VERSION}
+
+This dataset was collected using [WebScraper Pro](https://github.com/minerofthesoal/Scraper), an open-source Firefox extension and CLI tool for structured web data collection with AI extraction, batch queuing, video scraping, and automatic pagination support.
 
 ### Dataset Summary
 

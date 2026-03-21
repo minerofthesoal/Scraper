@@ -692,6 +692,16 @@ function uploadToHF() {
 
       return createPromise.then(function () {
         notify("WebScraper Pro", "Preparing files...");
+
+        /* Fetch existing README to preserve version history */
+        var readmeUrl = "https://huggingface.co/" + cfg.hfRepoId + "/raw/main/README.md";
+        return fetch(readmeUrl, {
+          headers: { Authorization: "Bearer " + cfg.hfToken },
+          credentials: "omit"
+        }).then(function (resp) {
+          return resp.ok ? resp.text() : null;
+        }).catch(function () { return null; });
+      }).then(function (existingReadme) {
         var clean = function (r) { var c = Object.assign({}, r); delete c._fp; delete c.headings; return c; };
         var texts = scrapedRecords.filter(function (r) { return r.type === "text"; }).map(clean);
         var images = scrapedRecords.filter(function (r) { return r.type === "image"; }).map(clean);
@@ -701,7 +711,7 @@ function uploadToHF() {
         var uploadStats = Object.assign({}, sessionStats, { totalRecords: scrapedRecords.length });
         var files = [];
 
-        var readme = WSP_HFUpload.generateReadme(cfg, citations, uploadStats);
+        var readme = WSP_HFUpload.generateReadme(cfg, citations, uploadStats, existingReadme);
         files.push({ path: "README.md", content: readme });
 
         /* Shard JSONL files to avoid HF "document exceeds maximum length" error */
