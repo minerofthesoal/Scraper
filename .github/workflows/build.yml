@@ -86,7 +86,7 @@ jobs:
           echo "Built webscraper-pro.xpi ($(du -h webscraper-pro.xpi | cut -f1))"
 
       - name: Upload XPI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: webscraper-pro-xpi
           path: webscraper-pro.xpi
@@ -121,7 +121,7 @@ jobs:
           scrape --version
 
       - name: Upload Python artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-package
           path: cli/dist/*
@@ -171,7 +171,7 @@ jobs:
           cp *.pkg.tar.xz $GITHUB_WORKSPACE/ 2>/dev/null || true
 
       - name: Upload Arch package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: arch-package
           path: |
