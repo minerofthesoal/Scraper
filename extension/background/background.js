@@ -246,13 +246,14 @@ function handleScrapedData(data) {
     }
   }
 
-  // Generate citation (MLA + APA) — guard against WSP_Citation not loaded
+  // Generate citation (MLA + APA) — graceful fallback if WSP_Citation not loaded
+  var citation;
   if (typeof WSP_Citation === "undefined") {
-    console.error("[WSP] WSP_Citation not loaded — cannot generate citations");
-    return;
+    console.warn("[WSP] WSP_Citation not loaded — using fallback citation");
+    citation = { url: meta.url || "", mla: "", apa: "", license: "", description: "" };
+  } else {
+    citation = WSP_Citation.generateDatasetCitation(meta);
   }
-
-  var citation = WSP_Citation.generateDatasetCitation(meta);
   var existingIdx = citations.findIndex(function (c) { return c.url === citation.url; });
   if (existingIdx === -1) {
     citations.push(citation);

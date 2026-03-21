@@ -343,7 +343,6 @@
         source_url: window.location.href,
         source_title: document.title,
       };
-      /* Forward custom template if provided */
       if (msg.customTemplate) payload.customTemplate = msg.customTemplate;
       browser.runtime.sendMessage(payload);
       return Promise.resolve({ sent: true });

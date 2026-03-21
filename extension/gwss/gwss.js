@@ -277,12 +277,27 @@
     loop();
   }
 
+  /* ── Edge dash patterns — fixed-length so texture doesn't stretch ── */
+  var EDGE_PATTERNS = [
+    { dash: [],                name: "Solid" },
+    { dash: [6, 4],            name: "Dashed" },
+    { dash: [2, 3],            name: "Dotted" },
+    { dash: [8, 3, 2, 3],     name: "Dash-Dot" },
+    { dash: [12, 4, 2, 4],    name: "Long Dash" },
+    { dash: [4, 2, 4, 2, 8, 2], name: "Double" },
+  ];
+
   /* ── Rendering ── */
   function render() {
     var w = canvas.width / devicePixelRatio;
     var h = canvas.height / devicePixelRatio;
 
     ctx.clearRect(0, 0, w, h);
+
+    /* Antialiasing hint */
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
     ctx.save();
     ctx.translate(w / 2 + camera.x, h / 2 + camera.y);
     ctx.scale(camera.zoom, camera.zoom);
@@ -290,25 +305,19 @@
     var style = getComputedStyle(document.body);
     var edgeColor = style.getPropertyValue("--edge-color").trim() || "rgba(129,140,248,0.15)";
 
-    /* Edge dash patterns — each edge gets a unique style */
-    var dashPatterns = [
-      [],                // solid
-      [6, 4],            // dashed
-      [2, 3],            // dotted
-      [8, 3, 2, 3],     // dash-dot
-      [12, 4, 2, 4],    // long dash-dot
-      [4, 2, 4, 2, 8, 2], // double-dash
-    ];
-
-    /* Draw edges */
+    /* Draw edges with pattern-coded dash styles.
+       lineDashOffset is set dynamically so the pattern tiles at a fixed
+       world-space period regardless of edge length (no stretching). */
     for (var ei = 0; ei < edges.length; ei++) {
       var ea = nodes[edges[ei].from], eb = nodes[edges[ei].to];
+      var pat = EDGE_PATTERNS[ei % EDGE_PATTERNS.length];
       ctx.beginPath();
-      ctx.setLineDash(dashPatterns[ei % dashPatterns.length]);
+      ctx.setLineDash(pat.dash);
+      ctx.lineDashOffset = 0; /* pattern always starts at the source node */
       ctx.moveTo(ea.x, ea.y);
       ctx.lineTo(eb.x, eb.y);
       ctx.strokeStyle = edgeColor;
-      ctx.lineWidth = Math.min(3, 0.5 + (edges[ei].weight || 1) * 0.3);
+      ctx.lineWidth = Math.min(3, 0.5 + (edges[ei].weight || 1) * 0.3) / camera.zoom;
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -385,6 +394,45 @@
     }
 
     ctx.restore();
+
+    /* ── Edge Legend Key (drawn in screen-space, bottom-right) ── */
+    if (edges.length > 0) {
+      var keyX = w - 130, keyY = h - 14 - EDGE_PATTERNS.length * 18;
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = style.getPropertyValue("--bg-secondary").trim() || "#161b22";
+      ctx.strokeStyle = style.getPropertyValue("--border").trim() || "#30363d";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(keyX - 8, keyY - 6, 132, EDGE_PATTERNS.length * 18 + 20, 6)
+                     : ctx.rect(keyX - 8, keyY - 6, 132, EDGE_PATTERNS.length * 18 + 20);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = style.getPropertyValue("--text-muted").trim() || "#6e7681";
+      ctx.font = "600 8px -apple-system, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("EDGE STYLES", keyX, keyY + 4);
+
+      var usedPatterns = Math.min(edges.length, EDGE_PATTERNS.length);
+      for (var ki = 0; ki < usedPatterns; ki++) {
+        var ky = keyY + 18 + ki * 18;
+        ctx.beginPath();
+        ctx.setLineDash(EDGE_PATTERNS[ki].dash);
+        ctx.moveTo(keyX, ky);
+        ctx.lineTo(keyX + 40, ky);
+        ctx.strokeStyle = edgeColor.replace("0.15", "0.6");
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = style.getPropertyValue("--text-secondary").trim() || "#8b949e";
+        ctx.font = "500 9px -apple-system, sans-serif";
+        ctx.fillText(EDGE_PATTERNS[ki].name, keyX + 48, ky + 1);
+      }
+      ctx.restore();
+    }
 
     var zoomEl = $("#zoom-level");
     if (zoomEl) zoomEl.textContent = Math.round(camera.zoom * 100) + "%";
@@ -630,23 +678,22 @@
     c.style.height = h + "px";
     var sc = c.getContext("2d");
     sc.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sc.imageSmoothingEnabled = true;
 
     var style = getComputedStyle(document.body);
     var bgSec = style.getPropertyValue("--bg-secondary").trim();
     var bgTer = style.getPropertyValue("--bg-tertiary").trim();
     var border = style.getPropertyValue("--border").trim();
     var textPri = style.getPropertyValue("--text-primary").trim();
-    var textSec = style.getPropertyValue("--text-secondary").trim();
     var textMut = style.getPropertyValue("--text-muted").trim();
     var accent = style.getPropertyValue("--accent").trim();
 
     sc.fillStyle = bgSec;
     sc.fillRect(0, 0, w, h);
 
-    // Flow: Domain -> Pages -> Types -> Stats
     var types = Object.entries(node.types);
     var pages = {};
-    var pageTypes = {}; /* track which types each page has */
+    var pageTypes = {};
     node.records.forEach(function (r) {
       var url = r.source_url || "unknown";
       try { url = new URL(url).pathname || "/"; } catch (e) { url = "/"; }
@@ -659,16 +706,17 @@
     var pageEntries = Object.entries(pages).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
 
     var typeColors = { text: "#818cf8", image: "#f59e0b", link: "#10b981", audio: "#8b5cf6", ai_extract: "#ec4899" };
+    var typeIcons = { text: "\u2261", image: "\u25A3", link: "\u26D3", audio: "\u266B", ai_extract: "\u2726" };
 
-    // Column positions — 4 columns now
+    // 4 column positions
     var col1 = 55, col2 = w * 0.32, col3 = w * 0.62, col4 = w * 0.88;
-    var headerY = 22;
-    var rowStart = 42;
+    var headerY = 22, rowStart = 42;
 
-    // Column headers with subtle underline
+    // Column headers
     sc.fillStyle = textMut;
     sc.font = "700 8px -apple-system, sans-serif";
     sc.textAlign = "center";
+    sc.textBaseline = "middle";
     sc.fillText("DOMAIN", col1, headerY);
     sc.fillText("PAGES", col2, headerY);
     sc.fillText("TYPES", col3, headerY);
@@ -680,17 +728,16 @@
     sc.lineWidth = 0.5;
     sc.stroke();
 
-    // Draw flow arrow helper
-    function drawFlowArrow(x1, y1, x2, y2, color, width) {
-      var cp1x = x1 + (x2 - x1) * 0.5;
+    // Flow arrow helper (bezier + arrowhead)
+    function drawFlowArrow(x1, y1, x2, y2, color, lw) {
+      var cpx = x1 + (x2 - x1) * 0.5;
       sc.beginPath();
       sc.moveTo(x1, y1);
-      sc.bezierCurveTo(cp1x, y1, cp1x, y2, x2, y2);
+      sc.bezierCurveTo(cpx, y1, cpx, y2, x2, y2);
       sc.strokeStyle = color;
-      sc.lineWidth = width || 1;
+      sc.lineWidth = lw || 1;
       sc.stroke();
-      // Arrow tip
-      var angle = Math.atan2(y2 - (y1 + y2) / 2, x2 - cp1x);
+      var angle = Math.atan2(y2 - (y1 + y2) / 2, x2 - cpx);
       var aLen = 4;
       sc.beginPath();
       sc.moveTo(x2, y2);
@@ -701,50 +748,39 @@
       sc.fill();
     }
 
-    // Domain node (root) — pill shape with favicon
+    // Domain node
     var domNodeY = (rowStart + h) / 2;
     sc.fillStyle = accent;
     drawRoundRect(sc, col1 - 40, domNodeY - 20, 80, 40, 10);
     sc.fill();
-    /* subtle shadow */
-    sc.shadowColor = accent + "44";
-    sc.shadowBlur = 8;
-    sc.fill();
-    sc.shadowColor = "transparent";
-    sc.shadowBlur = 0;
 
     if (node.faviconImg && node.faviconImg.complete && node.faviconImg.naturalWidth > 0) {
       try { sc.drawImage(node.faviconImg, col1 - 8, domNodeY - 16, 16, 16); } catch (e) {}
       sc.fillStyle = "#fff";
       sc.font = "600 9px -apple-system, sans-serif";
       sc.textAlign = "center";
-      sc.textBaseline = "middle";
-      var domLabel = node.domain.length > 10 ? node.domain.slice(0, 8) + ".." : node.domain;
-      sc.fillText(domLabel, col1, domNodeY + 8);
+      var dl = node.domain.length > 10 ? node.domain.slice(0, 8) + ".." : node.domain;
+      sc.fillText(dl, col1, domNodeY + 8);
     } else {
       sc.fillStyle = "#fff";
       sc.font = "600 10px -apple-system, sans-serif";
       sc.textAlign = "center";
-      sc.textBaseline = "middle";
-      var domLabel2 = node.domain.length > 10 ? node.domain.slice(0, 8) + ".." : node.domain;
-      sc.fillText(domLabel2, col1, domNodeY - 2);
+      var dl2 = node.domain.length > 10 ? node.domain.slice(0, 8) + ".." : node.domain;
+      sc.fillText(dl2, col1, domNodeY - 2);
       sc.font = "400 8px -apple-system, sans-serif";
       sc.fillStyle = "rgba(255,255,255,0.7)";
       sc.fillText(node.records.length + " rec", col1, domNodeY + 10);
     }
 
-    // Draw page nodes
+    // Page nodes
     var usableH = h - rowStart - 20;
     var pageSpacing = Math.min(36, usableH / Math.max(pageEntries.length, 1));
     var pageStartY = rowStart + (usableH - pageEntries.length * pageSpacing) / 2;
 
     pageEntries.forEach(function (pe, i) {
       var py = pageStartY + i * pageSpacing + pageSpacing / 2;
-
-      // Flow arrow from domain to page
       drawFlowArrow(col1 + 40, domNodeY, col2 - 52, py, border, 1);
 
-      // Page box with record count bar
       var boxW = 104, boxH = 26;
       sc.fillStyle = bgTer;
       drawRoundRect(sc, col2 - boxW / 2, py - boxH / 2, boxW, boxH, 5);
@@ -753,8 +789,8 @@
       sc.lineWidth = 0.5;
       sc.stroke();
 
-      // Mini progress bar showing relative size
-      var barMax = pageEntries[0][1]; // largest page
+      // Mini bar
+      var barMax = pageEntries[0][1];
       var barW = (pe[1] / barMax) * (boxW - 8);
       sc.fillStyle = accent + "22";
       drawRoundRect(sc, col2 - boxW / 2 + 4, py + boxH / 2 - 5, barW, 3, 1.5);
@@ -763,14 +799,14 @@
       sc.fillStyle = textPri;
       sc.font = "500 8.5px -apple-system, sans-serif";
       sc.textAlign = "center";
-      var pathLabel = pe[0].length > 12 ? pe[0].slice(0, 10) + ".." : pe[0];
-      sc.fillText(pathLabel, col2, py - 1);
+      var pl = pe[0].length > 12 ? pe[0].slice(0, 10) + ".." : pe[0];
+      sc.fillText(pl, col2, py - 1);
       sc.font = "600 7px -apple-system, sans-serif";
       sc.fillStyle = textMut;
       sc.fillText(pe[1] + " records", col2, py + 9);
     });
 
-    // Draw type nodes — only draw edges from pages that have that type
+    // Type nodes — only connect from pages that actually have this type
     var typeSpacing = Math.min(44, usableH / Math.max(types.length, 1));
     var typeStartY = rowStart + (usableH - types.length * typeSpacing) / 2;
 
@@ -778,7 +814,6 @@
       var ty = typeStartY + i * typeSpacing + typeSpacing / 2;
       var tColor = typeColors[te[0]] || accent;
 
-      // Edges from pages that actually contain this type
       pageEntries.forEach(function (pe, pi) {
         if (!pageTypes[pe[0]] || !pageTypes[pe[0]][te[0]]) return;
         var py = pageStartY + pi * pageSpacing + pageSpacing / 2;
@@ -786,18 +821,13 @@
         drawFlowArrow(col2 + 52, py, col3 - 38, ty, tColor + "66", thickness);
       });
 
-      // Type pill
       sc.fillStyle = tColor;
       drawRoundRect(sc, col3 - 36, ty - 14, 72, 28, 7);
       sc.fill();
-
-      // Icon character for type
-      var typeIcons = { text: "\u2261", image: "\u25A3", link: "\u26D3", audio: "\u266B", ai_extract: "\u2726" };
       sc.fillStyle = "rgba(255,255,255,0.9)";
       sc.font = "400 11px -apple-system, sans-serif";
       sc.textAlign = "center";
       sc.fillText(typeIcons[te[0]] || "\u25CF", col3 - 18, ty + 1);
-
       sc.fillStyle = "#fff";
       sc.font = "700 9px -apple-system, sans-serif";
       sc.fillText(te[0], col3 + 6, ty - 2);
@@ -806,7 +836,7 @@
       sc.fillText(te[1] + " rec", col3 + 6, ty + 8);
     });
 
-    // Stats column — summary boxes
+    // Stats column
     var statsData = [
       { label: "Total", value: node.records.length + "", color: accent },
       { label: "Size", value: formatBytes(node.dataSize), color: "#06b6d4" },
@@ -818,23 +848,18 @@
 
     statsData.forEach(function (st, i) {
       var sy = statStartY + i * statSpacing + statSpacing / 2;
-
-      // Flow arrow from types to stats (only for first stat)
       if (i === 0) {
         types.forEach(function (te, ti) {
           var ty = typeStartY + ti * typeSpacing + typeSpacing / 2;
           drawFlowArrow(col3 + 36, ty, col4 - 28, sy, border + "66", 0.5);
         });
       }
-
-      // Stat box
       sc.fillStyle = bgTer;
       drawRoundRect(sc, col4 - 26, sy - 13, 52, 26, 5);
       sc.fill();
       sc.strokeStyle = st.color + "55";
       sc.lineWidth = 1;
       sc.stroke();
-
       sc.fillStyle = st.color;
       sc.font = "700 10px -apple-system, sans-serif";
       sc.textAlign = "center";

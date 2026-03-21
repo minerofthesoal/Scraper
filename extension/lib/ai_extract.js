@@ -316,8 +316,6 @@ var WSP_AI = {
         "verified_purchase": ["Yes", "No", "Unknown"],
         "date": "date-time",
       },
-    };
-
       "all": {
         "title": "verbatim-string",
         "author": "verbatim-string",

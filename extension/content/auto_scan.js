@@ -140,7 +140,11 @@
       if (typeof WSP_Toast !== "undefined") WSP_Toast.show(`Page ${pageCount}: scrolling & scraping...`);
       await WSP_Scraper.scrapeWithScroll();
     } else if (typeof WSP_Scraper !== "undefined") {
-      WSP_Scraper.scrapeFullPage();
+      if (typeof WSP_Toast !== "undefined") WSP_Toast.show(`Page ${pageCount}: scraping...`);
+      await WSP_Scraper.scrapeFullPage();
+    } else {
+      /* Fallback: send SCRAPE_FULL_PAGE to trigger content script message listener */
+      browser.runtime.sendMessage({ action: "SCRAPE_FULL_PAGE" });
     }
 
     // Wait for background to process the scraped data
@@ -172,6 +176,8 @@
         // Scrape the newly loaded content
         if (typeof WSP_Scraper !== "undefined" && WSP_Scraper.scrapeWithScroll) {
           await WSP_Scraper.scrapeWithScroll();
+        } else if (typeof WSP_Scraper !== "undefined") {
+          await WSP_Scraper.scrapeFullPage();
         }
         await sleep(scrapeDelay);
       }
