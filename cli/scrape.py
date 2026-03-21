@@ -368,11 +368,14 @@ def config_reset():
 
 # ── 9. scrape export ──
 @cli.command("export")
-@click.argument("format", default="jsonl", type=click.Choice(["jsonl", "json", "csv", "xml", "md"]))
+@click.argument("format", default="jsonl", type=click.Choice(["jsonl", "json", "csv", "xml", "md", "parquet"]))
 @click.option("--output", "-o", default=None, help="Output file path")
 @click.option("--pretty", "-p", is_flag=True, help="Pretty-print JSON/JSONL output")
-def export_data(format, output, pretty):
-    """Export scraped data in specified format."""
+@click.option("--compression", "-c", default="snappy",
+              type=click.Choice(["snappy", "gzip", "zstd", "none"]),
+              help="Parquet compression (default: snappy)")
+def export_data(format, output, pretty, compression):
+    """Export scraped data in specified format (JSONL, JSON, CSV, XML, MD, Parquet)."""
     cfg = load_config()
     records = load_records(cfg)
 
@@ -382,7 +385,8 @@ def export_data(format, output, pretty):
 
     if not output:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output = f"export_{timestamp}.{format}"
+        ext = "parquet" if format == "parquet" else format
+        output = f"export_{timestamp}.{ext}"
 
     if format == "jsonl":
         with open(output, "w") as f:
@@ -436,6 +440,46 @@ def export_data(format, output, pretty):
                             f.write(f"- **{k}:** {v}\n")
                     f.write("\n")
                 f.write("---\n\n")
+    elif format == "parquet":
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+        except ImportError:
+            console.print("[red]pyarrow not installed. Run:[/red] pip install pyarrow")
+            return
+
+        # Flatten records: convert nested dicts/lists to JSON strings for parquet
+        flat_records = []
+        for r in records:
+            flat = {}
+            for k, v in r.items():
+                if isinstance(v, (dict, list)):
+                    flat[k] = json.dumps(v, ensure_ascii=False)
+                else:
+                    flat[k] = v
+            flat_records.append(flat)
+
+        # Build table from records
+        all_keys = sorted(set().union(*(r.keys() for r in flat_records)))
+        columns = {}
+        for key in all_keys:
+            vals = [r.get(key) for r in flat_records]
+            # Determine type from first non-None value
+            sample = next((v for v in vals if v is not None), "")
+            if isinstance(sample, int):
+                columns[key] = pa.array([v if isinstance(v, int) else None for v in vals], type=pa.int64())
+            elif isinstance(sample, float):
+                columns[key] = pa.array([v if isinstance(v, (int, float)) else None for v in vals], type=pa.float64())
+            else:
+                columns[key] = pa.array([str(v) if v is not None else None for v in vals], type=pa.string())
+
+        table = pa.table(columns)
+        comp = None if compression == "none" else compression
+        pq.write_table(table, output, compression=comp)
+        file_size = os.path.getsize(output)
+        console.print(f"[blue]Parquet: {len(all_keys)} columns, "
+                       f"compression={compression}, "
+                       f"size={file_size / 1024:.1f} KB[/blue]")
 
     log_history("export", f"Exported {len(records)} records to {output}")
     console.print(f"[green]Exported {len(records)} records to {output}[/green]")
@@ -482,9 +526,43 @@ def upload():
         save_path = cfg["save_path"]
         os.makedirs(save_path, exist_ok=True)
 
-        # Generate README first (always uploaded)
+        # Try fetching existing README to preserve version history
+        progress.update(task, description="Checking existing README...")
+        existing_readme = None
+        try:
+            import requests as req_lib
+            resp = req_lib.get(
+                f"https://huggingface.co/{cfg['hf_repo_id']}/raw/main/README.md",
+                headers={"Authorization": f"Bearer {cfg['hf_token']}"},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                existing_readme = resp.text
+        except Exception:
+            pass
+
+        # Generate README (preserves old version references if found)
         progress.update(task, description="Generating README...")
         readme = generate_readme_cli(cfg, records)
+        # If existing README had a version line, preserve it
+        if existing_readme:
+            import re as re_mod
+            old_match = re_mod.search(
+                r'Collected with \[WebScraper Pro\][^\n]*?(v[\d.]+(?:\s+and\s+v[\d.]+)*)',
+                existing_readme
+            )
+            if old_match:
+                old_ver = old_match.group(1)
+                current_ver = f"v{VERSION}"
+                if current_ver not in old_ver:
+                    new_ver = f"{old_ver} and {current_ver}"
+                else:
+                    new_ver = old_ver
+                readme = readme.replace(
+                    f"v{VERSION}",
+                    new_ver,
+                    1  # only replace first occurrence (the collection line)
+                )
         readme_file = os.path.join(save_path, "README.md")
         with open(readme_file, "w") as f:
             f.write(readme)
@@ -1010,35 +1088,64 @@ def update():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
 
+    def run_git(*args, cwd=None):
+        return subprocess.run(
+            ["git"] + list(args), capture_output=True, text=True,
+            cwd=cwd or project_root, timeout=60
+        )
+
     try:
-        # Check if we're in a git repo
         git_dir = os.path.join(project_root, ".git")
         if os.path.isdir(git_dir):
-            console.print("[yellow]Pulling latest from GitHub...[/yellow]")
-            result = subprocess.run(
-                ["git", "-C", project_root, "pull", "origin", "main"],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0:
-                console.print(f"[green]Repository updated![/green]")
-                console.print(result.stdout.strip())
-            else:
-                # Try master branch
-                result = subprocess.run(
-                    ["git", "-C", project_root, "pull", "origin", "master"],
-                    capture_output=True, text=True
-                )
-                if result.returncode == 0:
-                    console.print(f"[green]Repository updated![/green]")
-                else:
-                    console.print(f"[yellow]Git pull failed, trying pip...[/yellow]")
-                    raise FileNotFoundError("git pull failed")
+            # Stash any local changes first
+            status = run_git("status", "--porcelain")
+            has_changes = bool(status.stdout.strip())
+            if has_changes:
+                console.print("[yellow]Stashing local changes...[/yellow]")
+                run_git("stash", "push", "-m", "wsp-auto-update-stash")
 
-            # Reinstall CLI after pull
+            # Fetch latest from remote
+            console.print("[yellow]Fetching from GitHub...[/yellow]")
+            fetch = run_git("fetch", "origin")
+            if fetch.returncode != 0:
+                # Try setting the remote URL in case it's wrong
+                run_git("remote", "set-url", "origin", repo_url)
+                fetch = run_git("fetch", "origin")
+                if fetch.returncode != 0:
+                    raise RuntimeError(f"git fetch failed: {fetch.stderr.strip()}")
+
+            # Detect the default branch (main or master)
+            branch = None
+            for b in ["main", "master"]:
+                check = run_git("rev-parse", "--verify", f"origin/{b}")
+                if check.returncode == 0:
+                    branch = b
+                    break
+
+            if not branch:
+                raise RuntimeError("Could not find origin/main or origin/master")
+
+            # Reset to the latest remote commit
+            console.print(f"[yellow]Updating to latest origin/{branch}...[/yellow]")
+            result = run_git("reset", "--hard", f"origin/{branch}")
+            if result.returncode != 0:
+                raise RuntimeError(f"git reset failed: {result.stderr.strip()}")
+
+            console.print(f"[green]Repository updated to origin/{branch}![/green]")
+
+            # Re-apply stashed changes if any
+            if has_changes:
+                console.print("[yellow]Re-applying local changes...[/yellow]")
+                stash_pop = run_git("stash", "pop")
+                if stash_pop.returncode != 0:
+                    console.print("[yellow]Could not re-apply local changes (conflict). "
+                                  "Your changes are saved in git stash.[/yellow]")
+
+            # Reinstall CLI after update
             console.print("[blue]Reinstalling CLI dependencies...[/blue]")
             subprocess.run(
                 [sys.executable, "-m", "pip", "install", "-e", script_dir],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=120
             )
             console.print("[green]Update complete! Restart scrape to use the new version.[/green]")
         else:
@@ -1047,12 +1154,14 @@ def update():
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--upgrade",
                  f"git+{repo_url}#subdirectory=cli"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=180
             )
             if result.returncode == 0:
                 console.print("[green]Updated from GitHub successfully![/green]")
             else:
                 console.print(f"[red]Update failed.[/red]\n{result.stderr}")
+    except subprocess.TimeoutExpired:
+        console.print("[red]Update timed out. Check your network connection.[/red]")
     except Exception as e:
         console.print(f"[red]Update failed: {e}[/red]")
 
@@ -1587,7 +1696,9 @@ size_categories:
 
 ## Dataset Description
 
-This dataset was collected using [WebScraper Pro](https://github.com/minerofthesoal/Scraper), an open-source Firefox extension and CLI tool for structured web data collection with automatic pagination support.
+> Collected with [WebScraper Pro](https://github.com/minerofthesoal/Scraper) v{VERSION}
+
+This dataset was collected using [WebScraper Pro](https://github.com/minerofthesoal/Scraper), an open-source Firefox extension and CLI tool for structured web data collection with AI extraction, batch queuing, video scraping, and automatic pagination support.
 
 ### Dataset Summary
 
@@ -3614,7 +3725,242 @@ def ai_templates(template_name):
     console.print(f"[dim]Use custom JSON file:  scrape ai.extract /path/to/template.json[/dim]")
 
 
-# ── 58. scrape images.export ──
+# ── 58. scrape ai.screenshot ──
+@cli.command("ai.screenshot")
+@click.argument("url", required=False)
+@click.option("--pages", "-n", default=1, type=int, help="Number of pages to capture (auto-clicks Next)")
+@click.option("--scroll/--no-scroll", default=True, help="Scroll down before capturing")
+@click.option("--output", "-o", default=None, help="Output JSONL file path")
+@click.option("--delay", "-d", default=3, type=int, help="Delay between pages (seconds)")
+@click.option("--images/--no-images", "extract_images", default=False, help="Also extract images from screenshot")
+def ai_screenshot(url, pages, scroll, output, delay, extract_images):
+    """Screenshot-based text extraction for Linux (Mint, Arch + KDE/Hyprland/GNOME).
+
+    Takes a screenshot of the current screen or a Firefox window, runs OCR to
+    extract all text, saves to JSONL, deletes the screenshot, then optionally
+    clicks Next and repeats.
+
+    Requires: tesseract-ocr, python3-pil (Pillow)
+    Optional: xdotool (for auto-click Next and scrolling)
+
+    \b
+    Examples:
+        scrape ai.screenshot                    # Screenshot current screen
+        scrape ai.screenshot --pages 5          # Capture 5 pages, auto-next
+        scrape ai.screenshot --images           # Also extract images
+        scrape ai.screenshot -o out.jsonl -n 10 # 10 pages to custom file
+    """
+    import subprocess
+    import tempfile
+    import time
+    import json as json_mod
+
+    try:
+        from PIL import Image
+    except ImportError:
+        console.print("[red]Pillow not installed. Run:[/red] pip install Pillow")
+        return
+
+    # Detect screenshot tool based on desktop environment
+    de = (os.environ.get("XDG_CURRENT_DESKTOP", "") or
+          os.environ.get("DESKTOP_SESSION", "") or "").lower()
+    wayland = os.environ.get("WAYLAND_DISPLAY", "")
+    screenshot_cmd = None
+
+    if "hyprland" in de or (wayland and shutil.which("grim")):
+        screenshot_cmd = "grim"
+    elif "kde" in de or "plasma" in de:
+        if shutil.which("spectacle"):
+            screenshot_cmd = "spectacle"
+        elif shutil.which("grim"):
+            screenshot_cmd = "grim"
+    elif "gnome" in de or "cinnamon" in de or "mate" in de:
+        if shutil.which("gnome-screenshot"):
+            screenshot_cmd = "gnome-screenshot"
+        elif shutil.which("grim"):
+            screenshot_cmd = "grim"
+    elif shutil.which("scrot"):
+        screenshot_cmd = "scrot"
+    elif shutil.which("grim"):
+        screenshot_cmd = "grim"
+    elif shutil.which("import"):
+        screenshot_cmd = "import"  # ImageMagick
+
+    if not screenshot_cmd:
+        console.print("[red]No screenshot tool found.[/red]")
+        console.print("Install one of: grim (Wayland), spectacle (KDE), "
+                       "gnome-screenshot (GNOME/Cinnamon), scrot (X11)")
+        return
+
+    # Check for tesseract OCR
+    if not shutil.which("tesseract"):
+        console.print("[red]tesseract-ocr not installed.[/red]")
+        console.print("Install: [bold]sudo pacman -S tesseract tesseract-data-eng[/bold] (Arch)")
+        console.print("     or: [bold]sudo apt install tesseract-ocr[/bold] (Ubuntu/Mint)")
+        return
+
+    has_xdotool = shutil.which("xdotool") is not None
+
+    cfg = load_config()
+    if output is None:
+        save_dir = cfg.get("save_path", os.path.join(DATA_DIR, "scraped"))
+        os.makedirs(save_dir, exist_ok=True)
+        output = os.path.join(save_dir, "screenshot_extract.jsonl")
+
+    console.print(f"[blue]AI Screenshot Extraction[/blue]")
+    console.print(f"  Tool: {screenshot_cmd} | DE: {de or 'unknown'}")
+    console.print(f"  Pages: {pages} | Output: {output}")
+    console.print(f"  Tesseract OCR: [green]found[/green]")
+    if has_xdotool:
+        console.print(f"  xdotool: [green]found[/green] (auto-next enabled)")
+    else:
+        console.print(f"  xdotool: [yellow]not found[/yellow] (manual page turning)")
+
+    total_extracted = 0
+
+    for page_num in range(1, pages + 1):
+        console.print(f"\n[yellow]Page {page_num}/{pages}[/yellow]")
+
+        # Scroll down first if requested
+        if scroll and has_xdotool and page_num == 1:
+            console.print("  Scrolling to load content...")
+            for _ in range(3):
+                subprocess.run(["xdotool", "key", "Page_Down"],
+                               capture_output=True, timeout=5)
+                time.sleep(0.5)
+            subprocess.run(["xdotool", "key", "Home"],
+                           capture_output=True, timeout=5)
+            time.sleep(0.5)
+
+        # Take screenshot
+        tmp_path = os.path.join(tempfile.gettempdir(), f"wsp_screenshot_{page_num}.png")
+        console.print(f"  Taking screenshot with {screenshot_cmd}...")
+
+        try:
+            if screenshot_cmd == "grim":
+                subprocess.run(["grim", tmp_path], capture_output=True, timeout=10, check=True)
+            elif screenshot_cmd == "spectacle":
+                subprocess.run(["spectacle", "-b", "-n", "-f", "-o", tmp_path],
+                               capture_output=True, timeout=10, check=True)
+            elif screenshot_cmd == "gnome-screenshot":
+                subprocess.run(["gnome-screenshot", "-f", tmp_path],
+                               capture_output=True, timeout=10, check=True)
+            elif screenshot_cmd == "scrot":
+                subprocess.run(["scrot", tmp_path], capture_output=True, timeout=10, check=True)
+            elif screenshot_cmd == "import":
+                subprocess.run(["import", "-window", "root", tmp_path],
+                               capture_output=True, timeout=10, check=True)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            console.print(f"  [red]Screenshot failed: {e}[/red]")
+            continue
+
+        if not os.path.exists(tmp_path):
+            console.print("  [red]Screenshot file not created[/red]")
+            continue
+
+        # Run OCR with tesseract
+        console.print("  Running OCR...")
+        try:
+            ocr_result = subprocess.run(
+                ["tesseract", tmp_path, "stdout", "-l", "eng", "--psm", "3"],
+                capture_output=True, text=True, timeout=60
+            )
+            text = ocr_result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            console.print("  [red]OCR timed out[/red]")
+            os.remove(tmp_path)
+            continue
+
+        # Extract images from screenshot if requested
+        extracted_images = []
+        if extract_images:
+            try:
+                img = Image.open(tmp_path)
+                w, h = img.size
+                extracted_images.append({
+                    "width": w, "height": h,
+                    "format": "screenshot",
+                    "page": page_num,
+                })
+            except Exception:
+                pass
+
+        # Delete screenshot immediately
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+        if text:
+            # Clean OCR text
+            lines = [line.strip() for line in text.split("\n") if line.strip()]
+            clean_text = "\n".join(lines)
+            word_count = len(clean_text.split())
+            total_extracted += word_count
+
+            record = {
+                "type": "screenshot_extract",
+                "text": clean_text,
+                "word_count": word_count,
+                "page": page_num,
+                "source_url": url or "screenshot",
+                "extraction_method": "tesseract_ocr",
+                "desktop_env": de or "unknown",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            if extracted_images:
+                record["images"] = extracted_images
+
+            with open(output, "a", encoding="utf-8") as f:
+                f.write(json_mod.dumps(record, ensure_ascii=False) + "\n")
+
+            console.print(f"  [green]Extracted {word_count} words ({len(lines)} lines)[/green]")
+        else:
+            console.print("  [yellow]No text found in screenshot[/yellow]")
+
+        # Click next page if more pages to go
+        if page_num < pages and has_xdotool:
+            console.print("  Looking for Next button...")
+            # Scroll down to find navigation
+            for _ in range(5):
+                subprocess.run(["xdotool", "key", "Page_Down"],
+                               capture_output=True, timeout=5)
+                time.sleep(0.3)
+
+            # Try common next button patterns via keyboard
+            # Tab through links and look for "Next" (best-effort)
+            subprocess.run(["xdotool", "key", "End"],
+                           capture_output=True, timeout=5)
+            time.sleep(0.5)
+            # Use xdotool to search and click "Next" or ">" text
+            # Try clicking a likely next button area (right side of page, bottom)
+            try:
+                # Get screen dimensions
+                scr = subprocess.run(
+                    ["xdotool", "getdisplaygeometry"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if scr.returncode == 0:
+                    dims = scr.stdout.strip().split()
+                    if len(dims) == 2:
+                        sw, sh = int(dims[0]), int(dims[1])
+                        # Click near bottom-right where Next usually is
+                        subprocess.run(
+                            ["xdotool", "mousemove", str(sw * 3 // 4), str(sh * 4 // 5),
+                             "click", "1"],
+                            capture_output=True, timeout=5
+                        )
+            except Exception:
+                pass
+
+            console.print(f"  Waiting {delay}s for page load...")
+            time.sleep(delay)
+
+    console.print(f"\n[green]Done! Extracted {total_extracted} total words from {pages} page(s)[/green]")
+    console.print(f"[blue]Output: {output}[/blue]")
+
+
+# ── 59. scrape images.export ──
 @cli.command("images.export")
 @click.argument("format", default="png", type=click.Choice(["png", "webp", "jpeg", "bmp"]))
 @click.option("--output-dir", "-o", default=None, help="Output directory")
