@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.7.0"
+VERSION = "0.7.2"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1290,6 +1290,21 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.7.2", "2026-03-21", [
+            "Video scraping: extract <video> sources, embeds (Vimeo, Dailymotion, etc.), track subtitles",
+            "YouTube filter toggle: YouTube URLs filtered by default, enable in settings",
+            "Enhanced JS extraction: shadow DOM, web components, __NEXT_DATA__/__NUXT__, microdata, <template>",
+            "GwSS unique composite edge patterns: each connection has a deterministic mixed dash pattern",
+            "GwSS engine updated to v0.7.2 with edge pattern cache and improved legend",
+            "Queue fix: background tab creation with proper tabs.onUpdated listeners and 45s timeout",
+            "HuggingFace upload sharding: auto-split JSONL files at 500KB boundaries",
+            "AI extraction: local regex fallback, 'All (Combined)' template, result forwarding to popup",
+            "Auto-save: 60s interval persist + 5min session backups",
+            "Keyboard shortcuts changed to Ctrl+Shift+key to avoid Firefox conflicts",
+            "Sensitive content filter with PII, API key, and custom pattern detection",
+            "GitHub Pages homepage at docs/index.html",
+            "Updated README with all v0.7.x features",
+        ]),
         ("0.6.7", "2026-03-17", [
             "AI setup auto-install: 'scrape ai.setup' now auto-installs PyTorch and transformers (auto-detects GPU)",
             "New AI tab in popup: dedicated tab with server status, results viewer, custom template input",
