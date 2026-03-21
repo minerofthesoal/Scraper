@@ -11,7 +11,7 @@ jobs:
     name: Lint Python
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -30,7 +30,7 @@ jobs:
     name: Validate Extension
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate JSON files
         run: |
           python3 -c "import json; json.load(open('extension/manifest.json'))"
