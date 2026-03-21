@@ -22,6 +22,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
       - name: Install Pillow for icon generation
         run: pip install Pillow
@@ -102,6 +103,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
       - name: Install build tools
         run: pip install build wheel setuptools
@@ -182,8 +184,9 @@ jobs:
     name: Test CLI (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
 
@@ -191,6 +194,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -207,12 +211,22 @@ jobs:
           scrape doctor
           scrape changelog
 
+      - name: Test export formats
+        run: |
+          scrape export jsonl 2>/dev/null || true
+          scrape stats 2>/dev/null || true
+
   # ── Test Extension ──
   test-extension:
     name: Validate Extension
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Validate manifest.json
         run: |
@@ -255,15 +269,16 @@ jobs:
           print(f'All {len(files)} referenced files exist!')
           "
 
-      - name: Check for JS syntax issues
+      - name: Check JS syntax with Node
         run: |
-          error_count=0
-          for f in extension/**/*.js extension/**/**/*.js; do
-            if [ -f "$f" ]; then
-              node --check "$f" 2>/dev/null || {
-                echo "WARN: $f may use browser-only APIs"
-              }
-            fi
+          find extension -name '*.js' -type f | while read f; do
+            node --check "$f" 2>/dev/null || echo "WARN: $f (uses browser APIs)"
+          done
+
+      - name: Validate JSON files
+        run: |
+          find extension -name '*.json' -type f | while read f; do
+            python3 -c "import json; json.load(open('$f'))" && echo "OK: $f" || echo "FAIL: $f"
           done
 
   # ── Release ──

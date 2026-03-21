@@ -1010,35 +1010,64 @@ def update():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
 
+    def run_git(*args, cwd=None):
+        return subprocess.run(
+            ["git"] + list(args), capture_output=True, text=True,
+            cwd=cwd or project_root, timeout=60
+        )
+
     try:
-        # Check if we're in a git repo
         git_dir = os.path.join(project_root, ".git")
         if os.path.isdir(git_dir):
-            console.print("[yellow]Pulling latest from GitHub...[/yellow]")
-            result = subprocess.run(
-                ["git", "-C", project_root, "pull", "origin", "main"],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0:
-                console.print(f"[green]Repository updated![/green]")
-                console.print(result.stdout.strip())
-            else:
-                # Try master branch
-                result = subprocess.run(
-                    ["git", "-C", project_root, "pull", "origin", "master"],
-                    capture_output=True, text=True
-                )
-                if result.returncode == 0:
-                    console.print(f"[green]Repository updated![/green]")
-                else:
-                    console.print(f"[yellow]Git pull failed, trying pip...[/yellow]")
-                    raise FileNotFoundError("git pull failed")
+            # Stash any local changes first
+            status = run_git("status", "--porcelain")
+            has_changes = bool(status.stdout.strip())
+            if has_changes:
+                console.print("[yellow]Stashing local changes...[/yellow]")
+                run_git("stash", "push", "-m", "wsp-auto-update-stash")
 
-            # Reinstall CLI after pull
+            # Fetch latest from remote
+            console.print("[yellow]Fetching from GitHub...[/yellow]")
+            fetch = run_git("fetch", "origin")
+            if fetch.returncode != 0:
+                # Try setting the remote URL in case it's wrong
+                run_git("remote", "set-url", "origin", repo_url)
+                fetch = run_git("fetch", "origin")
+                if fetch.returncode != 0:
+                    raise RuntimeError(f"git fetch failed: {fetch.stderr.strip()}")
+
+            # Detect the default branch (main or master)
+            branch = None
+            for b in ["main", "master"]:
+                check = run_git("rev-parse", "--verify", f"origin/{b}")
+                if check.returncode == 0:
+                    branch = b
+                    break
+
+            if not branch:
+                raise RuntimeError("Could not find origin/main or origin/master")
+
+            # Reset to the latest remote commit
+            console.print(f"[yellow]Updating to latest origin/{branch}...[/yellow]")
+            result = run_git("reset", "--hard", f"origin/{branch}")
+            if result.returncode != 0:
+                raise RuntimeError(f"git reset failed: {result.stderr.strip()}")
+
+            console.print(f"[green]Repository updated to origin/{branch}![/green]")
+
+            # Re-apply stashed changes if any
+            if has_changes:
+                console.print("[yellow]Re-applying local changes...[/yellow]")
+                stash_pop = run_git("stash", "pop")
+                if stash_pop.returncode != 0:
+                    console.print("[yellow]Could not re-apply local changes (conflict). "
+                                  "Your changes are saved in git stash.[/yellow]")
+
+            # Reinstall CLI after update
             console.print("[blue]Reinstalling CLI dependencies...[/blue]")
             subprocess.run(
                 [sys.executable, "-m", "pip", "install", "-e", script_dir],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=120
             )
             console.print("[green]Update complete! Restart scrape to use the new version.[/green]")
         else:
@@ -1047,12 +1076,14 @@ def update():
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--upgrade",
                  f"git+{repo_url}#subdirectory=cli"],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=180
             )
             if result.returncode == 0:
                 console.print("[green]Updated from GitHub successfully![/green]")
             else:
                 console.print(f"[red]Update failed.[/red]\n{result.stderr}")
+    except subprocess.TimeoutExpired:
+        console.print("[red]Update timed out. Check your network connection.[/red]")
     except Exception as e:
         console.print(f"[red]Update failed: {e}[/red]")
 

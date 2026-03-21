@@ -15,6 +15,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
       - name: Install CLI dependencies
         run: |
           cd cli
@@ -23,6 +24,7 @@ jobs:
         run: |
           python -m py_compile cli/scrape.py
           python -m py_compile cli/gui.py
+          python -m py_compile install.py
       - name: CLI smoke tests
         run: |
           scrape --version
@@ -36,6 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Validate JSON files
         run: |
           python3 -c "import json; json.load(open('extension/manifest.json'))"
@@ -43,10 +50,8 @@ jobs:
 
       - name: Check for JS syntax errors
         run: |
-          for f in extension/**/*.js extension/**/**/*.js; do
-            if [ -f "$f" ]; then
-              node --check "$f" 2>/dev/null || echo "WARN: $f (might use browser APIs)"
-            fi
+          find extension -name '*.js' -type f | while read f; do
+            node --check "$f" 2>/dev/null || echo "WARN: $f (might use browser APIs)"
           done
 
   version-check:
@@ -64,6 +69,7 @@ jobs:
               manifest_ver = json.load(f)['version']
 
           # Read CLI version
+          cli_ver = None
           with open('cli/scrape.py') as f:
               for line in f:
                   m = re.match(r'VERSION\s*=\s*\"(.+?)\"', line)
@@ -72,6 +78,7 @@ jobs:
                       break
 
           # Read setup.py version
+          setup_ver = None
           with open('cli/setup.py') as f:
               for line in f:
                   m = re.match(r'\s*version=\"(.+?)\"', line)
@@ -79,13 +86,32 @@ jobs:
                       setup_ver = m.group(1)
                       break
 
-          print(f'Manifest: {manifest_ver}')
-          print(f'CLI:      {cli_ver}')
-          print(f'Setup:    {setup_ver}')
+          # Read install.py version
+          install_ver = None
+          with open('install.py') as f:
+              for line in f:
+                  m = re.match(r'VERSION\s*=\s*\"(.+?)\"', line)
+                  if m:
+                      install_ver = m.group(1)
+                      break
 
+          print(f'Manifest:  {manifest_ver}')
+          print(f'CLI:       {cli_ver}')
+          print(f'Setup:     {setup_ver}')
+          print(f'Installer: {install_ver}')
+
+          errors = []
           if cli_ver != setup_ver:
-              print('ERROR: CLI and setup.py versions do not match!')
+              errors.append(f'CLI ({cli_ver}) != setup.py ({setup_ver})')
+          if cli_ver != manifest_ver:
+              errors.append(f'CLI ({cli_ver}) != manifest ({manifest_ver})')
+          if install_ver and install_ver != cli_ver:
+              errors.append(f'install.py ({install_ver}) != CLI ({cli_ver})')
+
+          if errors:
+              for e in errors:
+                  print(f'ERROR: {e}')
               sys.exit(1)
 
-          print('Version check passed!')
+          print('All version strings match!')
           "
