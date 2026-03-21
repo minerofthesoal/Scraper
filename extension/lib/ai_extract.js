@@ -1,6 +1,7 @@
-/* ── AI Extraction Module v0.7 ── */
+/* ── AI Extraction Module v0.7.1.1 ── */
 /* NuExtract-2.0-2B integration for structured data extraction */
 /* Supports auto-download (no server needed) or remote server mode */
+/* Falls back to regex-based local extraction when server unavailable */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_AI */
 
@@ -158,6 +159,7 @@ var WSP_AI = {
 
   /**
    * Extract structured data from text using NuExtract.
+   * Falls back to local regex extraction if server unavailable.
    *
    * @param {string} text - The text to extract from
    * @param {object} template - JSON template defining what to extract
@@ -174,19 +176,146 @@ var WSP_AI = {
       if (self._status !== "ready") {
         if (self._autoDownload && self._status === "disconnected") {
           self._initAutoMode();
-          return Promise.reject(new Error("AI model is starting up. Please wait and try again."));
         }
-        /* If server status is stale, try a quick health check before failing */
+        /* Try a quick health check before falling back */
         return self.checkServer().then(function (result) {
           if (result.status === "ready") {
             return self._doExtract(text, template, maxTokens);
           }
-          return Promise.reject(new Error("AI server not ready. Status: " + self._status + ". Start with: scrape ai.serve"));
+          /* Server unavailable — use local regex extraction */
+          console.info("[WSP] AI server unavailable, using local regex extraction");
+          return self._localExtract(text, template);
         });
       }
-      return self._doExtract(text, template, maxTokens);
+      return self._doExtract(text, template, maxTokens).then(function (result) {
+        /* Check for empty results from server — fall back to local */
+        if (self._isEmptyResult(result)) {
+          console.info("[WSP] AI server returned empty result, supplementing with local extraction");
+          var local = self._localExtract(text, template);
+          return self._mergeResults(result, local);
+        }
+        return result;
+      });
     });
 
+  },
+
+  /**
+   * Check if an extraction result is essentially empty.
+   */
+  _isEmptyResult(result) {
+    if (!result || typeof result !== "object") return true;
+    var keys = Object.keys(result);
+    if (keys.length === 0) return true;
+    for (var i = 0; i < keys.length; i++) {
+      var v = result[keys[i]];
+      if (v === null || v === undefined || v === "") continue;
+      if (Array.isArray(v) && v.length === 0) continue;
+      return false; /* found at least one non-empty value */
+    }
+    return true;
+  },
+
+  /**
+   * Merge two result objects, preferring non-empty values from either.
+   */
+  _mergeResults(a, b) {
+    var merged = Object.assign({}, a);
+    var keys = Object.keys(b);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var av = merged[k], bv = b[k];
+      if (!av || av === "" || (Array.isArray(av) && av.length === 0)) {
+        merged[k] = bv;
+      }
+    }
+    return merged;
+  },
+
+  /**
+   * Local regex-based extraction fallback (no server needed).
+   * Extracts common patterns from text using regex.
+   */
+  _localExtract(text, template) {
+    var result = {};
+    if (!text) return result;
+
+    /* Email addresses */
+    if (template.emails || template.email) {
+      var emails = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g);
+      result.emails = emails ? Array.from(new Set(emails)) : [];
+    }
+
+    /* Phone numbers */
+    if (template.phone_numbers || template.phone) {
+      var phones = text.match(/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g);
+      result.phone_numbers = phones ? Array.from(new Set(phones)) : [];
+    }
+
+    /* Names — look for capitalized word sequences */
+    if (template.names || template.author) {
+      var nameRe = /(?:^|\.\s+|by\s+|author[:\s]+)([A-Z][a-z]+ (?:[A-Z]\.?\s+)?[A-Z][a-z]+)/gm;
+      var names = [];
+      var nm;
+      while ((nm = nameRe.exec(text)) !== null) { names.push(nm[1]); }
+      if (template.names) result.names = Array.from(new Set(names));
+      if (template.author && names.length > 0) result.author = names[0];
+    }
+
+    /* Title — first substantial line or heading-like text */
+    if (template.title) {
+      var lines = text.split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 5 && l.length < 200; });
+      result.title = lines.length > 0 ? lines[0] : "";
+    }
+
+    /* Summary — first paragraph-like chunk */
+    if (template.summary) {
+      var paragraphs = text.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(function (p) { return p.length > 50; });
+      result.summary = paragraphs.length > 0 ? paragraphs[0].slice(0, 500) : "";
+    }
+
+    /* Dates */
+    if (template.date_published || template.date || template.event_date) {
+      var dateRe = /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\w+ \d{1,2},?\s*\d{4}|\d{1,2}\s+\w+\s+\d{4})\b/;
+      var dateMatch = text.match(dateRe);
+      var dateVal = dateMatch ? dateMatch[1] : "";
+      if (template.date_published) result.date_published = dateVal;
+      if (template.date) result.date = dateVal;
+      if (template.event_date) result.event_date = dateVal;
+    }
+
+    /* Prices */
+    if (template.price) {
+      var priceRe = /(?:\$|USD|EUR|£|€)\s*([0-9,]+\.?\d*)/;
+      var priceMatch = text.match(priceRe);
+      result.price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : 0;
+      result.currency = priceMatch ? (text.match(/(\$|USD|EUR|£|€)/) || ["$"])[0] : "";
+    }
+
+    /* Addresses */
+    if (template.addresses) {
+      var addrRe = /\d{1,5}\s+[\w\s]+(?:Street|St|Avenue|Ave|Boulevard|Blvd|Drive|Dr|Road|Rd|Lane|Ln|Way|Court|Ct|Place|Pl)\.?(?:\s*,\s*[\w\s]+)?(?:\s*,\s*[A-Z]{2}\s+\d{5})?/gi;
+      var addrs = text.match(addrRe);
+      result.addresses = addrs ? Array.from(new Set(addrs)) : [];
+    }
+
+    /* Key points — extract sentences */
+    if (template.key_points) {
+      var sentences = text.split(/[.!?]+/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 20 && s.length < 300; });
+      result.key_points = sentences.slice(0, 5);
+    }
+
+    /* Companies — look for Inc, LLC, Ltd, Corp patterns */
+    if (template.companies) {
+      var compRe = /([A-Z][\w\s&.]+(?:Inc|LLC|Ltd|Corp|Co|Group|Foundation|University|Institute)\.?)/g;
+      var comps = [];
+      var cm;
+      while ((cm = compRe.exec(text)) !== null) { comps.push(cm[1].trim()); }
+      result.companies = Array.from(new Set(comps));
+    }
+
+    result._extraction_method = "local_regex";
+    return result;
   },
 
   /**

@@ -92,23 +92,23 @@
 
   "commands": {
     "start-selection": {
-      "suggested_key": { "default": "Alt+S" },
+      "suggested_key": { "default": "Ctrl+Shift+S" },
       "description": "Start area selection"
     },
     "scrape-page": {
-      "suggested_key": { "default": "Alt+P" },
+      "suggested_key": { "default": "Ctrl+Shift+P" },
       "description": "Scrape full page"
     },
     "scroll-scrape": {
-      "suggested_key": { "default": "Alt+Shift+S" },
+      "suggested_key": { "default": "Ctrl+Shift+L" },
       "description": "Scroll & scrape entire page"
     },
     "auto-scan": {
-      "suggested_key": { "default": "Alt+A" },
+      "suggested_key": { "default": "Ctrl+Shift+A" },
       "description": "Start auto-scan"
     },
     "stop-scrape": {
-      "suggested_key": { "default": "Alt+X" },
+      "suggested_key": { "default": "Ctrl+Shift+X" },
       "description": "Stop all scraping"
     }
   }
