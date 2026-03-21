@@ -1,4 +1,4 @@
-/* ── GwSS + SSDg Engine v0.7.1.1 ── */
+/* ── GwSS + SSDg Engine v0.7.2 ── */
 /* Interactive force-directed node graph with live physics, favicon, tags */
 /* eslint-env browser, webextensions */
 (function () {
@@ -147,6 +147,7 @@
     var domains = Object.keys(domainMap);
     nodes = [];
     edges = [];
+    edgePatternCache = {};
 
     /* Initial spiral layout + velocity init */
     domains.forEach(function (d, i) {
@@ -277,15 +278,66 @@
     loop();
   }
 
-  /* ── Edge dash patterns — fixed-length so texture doesn't stretch ── */
-  var EDGE_PATTERNS = [
-    { dash: [],                name: "Solid" },
-    { dash: [6, 4],            name: "Dashed" },
-    { dash: [2, 3],            name: "Dotted" },
-    { dash: [8, 3, 2, 3],     name: "Dash-Dot" },
-    { dash: [12, 4, 2, 4],    name: "Long Dash" },
-    { dash: [4, 2, 4, 2, 8, 2], name: "Double" },
+  /* ── Mixed composite edge patterns ── */
+  /* Each edge gets a unique composite pattern built from segments.
+     A single line may have: sawtooth, dot-dot-line, double split, then solid. */
+
+  var PATTERN_SEGMENTS = [
+    [10, 0],           /* solid run */
+    [2, 3, 2, 3],     /* dot-dot */
+    [8, 3, 2, 3],     /* dash-dot */
+    [6, 4],            /* dashed */
+    [2, 2],            /* fine dots */
+    [12, 4],           /* long dash */
+    [4, 2, 4, 2, 8, 2], /* double */
+    [1, 3, 6, 3],     /* short-long */
+    [3, 2, 3, 2, 3, 6], /* triple-gap */
+    [14, 3, 2, 3, 2, 3], /* long-dot-dot */
   ];
+
+  /* Simple hash for deterministic per-edge pattern selection */
+  function edgeHash(a, b) {
+    var str = a < b ? a + "|" + b : b + "|" + a;
+    var h = 0;
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
+  /* Build a composite dash array for an edge by concatenating 2-4 segments */
+  var edgePatternCache = {};
+  function getEdgePattern(edge) {
+    var key = edge.from + "-" + edge.to;
+    if (edgePatternCache[key]) return edgePatternCache[key];
+
+    var fromD = nodes[edge.from] ? nodes[edge.from].domain : "" + edge.from;
+    var toD = nodes[edge.to] ? nodes[edge.to].domain : "" + edge.to;
+    var h = edgeHash(fromD, toD);
+
+    /* Pick 2-4 segments based on the hash */
+    var segCount = 2 + (h % 3); /* 2, 3, or 4 segments */
+    var composite = [];
+    for (var i = 0; i < segCount; i++) {
+      var segIdx = ((h >> (i * 4 + 3)) ^ (h >> (i * 2))) % PATTERN_SEGMENTS.length;
+      if (segIdx < 0) segIdx = -segIdx;
+      segIdx = segIdx % PATTERN_SEGMENTS.length;
+      var seg = PATTERN_SEGMENTS[segIdx];
+      /* "solid run" segments use [10,0] — flatten to just a gap-less run */
+      if (seg[0] === 10 && seg[1] === 0) {
+        composite.push(10);
+        composite.push(0);
+      } else {
+        for (var j = 0; j < seg.length; j++) composite.push(seg[j]);
+      }
+    }
+
+    /* Ensure even-length dash array (canvas requirement) */
+    if (composite.length % 2 !== 0) composite.push(3);
+
+    edgePatternCache[key] = composite;
+    return composite;
+  }
 
   /* ── Rendering ── */
   function render() {
@@ -305,15 +357,13 @@
     var style = getComputedStyle(document.body);
     var edgeColor = style.getPropertyValue("--edge-color").trim() || "rgba(129,140,248,0.15)";
 
-    /* Draw edges with pattern-coded dash styles.
-       lineDashOffset is set dynamically so the pattern tiles at a fixed
-       world-space period regardless of edge length (no stretching). */
+    /* Draw edges with unique mixed composite dash patterns per edge */
     for (var ei = 0; ei < edges.length; ei++) {
       var ea = nodes[edges[ei].from], eb = nodes[edges[ei].to];
-      var pat = EDGE_PATTERNS[ei % EDGE_PATTERNS.length];
+      var compositeDash = getEdgePattern(edges[ei]);
       ctx.beginPath();
-      ctx.setLineDash(pat.dash);
-      ctx.lineDashOffset = 0; /* pattern always starts at the source node */
+      ctx.setLineDash(compositeDash);
+      ctx.lineDashOffset = 0;
       ctx.moveTo(ea.x, ea.y);
       ctx.lineTo(eb.x, eb.y);
       ctx.strokeStyle = edgeColor;
@@ -396,16 +446,18 @@
     ctx.restore();
 
     /* ── Edge Legend Key (drawn in screen-space, bottom-right) ── */
+    /* Show up to 4 sample edge patterns from actual edges */
     if (edges.length > 0) {
-      var keyX = w - 130, keyY = h - 14 - EDGE_PATTERNS.length * 18;
+      var sampleCount = Math.min(edges.length, 4);
+      var keyX = w - 150, keyY = h - 14 - sampleCount * 18;
       ctx.save();
       ctx.globalAlpha = 0.75;
       ctx.fillStyle = style.getPropertyValue("--bg-secondary").trim() || "#161b22";
       ctx.strokeStyle = style.getPropertyValue("--border").trim() || "#30363d";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(keyX - 8, keyY - 6, 132, EDGE_PATTERNS.length * 18 + 20, 6)
-                     : ctx.rect(keyX - 8, keyY - 6, 132, EDGE_PATTERNS.length * 18 + 20);
+      ctx.roundRect ? ctx.roundRect(keyX - 8, keyY - 6, 152, sampleCount * 18 + 20, 6)
+                     : ctx.rect(keyX - 8, keyY - 6, 152, sampleCount * 18 + 20);
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = 1;
@@ -414,22 +466,25 @@
       ctx.font = "600 8px -apple-system, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText("EDGE STYLES", keyX, keyY + 4);
+      ctx.fillText("EDGE PATTERNS (unique)", keyX, keyY + 4);
 
-      var usedPatterns = Math.min(edges.length, EDGE_PATTERNS.length);
-      for (var ki = 0; ki < usedPatterns; ki++) {
+      for (var ki = 0; ki < sampleCount; ki++) {
         var ky = keyY + 18 + ki * 18;
+        var sampleDash = getEdgePattern(edges[ki]);
         ctx.beginPath();
-        ctx.setLineDash(EDGE_PATTERNS[ki].dash);
+        ctx.setLineDash(sampleDash);
         ctx.moveTo(keyX, ky);
-        ctx.lineTo(keyX + 40, ky);
+        ctx.lineTo(keyX + 50, ky);
         ctx.strokeStyle = edgeColor.replace("0.15", "0.6");
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = style.getPropertyValue("--text-secondary").trim() || "#8b949e";
         ctx.font = "500 9px -apple-system, sans-serif";
-        ctx.fillText(EDGE_PATTERNS[ki].name, keyX + 48, ky + 1);
+        var fromD = nodes[edges[ki].from] ? nodes[edges[ki].from].domain : "?";
+        var toD = nodes[edges[ki].to] ? nodes[edges[ki].to].domain : "?";
+        var edgeLabel = (fromD.length > 8 ? fromD.slice(0, 7) + ".." : fromD) + " \u2194 " + (toD.length > 8 ? toD.slice(0, 7) + ".." : toD);
+        ctx.fillText(edgeLabel, keyX + 56, ky + 1);
       }
       ctx.restore();
     }

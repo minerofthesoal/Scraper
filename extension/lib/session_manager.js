@@ -295,32 +295,55 @@ var WSP_Queue = {
    */
   _scrapeUrl(url) {
     return new Promise(function (resolve, reject) {
-      browser.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
-        if (!tabs[0]) return reject(new Error("No active tab"));
+      /* Create a new tab for queue scraping so it works even with popup closed */
+      browser.tabs.create({ url: url, active: false }).then(function (tab) {
+        var tabId = tab.id;
+        var resolved = false;
+        var timeout;
 
-        var tabId = tabs[0].id;
-        browser.tabs.update(tabId, { url: url }).then(function () {
-          // Wait for page to load
-          var listener = function (tid, changeInfo) {
-            if (tid === tabId && changeInfo.status === "complete") {
-              browser.webNavigation.onCompleted.removeListener(listener);
-              // Wait a bit for content scripts to initialize, then scrape
-              setTimeout(function () {
-                browser.tabs.sendMessage(tabId, { action: "SCRAPE_WITH_SCROLL" })
-                  .then(function () { setTimeout(resolve, 3000); })
-                  .catch(reject);
-              }, 2000);
-            }
-          };
-          browser.webNavigation.onCompleted.addListener(listener);
+        /* Listen for the tab to finish loading */
+        function onUpdated(tid, changeInfo) {
+          if (tid !== tabId || changeInfo.status !== "complete") return;
+          browser.tabs.onUpdated.removeListener(onUpdated);
 
-          // Timeout after 30 seconds
+          /* Wait for content scripts to initialize, then scrape */
           setTimeout(function () {
-            browser.webNavigation.onCompleted.removeListener(listener);
-            reject(new Error("Page load timeout"));
-          }, 30000);
-        });
-      });
+            browser.tabs.sendMessage(tabId, { action: "SCRAPE_FULL_PAGE" })
+              .then(function () {
+                /* Wait for background to receive and process SCRAPED_DATA */
+                setTimeout(function () {
+                  if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    /* Close the tab after scraping */
+                    browser.tabs.remove(tabId).catch(function () {});
+                    resolve();
+                  }
+                }, 4000);
+              })
+              .catch(function (err) {
+                if (!resolved) {
+                  resolved = true;
+                  clearTimeout(timeout);
+                  browser.tabs.remove(tabId).catch(function () {});
+                  reject(err);
+                }
+              });
+          }, 3000); /* 3s for content scripts to inject */
+        }
+
+        browser.tabs.onUpdated.addListener(onUpdated);
+
+        /* Timeout after 45 seconds */
+        timeout = setTimeout(function () {
+          if (!resolved) {
+            resolved = true;
+            browser.tabs.onUpdated.removeListener(onUpdated);
+            browser.tabs.remove(tabId).catch(function () {});
+            reject(new Error("Page load timeout for " + url));
+          }
+        }, 45000);
+      }).catch(reject);
     });
   },
 
