@@ -1,13 +1,67 @@
-/* ── HuggingFace Upload Module v0.6.6.1 ── */
+/* ── HuggingFace Upload Module v0.7.1.1 ── */
 /* Fixed: NDJSON commit API format, base64 file encoding, proper fallbacks */
+/* Added: Shard large files to avoid HF max document length errors */
 /* eslint-env browser, webextensions */
 /* Exported as: window.WSP_HFUpload */
 var WSP_HF_API = "https://huggingface.co/api";
+
+/* Max bytes per shard — HF limits individual file content.
+   500KB raw text ≈ ~700KB base64 — well under HF's limit. */
+var WSP_HF_SHARD_SIZE = 500 * 1024;
 
 var WSP_HFUpload = {
 
   /* ── Last upload hash for incremental uploads ── */
   _lastUploadHash: null,
+
+  /**
+   * Split a JSONL string into shards that each fit under WSP_HF_SHARD_SIZE.
+   * Returns array of { path, content } objects.
+   * e.g. "data/images.jsonl" becomes "data/images-00000.jsonl", "data/images-00001.jsonl", ...
+   * If the file fits in one shard, the original path is kept.
+   */
+  _shardJSONL(path, content) {
+    if (!content || content.length <= WSP_HF_SHARD_SIZE) {
+      return [{ path: path, content: content }];
+    }
+
+    var lines = content.split("\n").filter(function (l) { return l.trim().length > 0; });
+    var shards = [];
+    var currentLines = [];
+    var currentSize = 0;
+    var basePath = path.replace(/\.jsonl$/, "");
+
+    for (var i = 0; i < lines.length; i++) {
+      var lineSize = lines[i].length + 1; /* +1 for newline */
+      if (currentSize + lineSize > WSP_HF_SHARD_SIZE && currentLines.length > 0) {
+        var shardIdx = String(shards.length).padStart(5, "0");
+        shards.push({
+          path: basePath + "-" + shardIdx + ".jsonl",
+          content: currentLines.join("\n") + "\n"
+        });
+        currentLines = [];
+        currentSize = 0;
+      }
+      currentLines.push(lines[i]);
+      currentSize += lineSize;
+    }
+
+    /* Last shard */
+    if (currentLines.length > 0) {
+      if (shards.length === 0) {
+        /* Fits in one shard after all — use original name */
+        shards.push({ path: path, content: currentLines.join("\n") + "\n" });
+      } else {
+        var lastIdx = String(shards.length).padStart(5, "0");
+        shards.push({
+          path: basePath + "-" + lastIdx + ".jsonl",
+          content: currentLines.join("\n") + "\n"
+        });
+      }
+    }
+
+    return shards;
+  },
 
   /**
    * Check if a HuggingFace token is valid.

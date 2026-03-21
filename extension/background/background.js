@@ -21,10 +21,37 @@ browser.storage.local.get(["scrapedRecords", "citations", "sessionStats", "lastU
   console.error("[WSP] Failed to load persisted data:", err);
 });
 
-/* ── Save state ── */
+/* ── Save state (debounced) ── */
+var _persistPending = false;
 function persistState() {
   browser.storage.local.set({ scrapedRecords: scrapedRecords, citations: citations, sessionStats: sessionStats, lastUploadRecordCount: lastUploadRecordCount });
+  _persistPending = false;
 }
+
+/* Schedule a persist if one isn't already queued (debounce rapid saves) */
+function schedulePersist() {
+  if (!_persistPending) {
+    _persistPending = true;
+    setTimeout(persistState, 2000);
+  }
+}
+
+/* ── Auto-save: persist every 60 seconds if data exists ── */
+setInterval(function () {
+  if (scrapedRecords.length > 0) {
+    persistState();
+    console.info("[WSP] Auto-saved " + scrapedRecords.length + " records");
+  }
+}, 60000);
+
+/* Also auto-save to a session backup every 5 minutes */
+setInterval(function () {
+  if (scrapedRecords.length > 0 && typeof WSP_Session !== "undefined") {
+    WSP_Session.save("__autosave__", scrapedRecords, citations, sessionStats, lastUploadRecordCount)
+      .then(function () { console.info("[WSP] Auto-save session backup saved"); })
+      .catch(function () { /* ignore */ });
+  }
+}, 300000);
 
 /* ── Broadcast stats to popup ── */
 function broadcastStats() {
@@ -677,25 +704,42 @@ function uploadToHF() {
         var readme = WSP_HFUpload.generateReadme(cfg, citations, uploadStats);
         files.push({ path: "README.md", content: readme });
 
-        if (texts.length > 0) files.push({ path: "data/text_data.jsonl", content: WSP_Utils.toJSONL(texts) });
-        if (images.length > 0) files.push({ path: "data/images.jsonl", content: WSP_Utils.toJSONL(images) });
-        if (links.length > 0) files.push({ path: "data/links.jsonl", content: WSP_Utils.toJSONL(links) });
-        if (audioRecs.length > 0) files.push({ path: "data/audio.jsonl", content: WSP_Utils.toJSONL(audioRecs) });
-        files.push({ path: "data/citations.jsonl", content: WSP_Utils.toJSONL(citations) });
+        /* Shard JSONL files to avoid HF "document exceeds maximum length" error */
+        var shard = WSP_HFUpload._shardJSONL.bind(WSP_HFUpload);
+        if (texts.length > 0) files = files.concat(shard("data/text_data.jsonl", WSP_Utils.toJSONL(texts)));
+        if (images.length > 0) files = files.concat(shard("data/images.jsonl", WSP_Utils.toJSONL(images)));
+        if (links.length > 0) files = files.concat(shard("data/links.jsonl", WSP_Utils.toJSONL(links)));
+        if (audioRecs.length > 0) files = files.concat(shard("data/audio.jsonl", WSP_Utils.toJSONL(audioRecs)));
+        files = files.concat(shard("data/citations.jsonl", WSP_Utils.toJSONL(citations)));
 
-        notify("WebScraper Pro", "Uploading " + files.length + " files to " + cfg.hfRepoId + "...");
-        return WSP_HFUpload.commitFilesWithRetry(
-          cfg.hfToken, cfg.hfRepoId, files,
-          "Update dataset - " + scrapedRecords.length + " records, " + sessionStats.words + " words, " + sessionStats.pages + " pages",
-          3
-        ).then(function () {
+        notify("WebScraper Pro", "Uploading " + files.length + " files (" + (files.length > 5 ? "sharded" : "normal") + ") to " + cfg.hfRepoId + "...");
+
+        /* Upload files one at a time to avoid max payload errors */
+        function uploadSequentially(idx) {
+          if (idx >= files.length) return Promise.resolve();
+          notify("WebScraper Pro", "Uploading file " + (idx + 1) + "/" + files.length + ": " + files[idx].path);
+          return WSP_HFUpload.commitFilesWithRetry(
+            cfg.hfToken, cfg.hfRepoId, [files[idx]],
+            "Update " + files[idx].path + " (" + (idx + 1) + "/" + files.length + ")",
+            3
+          ).then(function () {
+            return uploadSequentially(idx + 1);
+          });
+        }
+
+        return uploadSequentially(0).then(function () {
           lastUploadRecordCount = scrapedRecords.length;
           persistState();
           notify("WebScraper Pro", "Uploaded " + scrapedRecords.length + " records to " + cfg.hfRepoId + "!");
 
           if (cfg.uploadToOwner) {
             notify("WebScraper Pro", "Uploading to shared repo " + OWNER_HF_REPO + "...");
-            return WSP_HFUpload.commitFilesWithRetry(cfg.hfToken, OWNER_HF_REPO, files, "Community upload - " + scrapedRecords.length + " records", 2)
+            function uploadOwnerSeq(oi) {
+              if (oi >= files.length) return Promise.resolve();
+              return WSP_HFUpload.commitFilesWithRetry(cfg.hfToken, OWNER_HF_REPO, [files[oi]], "Community upload " + files[oi].path, 2)
+                .then(function () { return uploadOwnerSeq(oi + 1); });
+            }
+            return uploadOwnerSeq(0)
               .then(function () {
                 notify("WebScraper Pro", "Also uploaded to shared repo: " + OWNER_HF_REPO);
               })
