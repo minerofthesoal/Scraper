@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.7.2"
+VERSION = "0.7.2.1"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1188,6 +1188,24 @@ def uninstall(yes):
     if not yes:
         click.confirm("\nAre you sure you want to uninstall everything?", abort=True)
 
+    # Uninstall pip package FIRST (before removing venv that contains the python binary)
+    try:
+        # Try using the current python; if it fails (venv already broken), find system python
+        pip_exe = sys.executable
+        if not os.path.exists(pip_exe):
+            # sys.executable is gone — find a system python
+            for candidate in ["python3", "python"]:
+                found = shutil.which(candidate)
+                if found:
+                    pip_exe = found
+                    break
+        subprocess.run(
+            [pip_exe, "-m", "pip", "uninstall", "-y", "webscraper-pro-cli"],
+            capture_output=True, text=True, timeout=30
+        )
+    except Exception:
+        pass  # Best-effort; if pip uninstall fails, we still clean up files
+
     removed = []
     for path in [config_dir, data_dir, venv_dir]:
         if os.path.isdir(path):
@@ -1200,12 +1218,6 @@ def uninstall(yes):
     # Also try .cmd on Windows
     if sys.platform == "win32" and os.path.exists(local_bin + ".cmd"):
         os.remove(local_bin + ".cmd")
-
-    # Uninstall pip package
-    subprocess.run(
-        [sys.executable, "-m", "pip", "uninstall", "-y", "webscraper-pro-cli"],
-        capture_output=True, text=True
-    )
 
     console.print(f"\n[green]Removed {len(removed)} items.[/green]")
     console.print("[green]WebScraper Pro has been uninstalled.[/green]")
@@ -1399,6 +1411,11 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.7.2.1", "2026-03-21", [
+            "Fix uninstall crash: pip uninstall now runs BEFORE deleting the venv directory",
+            "Fix FileNotFoundError when sys.executable points to deleted venv python",
+            "Fallback to system python3/python if venv python is missing",
+        ]),
         ("0.7.2", "2026-03-21", [
             "Video scraping: extract <video> sources, embeds (Vimeo, Dailymotion, etc.), track subtitles",
             "YouTube filter toggle: YouTube URLs filtered by default, enable in settings",
