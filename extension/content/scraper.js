@@ -1,5 +1,5 @@
-/* ── Scraper Module v0.6.3b1 ── */
-/* Universal text/image/link/audio extraction that works on ANY site */
+/* ── Scraper Module v0.7.2 ── */
+/* Universal text/image/link/audio/video extraction that works on ANY site */
 (function () {
   "use strict";
 
@@ -335,33 +335,27 @@
   }
 
   /**
-   * Universal audio/video extraction.
+   * Universal audio extraction.
    */
   function extractAudioUniversal(elements) {
     const audio = [];
     const seenSrc = new Set();
 
     for (const el of elements) {
-      if (el.tagName === "AUDIO" || el.tagName === "VIDEO") {
-        // Direct src
+      if (el.tagName === "AUDIO") {
         let src = el.currentSrc || el.src;
-
-        // Check <source> children
         if (!src) {
           const source = el.querySelector("source");
           if (source) src = source.src;
         }
-
         if (src && !seenSrc.has(src)) {
           seenSrc.add(src);
-          audio.push({ src, type: el.tagName.toLowerCase() });
+          audio.push({ src, type: "audio", mime: el.type || "" });
         }
-
-        // Also grab all <source> alternatives
         for (const source of el.querySelectorAll("source")) {
           if (source.src && !seenSrc.has(source.src)) {
             seenSrc.add(source.src);
-            audio.push({ src: source.src, type: source.type || el.tagName.toLowerCase() });
+            audio.push({ src: source.src, type: "audio", mime: source.type || "" });
           }
         }
       }
@@ -370,9 +364,9 @@
       if (el.tagName === "EMBED" || el.tagName === "OBJECT") {
         const src = el.src || el.data;
         const type = el.type || "";
-        if (src && (type.includes("audio") || type.includes("video")) && !seenSrc.has(src)) {
+        if (src && type.includes("audio") && !seenSrc.has(src)) {
           seenSrc.add(src);
-          audio.push({ src, type });
+          audio.push({ src, type: "audio", mime: type });
         }
       }
     }
@@ -381,11 +375,119 @@
   }
 
   /**
+   * Check if a URL is a YouTube URL.
+   */
+  function isYouTubeUrl(url) {
+    if (!url) return false;
+    return /(?:youtube\.com|youtu\.be|youtube-nocookie\.com|ytimg\.com)/i.test(url);
+  }
+
+  /**
+   * Universal video extraction.
+   * Extracts <video> sources, <embed>/<object> video, and embedded iframes.
+   * Filters YouTube unless allowYouTube is true.
+   */
+  function extractVideoUniversal(elements, allowYouTube) {
+    const videos = [];
+    const seenSrc = new Set();
+
+    function addVideo(src, info) {
+      if (!src || seenSrc.has(src)) return;
+      if (!allowYouTube && isYouTubeUrl(src)) return;
+      seenSrc.add(src);
+      videos.push(Object.assign({ src }, info));
+    }
+
+    for (const el of elements) {
+      // <video> elements
+      if (el.tagName === "VIDEO") {
+        const src = el.currentSrc || el.src;
+        const info = {
+          type: "video",
+          mime: el.type || "",
+          poster: el.poster || "",
+          duration: el.duration && isFinite(el.duration) ? el.duration : 0,
+          width: el.videoWidth || el.width || 0,
+          height: el.videoHeight || el.height || 0,
+        };
+        if (src) addVideo(src, info);
+
+        // All <source> children
+        for (const source of el.querySelectorAll("source")) {
+          if (source.src) {
+            addVideo(source.src, {
+              type: "video",
+              mime: source.type || "",
+              poster: el.poster || "",
+              duration: info.duration,
+              width: info.width,
+              height: info.height,
+            });
+          }
+        }
+
+        // <track> subtitles/captions
+        for (const track of el.querySelectorAll("track")) {
+          if (track.src) {
+            addVideo(track.src, {
+              type: "video-track",
+              kind: track.kind || "subtitles",
+              label: track.label || "",
+              srclang: track.srclang || "",
+            });
+          }
+        }
+      }
+
+      // <embed> and <object> video
+      if (el.tagName === "EMBED" || el.tagName === "OBJECT") {
+        const src = el.src || el.data;
+        const type = el.type || "";
+        if (src && type.includes("video")) {
+          addVideo(src, { type: "video", mime: type });
+        }
+      }
+
+      // <iframe> video embeds (Vimeo, Dailymotion, etc.)
+      if (el.tagName === "IFRAME" && el.src) {
+        const iframeSrc = el.src;
+        // Detect known video embed patterns
+        const videoEmbedPattern = /(?:player\.vimeo\.com|dailymotion\.com\/embed|streamable\.com|wistia\.com|bitchute\.com|rumble\.com|odysee\.com|peertube)/i;
+        const youtubeEmbedPattern = /(?:youtube\.com\/embed|youtube-nocookie\.com\/embed|youtu\.be)/i;
+
+        if (videoEmbedPattern.test(iframeSrc)) {
+          addVideo(iframeSrc, { type: "video-embed", embed: true });
+        } else if (youtubeEmbedPattern.test(iframeSrc)) {
+          addVideo(iframeSrc, { type: "video-embed", embed: true, platform: "youtube" });
+        }
+      }
+
+      // data-video-src and similar attributes
+      for (const attr of ["data-video-src", "data-video-url", "data-video", "data-src"]) {
+        const src = el.getAttribute(attr);
+        if (src && /\.(mp4|webm|ogg|m3u8|mpd|mov|avi|mkv)/i.test(src)) {
+          addVideo(src, { type: "video", mime: "" });
+        }
+      }
+    }
+
+    return videos;
+  }
+
+  /**
    * Extract JavaScript-rendered content (toggled by user, off by default).
+   * Enhanced: shadow DOM, web components, template elements, meta state, global JS data.
    */
   async function extractJSContent(elements) {
     const jsData = [];
-    const seenSrc = new Set();
+    const seenContent = new Set();
+
+    function addUnique(item) {
+      const key = JSON.stringify(item).slice(0, 200);
+      if (seenContent.has(key)) return;
+      seenContent.add(key);
+      jsData.push(item);
+    }
 
     for (const el of elements) {
       // Script tags with structured data
@@ -394,8 +496,27 @@
         if (type === "application/ld+json" || type === "application/json") {
           try {
             const data = JSON.parse(el.textContent);
-            jsData.push({ type: "structured-data", format: type, data });
+            addUnique({ type: "structured-data", format: type, data });
           } catch { /* skip */ }
+        }
+        // Inline scripts with __NEXT_DATA__, __NUXT__, window.__data patterns
+        if (!type || type === "text/javascript") {
+          const text = el.textContent || "";
+          const statePatterns = [
+            { re: /window\.__NEXT_DATA__\s*=\s*({[\s\S]*?})\s*;?\s*(?:<\/script>|$)/, name: "next-data" },
+            { re: /window\.__NUXT__\s*=\s*({[\s\S]*?})\s*;?\s*(?:<\/script>|$)/, name: "nuxt-data" },
+            { re: /window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})\s*;?\s*(?:<\/script>|$)/, name: "initial-state" },
+            { re: /window\.__APP_DATA__\s*=\s*({[\s\S]*?})\s*;?\s*(?:<\/script>|$)/, name: "app-data" },
+          ];
+          for (const pat of statePatterns) {
+            const m = text.match(pat.re);
+            if (m) {
+              try {
+                const data = JSON.parse(m[1]);
+                addUnique({ type: "js-state", name: pat.name, data });
+              } catch { /* partial JSON, skip */ }
+            }
+          }
         }
       }
 
@@ -406,10 +527,37 @@
           if (iframeDoc) {
             const iframeText = iframeDoc.body ? iframeDoc.body.innerText : "";
             if (iframeText && iframeText.length > 10) {
-              jsData.push({ type: "iframe-text", text: iframeText.trim(), src: el.src });
+              addUnique({ type: "iframe-text", text: iframeText.trim(), src: el.src });
             }
           }
         } catch { /* cross-origin blocked */ }
+      }
+
+      // <template> elements with content
+      if (el.tagName === "TEMPLATE" && el.content) {
+        const tplText = el.content.textContent.trim();
+        if (tplText.length > 10) {
+          addUnique({ type: "template", text: tplText.slice(0, 5000) });
+        }
+      }
+
+      // Shadow DOM traversal
+      if (el.shadowRoot) {
+        const shadowEls = el.shadowRoot.querySelectorAll("*");
+        for (const sel of shadowEls) {
+          const txt = (sel.innerText || sel.textContent || "").trim();
+          if (txt.length > 20 && sel.children.length <= 3) {
+            addUnique({ type: "shadow-dom", tag: sel.tagName.toLowerCase(), text: txt.slice(0, 2000) });
+          }
+        }
+      }
+
+      // Web components (custom elements with hyphenated names)
+      if (el.tagName.includes("-")) {
+        const txt = (el.innerText || el.textContent || "").trim();
+        if (txt.length > 20) {
+          addUnique({ type: "web-component", tag: el.tagName.toLowerCase(), text: txt.slice(0, 2000) });
+        }
       }
 
       // Data attributes that might contain content
@@ -419,18 +567,41 @@
             try {
               const parsed = JSON.parse(value);
               if (typeof parsed === "object") {
-                jsData.push({ type: "data-attr", key, data: parsed });
+                addUnique({ type: "data-attr", key, data: parsed });
               }
             } catch {
-              // Not JSON, check if it's meaningful text
               if (/^[a-zA-Z]/.test(value) && value.split(" ").length > 3) {
-                jsData.push({ type: "data-text", key, text: value });
+                addUnique({ type: "data-text", key, text: value });
               }
             }
           }
         }
       }
+
+      // [slot] elements (web component slots)
+      if (el.getAttribute("slot")) {
+        const txt = (el.innerText || el.textContent || "").trim();
+        if (txt.length > 10) {
+          addUnique({ type: "slot", name: el.getAttribute("slot"), text: txt.slice(0, 2000) });
+        }
+      }
     }
+
+    // Global: microdata (itemscope/itemprop)
+    try {
+      const microItems = document.querySelectorAll("[itemscope]");
+      for (const item of microItems) {
+        const itemType = item.getAttribute("itemtype") || "";
+        const props = {};
+        for (const prop of item.querySelectorAll("[itemprop]")) {
+          const name = prop.getAttribute("itemprop");
+          props[name] = prop.content || prop.getAttribute("content") || prop.innerText || prop.src || "";
+        }
+        if (Object.keys(props).length > 0) {
+          addUnique({ type: "microdata", itemType, properties: props });
+        }
+      }
+    } catch { /* skip */ }
 
     return jsData;
   }
@@ -513,7 +684,7 @@
    * Main extraction pipeline.
    */
   async function extractData(elements) {
-    const cfg = await browser.storage.local.get(["scrapeJS", "minTextLength"]);
+    const cfg = await browser.storage.local.get(["scrapeJS", "minTextLength", "scrapeVideo", "allowYouTube"]);
     const minLen = cfg.minTextLength || 3;
 
     // Universal text extraction
@@ -529,13 +700,19 @@
     // Universal audio extraction
     const audio = extractAudioUniversal(elements);
 
+    // Video extraction (enabled by default, YouTube filtered unless allowed)
+    let video = [];
+    if (cfg.scrapeVideo !== false) {
+      video = extractVideoUniversal(elements, !!cfg.allowYouTube);
+    }
+
     // Optional JS content extraction
     let jsContent = [];
     if (cfg.scrapeJS) {
       jsContent = await extractJSContent(elements);
     }
 
-    return { texts, images, links, audio, jsContent, totalWords };
+    return { texts, images, links, audio, video, jsContent, totalWords };
   }
 
   /**
@@ -554,7 +731,7 @@
     // Send to background
     browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
     if (typeof WSP_Toast !== "undefined") {
-      WSP_Toast.show(`Scraped: ${data.totalWords} words, ${data.images.length} images, ${data.links.length} links`);
+      WSP_Toast.show(`Scraped: ${data.totalWords} words, ${data.images.length} imgs, ${data.links.length} links, ${data.video.length} videos`);
     }
     return result;
   }
@@ -593,7 +770,7 @@
 
     browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
     if (typeof WSP_Toast !== "undefined") {
-      WSP_Toast.show(`Scraped full page: ${data.totalWords} words, ${data.images.length} images, ${data.links.length} links`);
+      WSP_Toast.show(`Scraped full page: ${data.totalWords} words, ${data.images.length} imgs, ${data.links.length} links, ${data.video.length} videos`);
     }
     return result;
   }
@@ -641,7 +818,7 @@
 
     // Step 3: Scrape viewport by viewport using document coordinates
     let currentY = startY;
-    let allResults = { texts: [], images: [], links: [], audio: [], jsContent: [], totalWords: 0 };
+    let allResults = { texts: [], images: [], links: [], audio: [], video: [], jsContent: [], totalWords: 0 };
     const seenText = new Set();
     const seenSrc = new Set();
     let viewportCount = 0;
@@ -687,6 +864,12 @@
           allResults.audio.push(a);
         }
       }
+      for (const v of data.video || []) {
+        if (!seenSrc.has(v.src)) {
+          seenSrc.add(v.src);
+          allResults.video.push(v);
+        }
+      }
       if (data.jsContent) {
         allResults.jsContent.push(...data.jsContent);
       }
@@ -711,7 +894,7 @@
     browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
 
     if (typeof WSP_Toast !== "undefined") {
-      WSP_Toast.show(`Scroll-scraped ${viewportCount} viewports: ${allResults.totalWords} words, ${allResults.images.length} images, ${allResults.links.length} links`);
+      WSP_Toast.show(`Scroll-scraped ${viewportCount} viewports: ${allResults.totalWords} words, ${allResults.images.length} imgs, ${allResults.links.length} links, ${allResults.video.length} videos`);
     }
 
     return result;
@@ -730,7 +913,7 @@
     const result = { meta, ...data, scrapedAt: new Date().toISOString() };
     browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
     if (typeof WSP_Toast !== "undefined") {
-      WSP_Toast.show(`Full scrape: ${data.totalWords} words, ${data.images.length} images`);
+      WSP_Toast.show(`Full scrape: ${data.totalWords} words, ${data.images.length} imgs, ${data.video.length} videos`);
     }
     return result;
   }

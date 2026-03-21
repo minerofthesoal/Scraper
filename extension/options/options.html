@@ -62,6 +62,18 @@
       </div>
 
       <label class="toggle-row">
+        <input type="checkbox" id="chk-scrape-video" checked>
+        <span>Extract video sources (mp4, webm, embeds)</span>
+      </label>
+      <small style="display:block;padding:0 36px;color:#888">Scrapes &lt;video&gt; sources, embedded players, and video data attributes.</small>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="chk-allow-youtube">
+        <span>Include YouTube videos</span>
+      </label>
+      <small style="display:block;padding:0 36px;color:#888">Off by default. YouTube embeds are filtered out unless this is enabled.</small>
+
+      <label class="toggle-row">
         <input type="checkbox" id="chk-scrape-js">
         <span>Extract JavaScript-rendered content (data attrs, JSON-LD, iframes)</span>
       </label>

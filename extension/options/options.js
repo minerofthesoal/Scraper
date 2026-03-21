@@ -103,6 +103,7 @@
     "scrapeJS", "citationFormat", "respectRobots", "minTextLength",
     "rateLimitConfig", "domainAllowlist", "domainBlocklist", "regexPatterns",
     "rateEnabled",
+    "scrapeVideo", "allowYouTube",
     "aiEnabled", "aiServerUrl", "aiAutoDownload", "prettyPrint",
     "sanitizeContent", "validateUrls", "cookieDismissEnabled", "deobfuscateEnabled",
   ]).then((cfg) => {
@@ -129,6 +130,8 @@
 
     setChecked($("#chk-upload-owner"), cfg.uploadToOwner);
     setChecked($("#chk-scrape-js"), cfg.scrapeJS);
+    setChecked($("#chk-scrape-video"), cfg.scrapeVideo !== false);
+    setChecked($("#chk-allow-youtube"), cfg.allowYouTube);
     setVal($("#sel-citation-format"), cfg.citationFormat || "mla");
     setChecked($("#chk-respect-robots"), cfg.respectRobots !== false);
     setVal($("#inp-min-text"), cfg.minTextLength || 3);
@@ -240,6 +243,8 @@
           citeReadme: getChecked(elements.citeReadme),
           citeLinks: getChecked(elements.citeLinks),
           scrapeJS: getChecked($("#chk-scrape-js")),
+          scrapeVideo: getChecked($("#chk-scrape-video")),
+          allowYouTube: getChecked($("#chk-allow-youtube")),
           citationFormat: getVal($("#sel-citation-format"), "mla"),
           respectRobots: getChecked($("#chk-respect-robots")),
           minTextLength: parseInt(getVal($("#inp-min-text"), "3"), 10) || 3,
