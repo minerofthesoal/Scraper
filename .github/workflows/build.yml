@@ -299,62 +299,92 @@ jobs:
           if-no-files-found: ignore
 
   # ── Release ──
+  # Runs on tag push (v*) OR on push to main/master
   release:
     name: Create Release
     needs: [build-extension, build-python, test-cli, test-extension]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download XPI artifact
-        uses: actions/download-artifact@v4
         with:
-          name: webscraper-pro-xpi
-          path: release-assets/
-
-      - name: Download Python package
-        uses: actions/download-artifact@v4
-        with:
-          name: python-package
-          path: release-assets/
-
-      - name: Download Arch package (if available)
-        uses: actions/download-artifact@v4
-        with:
-          name: arch-package
-          path: release-assets/
-        continue-on-error: true
+          fetch-depth: 0
 
       - name: Get version from manifest
         id: version
         run: |
           VER=$(python3 -c "import json; print(json.load(open('extension/manifest.json'))['version'])")
           echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+
+      - name: Check if release already exists
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git tag -l "$TAG" | grep -q "$TAG"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $TAG already exists, skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Will create release $TAG"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Download XPI artifact
+        if: steps.check.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: webscraper-pro-xpi
+          path: release-assets/
+
+      - name: Download Python package
+        if: steps.check.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: release-assets/
+
+      - name: Download Arch package (if available)
+        if: steps.check.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-package
+          path: release-assets/
+        continue-on-error: true
 
       - name: Generate changelog from CLI
+        if: steps.check.outputs.exists != 'true'
         id: changelog
         run: |
           pip install -q click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm 2>/dev/null
           cd cli && pip install -e . -q 2>/dev/null && cd ..
-          # Try to get changelog for this version
           CHANGES=$(scrape changelog 2>/dev/null | head -30 || echo "See commit history for changes.")
           echo "changes<<EOFCHANGES" >> $GITHUB_OUTPUT
           echo "$CHANGES" >> $GITHUB_OUTPUT
           echo "EOFCHANGES" >> $GITHUB_OUTPUT
 
       - name: List release assets
+        if: steps.check.outputs.exists != 'true'
         run: |
           echo "Release assets:"
           find release-assets/ -type f -exec ls -lh {} \;
 
       - name: Create Release
+        if: steps.check.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: WebScraper Pro v${{ steps.version.outputs.version }}
           files: release-assets/*
           generate_release_notes: true
           body: |
-            ## WebScraper Pro ${{ github.ref_name }}
+            ## WebScraper Pro v${{ steps.version.outputs.version }}
 
             ### Downloads
             | Package | Description |
