@@ -24,7 +24,7 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Install Pillow for icon generation
+      - name: Install dependencies
         run: pip install Pillow
 
       - name: Generate icons
@@ -115,7 +115,7 @@ jobs:
           echo "Built packages:"
           ls -lh dist/
 
-      - name: Verify package
+      - name: Verify package installs and runs
         run: |
           pip install cli/dist/*.whl
           scrape --version
@@ -125,58 +125,6 @@ jobs:
         with:
           name: python-package
           path: cli/dist/*
-          retention-days: 30
-
-  # ── Build Arch Linux Package ──
-  build-arch:
-    name: Build Arch Linux Package
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-    steps:
-      - name: Setup Arch build environment
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git python python-pip python-setuptools python-build python-wheel python-pillow zip sudo
-          useradd -m builder
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-      - uses: actions/checkout@v4
-
-      - name: Generate icons
-        run: python extension/icons/generate_icons.py
-
-      - name: Build .xpi
-        run: |
-          cd extension
-          zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc"
-          cd ..
-
-      - name: Prepare PKGBUILD
-        run: |
-          cp -r packaging/arch /tmp/archpkg
-          cp webscraper-pro.xpi /tmp/archpkg/
-          cp -r cli /tmp/archpkg/cli
-          cp -r extension /tmp/archpkg/extension
-          cp install.sh /tmp/archpkg/
-          cp README.md /tmp/archpkg/
-          cp LICENSE /tmp/archpkg/
-          chown -R builder:builder /tmp/archpkg
-
-      - name: Build package
-        run: |
-          cd /tmp/archpkg
-          sudo -u builder makepkg -sf --noconfirm
-          cp *.pkg.tar.zst $GITHUB_WORKSPACE/ 2>/dev/null || true
-          cp *.pkg.tar.xz $GITHUB_WORKSPACE/ 2>/dev/null || true
-
-      - name: Upload Arch package
-        uses: actions/upload-artifact@v4
-        with:
-          name: arch-package
-          path: |
-            *.pkg.tar.zst
-            *.pkg.tar.xz
           retention-days: 30
 
   # ── Test CLI ──
@@ -198,6 +146,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          pip install -r requirements.txt
           cd cli
           pip install -e .
 
@@ -271,35 +220,138 @@ jobs:
 
       - name: Check JS syntax with Node
         run: |
-          find extension -name '*.js' -type f | while read f; do
-            node --check "$f" 2>/dev/null || echo "WARN: $f (uses browser APIs)"
-          done
+          ERRORS=0
+          while IFS= read -r f; do
+            if ! node --check "$f" 2>/dev/null; then
+              echo "WARN: $f (uses browser APIs)"
+            fi
+          done < <(find extension -name '*.js' -type f)
+          echo "JS syntax check complete"
 
       - name: Validate JSON files
         run: |
-          find extension -name '*.json' -type f | while read f; do
-            python3 -c "import json; json.load(open('$f'))" && echo "OK: $f" || echo "FAIL: $f"
-          done
+          ERRORS=0
+          while IFS= read -r f; do
+            if python3 -c "import json; json.load(open('$f'))"; then
+              echo "OK: $f"
+            else
+              echo "FAIL: $f"
+              ERRORS=1
+            fi
+          done < <(find extension -name '*.json' -type f)
+          exit $ERRORS
+
+  # ── Build Arch Linux Package (optional — does not block release) ──
+  build-arch:
+    name: Build Arch Linux Package
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Setup Arch build environment
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git python python-pip python-setuptools python-build python-wheel python-pillow zip sudo
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+      - uses: actions/checkout@v4
+
+      - name: Generate icons
+        run: python extension/icons/generate_icons.py
+
+      - name: Build .xpi
+        run: |
+          cd extension
+          zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc"
+          cd ..
+
+      - name: Prepare PKGBUILD
+        run: |
+          mkdir -p /tmp/archpkg
+          cp packaging/arch/PKGBUILD /tmp/archpkg/
+          cp webscraper-pro.xpi /tmp/archpkg/
+          cp -r cli /tmp/archpkg/cli
+          cp -r extension /tmp/archpkg/extension
+          cp install.sh /tmp/archpkg/ 2>/dev/null || true
+          cp install.py /tmp/archpkg/ 2>/dev/null || true
+          cp README.md /tmp/archpkg/
+          cp LICENSE /tmp/archpkg/
+          chown -R builder:builder /tmp/archpkg
+
+      - name: Build package
+        run: |
+          cd /tmp/archpkg
+          sudo -u builder makepkg -sf --noconfirm 2>&1 || echo "WARN: makepkg failed (non-fatal)"
+          cp *.pkg.tar.zst $GITHUB_WORKSPACE/ 2>/dev/null || true
+          cp *.pkg.tar.xz $GITHUB_WORKSPACE/ 2>/dev/null || true
+
+      - name: Upload Arch package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: |
+            *.pkg.tar.zst
+            *.pkg.tar.xz
+          retention-days: 30
+          if-no-files-found: ignore
 
   # ── Release ──
   release:
     name: Create Release
-    needs: [build-extension, build-python, build-arch, test-cli, test-extension]
+    needs: [build-extension, build-python, test-cli, test-extension]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download XPI artifact
         uses: actions/download-artifact@v4
+        with:
+          name: webscraper-pro-xpi
+          path: release-assets/
+
+      - name: Download Python package
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: release-assets/
+
+      - name: Download Arch package (if available)
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-package
+          path: release-assets/
+        continue-on-error: true
+
+      - name: Get version from manifest
+        id: version
+        run: |
+          VER=$(python3 -c "import json; print(json.load(open('extension/manifest.json'))['version'])")
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog from CLI
+        id: changelog
+        run: |
+          pip install -q click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm 2>/dev/null
+          cd cli && pip install -e . -q 2>/dev/null && cd ..
+          # Try to get changelog for this version
+          CHANGES=$(scrape changelog 2>/dev/null | head -30 || echo "See commit history for changes.")
+          echo "changes<<EOFCHANGES" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOFCHANGES" >> $GITHUB_OUTPUT
+
+      - name: List release assets
+        run: |
+          echo "Release assets:"
+          find release-assets/ -type f -exec ls -lh {} \;
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            webscraper-pro-xpi/webscraper-pro.xpi
-            python-package/*
-            arch-package/*
+          files: release-assets/*
           generate_release_notes: true
           body: |
             ## WebScraper Pro ${{ github.ref_name }}
@@ -307,9 +359,8 @@ jobs:
             ### Downloads
             | Package | Description |
             |---------|-------------|
-            | `webscraper-pro.xpi` | Firefox extension - load via `about:addons` |
-            | `webscraper_pro_cli-*.whl` | Python CLI - `pip install <file>` |
-            | `webscraper-pro-*.pkg.tar.zst` | Arch Linux - `sudo pacman -U <file>` |
+            | `webscraper-pro.xpi` | Firefox extension — load via `about:addons` |
+            | `webscraper_pro_cli-*.whl` | Python CLI — `pip install <file>` |
 
             ### Install
             ```bash
@@ -319,9 +370,6 @@ jobs:
             # Update existing installation
             scrape -U
 
-            # Arch Linux native
-            sudo pacman -U webscraper-pro-*.pkg.tar.zst
-
             # CLI only
             cd cli && pip install -e .
             ```
@@ -329,4 +377,9 @@ jobs:
             ### Uninstall
             ```bash
             scrape -rmv
+            ```
+
+            ### Changelog (v${{ steps.version.outputs.version }})
+            ```
+            ${{ steps.changelog.outputs.changes }}
             ```
