@@ -1,4 +1,4 @@
-/* ── AI Extraction Module v0.7.1.1 ── */
+/* ── AI Extraction Module v0.7.2.2 ── */
 /* NuExtract-2.0-2B integration for structured data extraction */
 /* Supports auto-download (no server needed) or remote server mode */
 /* Falls back to regex-based local extraction when server unavailable */
@@ -172,7 +172,11 @@ var WSP_AI = {
     /* Re-read enabled state from storage every time to stay in sync
        with options page saves (fixes "disabled" false-negative bug). */
     return self.refreshEnabled().then(function (enabled) {
-      if (!enabled) return Promise.reject(new Error("AI extraction is not enabled. Enable it in Settings > AI Extraction."));
+      if (!enabled) {
+        /* AI not enabled — still run local regex extraction as fallback */
+        console.info("[WSP] AI not enabled, using local regex extraction");
+        return self._localExtract(text, template);
+      }
       if (self._status !== "ready") {
         if (self._autoDownload && self._status === "disconnected") {
           self._initAutoMode();
@@ -312,6 +316,39 @@ var WSP_AI = {
       var cm;
       while ((cm = compRe.exec(text)) !== null) { comps.push(cm[1].trim()); }
       result.companies = Array.from(new Set(comps));
+    }
+
+    /* URLs */
+    if (template.urls || template.application_url) {
+      var urlRe = /https?:\/\/[^\s<>"']+/g;
+      var urls = text.match(urlRe);
+      if (template.urls) result.urls = urls ? Array.from(new Set(urls)).slice(0, 20) : [];
+      if (template.application_url && urls && urls.length > 0) result.application_url = urls[0];
+    }
+
+    /* Description fallback — use summary if not already set */
+    if (template.description && !result.description) {
+      var descParas = text.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(function (p) { return p.length > 30; });
+      result.description = descParas.length > 0 ? descParas[0].slice(0, 500) : "";
+    }
+
+    /* Topics — keyword-based classification */
+    if (template.topics && !result.topics) {
+      var topicMap = { Technology: /\b(software|app|code|program|digital|computer|AI|algorithm)\b/i, Science: /\b(research|study|experiment|hypothesis|scientific|biology|physics)\b/i, Business: /\b(company|market|revenue|profit|startup|enterprise|CEO)\b/i, Health: /\b(health|medical|doctor|patient|disease|treatment|hospital)\b/i };
+      result.topics = [];
+      for (var topicName in topicMap) {
+        if (topicMap[topicName].test(text)) result.topics.push(topicName);
+      }
+      if (result.topics.length === 0) result.topics.push("Other");
+    }
+
+    /* Sentiment — simple keyword check */
+    if (template.sentiment && !result.sentiment) {
+      var posRe = /\b(great|good|excellent|amazing|best|love|fantastic|wonderful|happy|pleased)\b/gi;
+      var negRe = /\b(bad|worst|terrible|awful|hate|poor|horrible|disappointing|angry|upset)\b/gi;
+      var posCount = (text.match(posRe) || []).length;
+      var negCount = (text.match(negRe) || []).length;
+      result.sentiment = posCount > negCount ? "Positive" : negCount > posCount ? "Negative" : "Neutral";
     }
 
     result._extraction_method = "local_regex";

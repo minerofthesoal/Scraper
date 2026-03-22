@@ -1,11 +1,11 @@
-/* ── WebScraper Pro Background Script v0.6.7.0.1 ── */
+/* ── WebScraper Pro Background Script v0.7.2.2 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
 /* ── State ── */
 var scrapedRecords = [];
 var citations = [];
-var sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
+var sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0, video: 0 };
 var lastUploadRecordCount = 0;
 var dedupSkipped = 0;
 
@@ -14,7 +14,7 @@ browser.storage.local.get(["scrapedRecords", "citations", "sessionStats", "lastU
   if (Array.isArray(data.scrapedRecords)) scrapedRecords = data.scrapedRecords;
   if (Array.isArray(data.citations)) citations = data.citations;
   if (data.sessionStats && typeof data.sessionStats === "object") {
-    sessionStats = Object.assign({ words: 0, pages: 0, images: 0, links: 0, audio: 0 }, data.sessionStats);
+    sessionStats = Object.assign({ words: 0, pages: 0, images: 0, links: 0, audio: 0, video: 0 }, data.sessionStats);
   }
   if (typeof data.lastUploadRecordCount === "number") lastUploadRecordCount = data.lastUploadRecordCount;
 }).catch(function (err) {
@@ -135,6 +135,14 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
 
     case "AI_EXTRACT_REQUEST":
       handleAIExtractRequest(msg);
+      break;
+
+    case "AI_BATCH_EXTRACT":
+      handleAIBatchExtract(msg);
+      break;
+
+    case "AI_SCREENSHOT":
+      handleAIScreenshot(msg);
       break;
 
     // ── Queue actions ──
@@ -412,6 +420,34 @@ function handleScrapedData(data) {
     sessionStats.audio += data.audio.length;
   }
 
+  // Process video
+  if (data.video) {
+    for (var vi = 0; vi < data.video.length; vi++) {
+      var v = data.video[vi];
+      var videoFp = _fingerprint(v.src);
+      if (seenFingerprints.has(videoFp)) continue;
+      seenFingerprints.add(videoFp);
+
+      scrapedRecords.push({
+        id: uid(),
+        _fp: videoFp,
+        type: "video",
+        src: v.src,
+        media_type: v.mime || v.type || "",
+        poster: v.poster || "",
+        duration: v.duration || 0,
+        width: v.width || 0,
+        height: v.height || 0,
+        source_url: meta.url,
+        source_title: meta.title,
+        scraped_at: data.scrapedAt,
+        citation_mla: citation.mla,
+        citation_apa: citation.apa || "",
+      });
+    }
+    sessionStats.video += data.video.length;
+  }
+
   // Process smart extract article data
   if (data.article) {
     var articleFp = _fingerprint(data.article.fullText);
@@ -493,6 +529,7 @@ function exportData(format, options) {
   var images = scrapedRecords.filter(function (r) { return r.type === "image"; }).map(clean);
   var links = scrapedRecords.filter(function (r) { return r.type === "link"; }).map(clean);
   var audioRecs = scrapedRecords.filter(function (r) { return r.type === "audio"; }).map(clean);
+  var videoRecs = scrapedRecords.filter(function (r) { return r.type === "video"; }).map(clean);
 
   if (format === "jsonl") {
     var toJL = prettyPrint
@@ -503,10 +540,11 @@ function exportData(format, options) {
     if (images.length > 0) WSP_Utils.downloadText(toJL(images), "webscraper-pro/data/images_" + timestamp + ext);
     if (links.length > 0) WSP_Utils.downloadText(toJL(links), "webscraper-pro/data/links_" + timestamp + ext);
     if (audioRecs.length > 0) WSP_Utils.downloadText(toJL(audioRecs), "webscraper-pro/data/audio_" + timestamp + ext);
+    if (videoRecs.length > 0) WSP_Utils.downloadText(toJL(videoRecs), "webscraper-pro/data/video_" + timestamp + ext);
     WSP_Utils.downloadText(toJL(citations), "webscraper-pro/data/citations_" + timestamp + ext);
   } else if (format === "json") {
     var indent = prettyPrint ? 4 : 2;
-    WSP_Utils.downloadText(JSON.stringify({ texts: texts, images: images, links: links, audio: audioRecs, citations: citations }, null, indent),
+    WSP_Utils.downloadText(JSON.stringify({ texts: texts, images: images, links: links, audio: audioRecs, video: videoRecs, citations: citations }, null, indent),
       "webscraper-pro/data/full_export_" + timestamp + ".json");
   } else if (format === "csv") {
     if (texts.length > 0) WSP_Utils.downloadText(WSP_Utils.toCSV(texts), "webscraper-pro/data/text_data_" + timestamp + ".csv", "text/csv");
@@ -527,7 +565,7 @@ function exportData(format, options) {
 function toMarkdown(texts, images, links, audio, citationsList) {
   var md = "# WebScraper Pro Export\n\n";
   md += "**Generated:** " + new Date().toISOString() + "  \n";
-  md += "**Version:** v0.6.7.0.1  \n";
+  md += "**Version:** v0.7.2.2  \n";
   md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
   md += "---\n\n";
 
@@ -591,7 +629,7 @@ function toMarkdown(texts, images, links, audio, citationsList) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.6.7.0.1</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.7.2.2</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
@@ -869,6 +907,57 @@ function handleAIExtractRequest(msg) {
   });
 }
 
+/* ── Handle AI batch extraction (from popup) ── */
+function handleAIBatchExtract(msg) {
+  if (typeof WSP_AI === "undefined") {
+    notify("WebScraper Pro", "AI module not loaded. Reload the extension.");
+    return;
+  }
+
+  var textRecords = scrapedRecords.filter(function (r) { return r.type === "text" && r.text && r.text.length > 20; });
+  if (textRecords.length === 0) {
+    notify("WebScraper Pro", "No text records to extract from. Scrape some pages first!");
+    return;
+  }
+
+  var template = WSP_AI.getTemplate(msg.template || "article");
+  notify("WebScraper Pro", "Starting batch extraction on " + textRecords.length + " records...");
+
+  WSP_AI.batchExtract(textRecords, template, function (done, total) {
+    if (done % 5 === 0 || done === total) {
+      notify("WebScraper Pro", "AI batch: " + done + "/" + total + " done");
+    }
+  }).then(function (batch) {
+    var validResults = batch.results.filter(function (r) { return r.data && !r.skipped; });
+    if (validResults.length > 0) {
+      for (var i = 0; i < validResults.length; i++) {
+        handleAIExtractResult({
+          template: msg.template,
+          result: validResults[i].data,
+          source_url: validResults[i].source_url || "",
+        });
+      }
+    }
+    /* Send all results to popup */
+    try {
+      browser.runtime.sendMessage({
+        action: "AI_RESULTS",
+        results: validResults
+      }).catch(function () {});
+    } catch (e) { /* ignore */ }
+    notify("WebScraper Pro", "Batch extraction complete: " + validResults.length + " results, " + batch.errors.length + " errors");
+  }).catch(function (err) {
+    notify("WebScraper Pro - Error", "Batch extraction failed: " + err.message);
+  });
+}
+
+/* ── Handle AI screenshot extraction (ASE) ── */
+function handleAIScreenshot(msg) {
+  /* ASE requires the CLI tool (scrape ai.screenshot) which runs on Linux.
+     The extension can't directly take screenshots — inform the user to use the CLI. */
+  notify("WebScraper Pro", "Screenshot Extract (ASE) requires the CLI tool. Run: scrape ai.screenshot" + (msg.scroll ? " --scroll" : "") + " -n " + (msg.pages || 1));
+}
+
 /* ── Auto-navigate for pagination ── */
 function handleAutoNavigate(url, tab) {
   if (!tab) return;
@@ -900,7 +989,7 @@ function stopAll() {
 function clearData() {
   scrapedRecords = [];
   citations = [];
-  sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0 };
+  sessionStats = { words: 0, pages: 0, images: 0, links: 0, audio: 0, video: 0 };
   lastUploadRecordCount = 0;
   persistState();
   broadcastStats();

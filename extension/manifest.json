@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebScraper Pro",
-  "version": "0.7.2.1",
+  "version": "0.7.2.2",
   "description": "Scrape text, images, links, audio, and video with smart extraction, AI-powered extraction, batch queuing, session management, GwSS visualization, HuggingFace upload, and MLA/APA citations.",
   "author": "WebScraper Pro Team",
   "homepage_url": "https://github.com/minerofthesoal/Scraper",

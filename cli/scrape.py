@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.7.2.1"
+VERSION = "0.7.2.2"
 
 # ── Config paths ──
 def get_config_dir():
@@ -112,6 +112,82 @@ DATA_DIR = get_data_dir()
 HISTORY_FILE = os.path.join(DATA_DIR, "history.jsonl")
 
 OWNER_HF_REPO = "ray0rf1re/Site.scraped"
+
+# ── Python 3.14+ venv fallback for AI commands ──
+def _find_compatible_python():
+    """Find a compatible Python (3.10-3.13) when running on 3.14+.
+    Returns (python_path, version_str) or (None, None) if no compatible python found."""
+    # Preferred order: 3.12 first, then 3.13, 3.11, 3.10
+    candidates = ["python3.12", "python3.13", "python3.11", "python3.10"]
+    for candidate in candidates:
+        path = shutil.which(candidate)
+        if path:
+            try:
+                result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    ver = result.stdout.strip().split()[-1]
+                    return path, ver
+            except Exception:
+                continue
+    return None, None
+
+
+def _ensure_ai_venv():
+    """If running Python 3.14+, create a venv with a compatible Python and re-exec.
+    Returns True if we should continue, or exits to re-exec in the venv."""
+    py_ver = sys.version_info
+    if py_ver >= (3, 14):
+        venv_dir = os.path.join(os.path.expanduser("~"), ".webscraper-pro-ai-venv")
+        venv_python = os.path.join(venv_dir, "bin", "python")
+
+        # If we're already in the venv, continue
+        if os.environ.get("WSP_AI_VENV") == "1":
+            return True
+
+        # If venv exists and works, re-exec into it
+        if os.path.exists(venv_python):
+            console.print(f"[yellow]Python {py_ver.major}.{py_ver.minor} detected — using AI venv at {venv_dir}[/yellow]")
+            env = os.environ.copy()
+            env["WSP_AI_VENV"] = "1"
+            os.execve(venv_python, [venv_python] + sys.argv, env)
+
+        # Need to create venv with compatible Python
+        console.print(f"[yellow]Python {py_ver.major}.{py_ver.minor} is not supported by PyTorch.[/yellow]")
+        console.print("[dim]Searching for Python 3.10-3.13 to create AI venv...[/dim]")
+
+        compat_python, compat_ver = _find_compatible_python()
+        if not compat_python:
+            console.print("[red]No compatible Python (3.10-3.13) found on system.[/red]")
+            console.print("[yellow]Install Python 3.12: sudo apt install python3.12 python3.12-venv[/yellow]")
+            return False
+
+        console.print(f"[green]Found {compat_python} ({compat_ver})[/green]")
+        console.print(f"[dim]Creating AI venv at {venv_dir}...[/dim]")
+
+        try:
+            result = subprocess.run([compat_python, "-m", "venv", venv_dir],
+                                    capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                console.print(f"[red]Failed to create venv: {result.stderr}[/red]")
+                console.print(f"[yellow]Try: sudo apt install python3.{compat_ver.split('.')[1]}-venv[/yellow]")
+                return False
+
+            console.print(f"[green]AI venv created with Python {compat_ver}[/green]")
+
+            # Install the CLI into the venv
+            pip_path = os.path.join(venv_dir, "bin", "pip")
+            cli_dir = os.path.dirname(os.path.abspath(__file__))
+            subprocess.run([pip_path, "install", "-e", cli_dir], capture_output=True, text=True, timeout=120)
+
+            # Re-exec into the venv
+            env = os.environ.copy()
+            env["WSP_AI_VENV"] = "1"
+            os.execve(venv_python, [venv_python] + sys.argv, env)
+        except Exception as e:
+            console.print(f"[red]Failed to create AI venv: {e}[/red]")
+            return False
+
+    return True
 
 DEFAULT_CONFIG = {
     "save_path": os.path.join(DATA_DIR, "scraped"),
@@ -1411,6 +1487,21 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.7.2.2", "2026-03-21", [
+            "Popup: add video stats counter, video data filter, Parquet export option",
+            "Popup: add scrapeVideo/allowYouTube/scrapeJS quick toggles",
+            "Popup: add AI Screenshot Extract (ASE) section with scroll option",
+            "AI extraction: always use local regex fallback when server unavailable (no longer errors when disabled)",
+            "AI extraction: improved local regex with URL, topic, sentiment, and description extraction",
+            "AI batch extraction: new handler in background script",
+            "Video processing: background script now stores video records from scraper",
+            "Video export: included in JSONL, JSON, and HuggingFace uploads",
+            "Python 3.14+: auto-create venv with Python 3.12 (preferred) or 3.10-3.13 fallback for AI commands",
+            "Remove Dependabot configuration",
+            "New icon: modern gradient design with document/extraction motif",
+            "Improved homepage: redesigned with navigation, export formats, how-it-works steps",
+            "Fix version strings: popup, footer, background exports all updated to current version",
+        ]),
         ("0.7.2.1", "2026-03-21", [
             "Fix uninstall crash: pip uninstall now runs BEFORE deleting the venv directory",
             "Fix FileNotFoundError when sys.executable points to deleted venv python",
@@ -2931,10 +3022,13 @@ def ai_serve(gpu, port, model):
     Ampere (RTX 3000), Ada Lovelace (RTX 4000), Hopper.
 
     Requirements: pip install torch torchvision transformers
-    Requires Python 3.10+ (PyTorch 2.6+ supports 3.13, 3.14 support expected).
+    Requires Python 3.10-3.13 (PyTorch does not support 3.14+).
     Pascal GPUs (GTX 1070/1080): Use PyTorch <=2.4.1 with CUDA 11.8.
     """
-    # Check Python version first
+    # Check Python version — 3.14+ not supported by PyTorch, use venv fallback
+    if not _ensure_ai_venv():
+        return
+
     py_minor = sys.version_info.minor
     if py_minor < 10:
         console.print(f"[red]Python {sys.version_info.major}.{py_minor} is too old. PyTorch requires Python 3.10+.[/red]")
@@ -3402,12 +3496,15 @@ def ai_setup(gpu):
     This will install required dependencies and download the model.
     GPU mode requires CUDA-capable GPU (min GTX 1070 8GB).
     CPU mode works on any modern processor (i7-7660U, i7-7700HQ, etc.).
-    Requires Python 3.10+ (PyTorch 2.6+ supports 3.13, 3.14 expected).
+    Requires Python 3.10-3.13 (PyTorch does not support 3.14+).
     Pascal GPUs (GTX 1070/1080): Use PyTorch <=2.4.1 with CUDA 11.8.
     """
     console.print("[bold blue]NuExtract AI Setup[/bold blue]\n")
 
-    # Check Python version
+    # Check Python version — 3.14+ not supported by PyTorch, use venv fallback
+    if not _ensure_ai_venv():
+        return
+
     py_ver = sys.version_info
     console.print(f"  Python: [cyan]{py_ver.major}.{py_ver.minor}.{py_ver.micro}[/cyan]")
 
@@ -3416,7 +3513,7 @@ def ai_setup(gpu):
         console.print("  [yellow]Upgrade to Python 3.10+.[/yellow]")
         return
 
-    console.print(f"  Python compatibility: [green]OK[/green] (3.10+)")
+    console.print(f"  Python compatibility: [green]OK[/green] (3.10-3.13)")
 
     # Check PyTorch
     try:

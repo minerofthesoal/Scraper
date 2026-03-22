@@ -9,7 +9,7 @@
     <header>
       <div class="header-left">
         <h1>WebScraper Pro</h1>
-        <span id="version-tag" class="version">v0.7</span>
+        <span id="version-tag" class="version">v0.7.2.2</span>
       </div>
       <div class="header-right">
         <button id="btn-theme" class="btn-icon" title="Toggle theme">&#9790;</button>
@@ -85,6 +85,18 @@
           <input type="checkbox" id="chk-download-images">
           <span>Download images</span>
         </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-scrape-video" checked>
+          <span>Scrape video</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-allow-youtube">
+          <span>Include YouTube</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="chk-scrape-js">
+          <span>JS-rendered content</span>
+        </label>
       </section>
 
       <section class="stats">
@@ -95,6 +107,7 @@
           <div class="stat"><span id="stat-images">0</span><small>Images</small></div>
           <div class="stat"><span id="stat-links">0</span><small>Links</small></div>
           <div class="stat"><span id="stat-audio">0</span><small>Audio</small></div>
+          <div class="stat"><span id="stat-video">0</span><small>Video</small></div>
         </div>
         <div class="stat-meta">
           <span id="stat-records">0 records</span>
@@ -138,6 +151,7 @@
           <option value="image">Images</option>
           <option value="link">Links</option>
           <option value="audio">Audio</option>
+          <option value="video">Video</option>
           <option value="ai_extract">AI Extract</option>
         </select>
       </div>
@@ -197,6 +211,20 @@
           <button id="btn-ai-batch" class="btn btn-secondary">Batch Extract</button>
         </div>
         <span id="ai-extract-status" class="export-status"></span>
+      </section>
+
+      <section class="ai-ase-section">
+        <h2>Screenshot Extract (ASE)</h2>
+        <small class="ase-hint">Take a screenshot, OCR text via Tesseract, save to dataset. Linux only (KDE/Hyprland/GNOME/Cinnamon).</small>
+        <div class="btn-row-2">
+          <button id="btn-ai-screenshot" class="btn btn-accent">Screenshot Extract</button>
+          <button id="btn-ai-screenshot-scroll" class="btn btn-secondary">Screenshot + Scroll</button>
+        </div>
+        <div class="field-row" style="margin-top:6px">
+          <label for="inp-ase-pages">Pages:</label>
+          <input type="number" id="inp-ase-pages" value="1" min="1" max="100" style="width:60px">
+        </div>
+        <span id="ase-status" class="export-status"></span>
       </section>
 
       <section class="ai-results-section">
@@ -267,6 +295,7 @@
             <option value="csv">CSV</option>
             <option value="xml">XML</option>
             <option value="md">Markdown</option>
+            <option value="parquet">Parquet</option>
           </select>
         </div>
         <label class="toggle-row">
@@ -328,7 +357,7 @@
     </div>
 
     <footer>
-      <small>v0.7 | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
+      <small>v0.7.2.2 | <a id="link-options" href="#">Settings</a> | <a id="link-shortcuts" href="#">Shortcuts</a></small>
     </footer>
   </div>
   <script src="popup.js"></script>
