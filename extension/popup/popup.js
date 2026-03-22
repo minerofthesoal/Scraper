@@ -1,4 +1,4 @@
-/* ── Popup Controller v0.7 ── */
+/* ── Popup Controller v0.7.2.2 ── */
 (function () {
   "use strict";
 
@@ -56,6 +56,9 @@
   const chkCookieDismiss = $("#chk-cookie-dismiss");
   const chkDeobfuscate = $("#chk-deobfuscate");
   const chkDownloadImages = $("#chk-download-images");
+  const chkScrapeVideo = $("#chk-scrape-video");
+  const chkAllowYoutube = $("#chk-allow-youtube");
+  const chkScrapeJs = $("#chk-scrape-js");
   const selFormat = $("#sel-format");
 
   /* ── Session Timer ── */
@@ -92,13 +95,17 @@
   /* ── Load saved config ── */
   browser.storage.local.get([
     "autoScroll", "autoNext", "dataFormat", "sessionStats", "scrapeActive",
-    "cookieDismissEnabled", "deobfuscateEnabled", "downloadImages"
+    "cookieDismissEnabled", "deobfuscateEnabled", "downloadImages",
+    "scrapeVideo", "allowYouTube", "scrapeJS"
   ]).then((cfg) => {
     if (chkAutoScroll) chkAutoScroll.checked = cfg.autoScroll !== false;
     if (chkAutoNext) chkAutoNext.checked = cfg.autoNext !== false;
     if (chkCookieDismiss) chkCookieDismiss.checked = !!cfg.cookieDismissEnabled;
     if (chkDeobfuscate) chkDeobfuscate.checked = !!cfg.deobfuscateEnabled;
     if (chkDownloadImages) chkDownloadImages.checked = !!cfg.downloadImages;
+    if (chkScrapeVideo) chkScrapeVideo.checked = cfg.scrapeVideo !== false;
+    if (chkAllowYoutube) chkAllowYoutube.checked = !!cfg.allowYouTube;
+    if (chkScrapeJs) chkScrapeJs.checked = !!cfg.scrapeJS;
     if (selFormat) selFormat.value = cfg.dataFormat || "jsonl";
     updateStats(cfg.sessionStats || {});
     updateStatus(cfg.scrapeActive ? "scraping" : "idle");
@@ -113,10 +120,13 @@
       cookieDismissEnabled: chkCookieDismiss ? chkCookieDismiss.checked : false,
       deobfuscateEnabled: chkDeobfuscate ? chkDeobfuscate.checked : false,
       downloadImages: chkDownloadImages ? chkDownloadImages.checked : false,
+      scrapeVideo: chkScrapeVideo ? chkScrapeVideo.checked : true,
+      allowYouTube: chkAllowYoutube ? chkAllowYoutube.checked : false,
+      scrapeJS: chkScrapeJs ? chkScrapeJs.checked : false,
       dataFormat: selFormat ? selFormat.value : "jsonl",
     });
   }
-  [chkAutoScroll, chkAutoNext, chkCookieDismiss, chkDeobfuscate, chkDownloadImages, selFormat].forEach(el => {
+  [chkAutoScroll, chkAutoNext, chkCookieDismiss, chkDeobfuscate, chkDownloadImages, chkScrapeVideo, chkAllowYoutube, chkScrapeJs, selFormat].forEach(el => {
     if (el) el.addEventListener("change", saveQuickSettings);
   });
 
@@ -151,6 +161,7 @@
     set("#stat-images", s.images || 0);
     set("#stat-links", s.links || 0);
     set("#stat-audio", s.audio || 0);
+    set("#stat-video", s.video || 0);
   }
 
   function updateRecordMeta(count, stats) {
@@ -649,7 +660,7 @@
       // Type counts (always count from all records, not filtered)
       const typeCounts = $("#data-type-counts");
       if (typeCounts) {
-        const types = { text: 0, image: 0, link: 0, audio: 0, ai_extract: 0 };
+        const types = { text: 0, image: 0, link: 0, audio: 0, video: 0, ai_extract: 0 };
         records.forEach(r => { if (types[r.type] !== undefined) types[r.type]++; });
         typeCounts.innerHTML = Object.entries(types)
           .filter(([, v]) => v > 0)
@@ -813,7 +824,7 @@
         if (domains.length === 0) {
           list.innerHTML = '<div class="data-empty">No scraped data yet</div>';
         } else {
-          var typeColors = { text: "var(--accent)", image: "var(--orange)", link: "var(--green)", audio: "#8b5cf6", ai_extract: "var(--pink)" };
+          var typeColors = { text: "var(--accent)", image: "var(--orange)", link: "var(--green)", audio: "#8b5cf6", video: "#e11d48", ai_extract: "var(--pink)" };
           list.innerHTML = domains.slice(0, 20).map(([d, info]) => {
             var dots = Object.keys(info.types).map(t =>
               '<span class="gdi-type-dot" style="background:' + (typeColors[t] || "var(--accent)") + '" title="' + t + ': ' + info.types[t] + '"></span>'
@@ -836,6 +847,23 @@
       if (gsSize) gsSize.textContent = formatBytes(totalSize);
     }).catch(() => {});
   }
+
+  /* ── AI Screenshot Extract (ASE) ── */
+  bindClick("#btn-ai-screenshot", () => {
+    const pages = parseInt(($("#inp-ase-pages") || {}).value) || 1;
+    const statusEl = $("#ase-status");
+    if (statusEl) statusEl.textContent = "Starting screenshot extraction...";
+    sendToBackground("AI_SCREENSHOT", { pages, scroll: false });
+    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 15000);
+  });
+
+  bindClick("#btn-ai-screenshot-scroll", () => {
+    const pages = parseInt(($("#inp-ase-pages") || {}).value) || 1;
+    const statusEl = $("#ase-status");
+    if (statusEl) statusEl.textContent = "Starting screenshot + scroll extraction...";
+    sendToBackground("AI_SCREENSHOT", { pages, scroll: true });
+    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 15000);
+  });
 
   /* ── Keyboard Navigation ── */
   document.addEventListener("keydown", (e) => {

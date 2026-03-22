@@ -7,40 +7,88 @@
   <meta name="description" content="WebScraper Pro is a powerful Firefox extension for scraping text, images, links, audio, and video with AI extraction, batch queuing, GwSS visualization, and HuggingFace upload.">
   <style>
     :root {
-      --bg: #0d1117;
-      --bg2: #161b22;
-      --bg3: #21262d;
-      --border: #30363d;
-      --text: #e6edf3;
-      --text2: #8b949e;
+      --bg: #0a0e17;
+      --bg2: #111827;
+      --bg3: #1e2433;
+      --bg4: #252d3d;
+      --border: #2a3346;
+      --text: #e8edf5;
+      --text2: #8892a6;
+      --text3: #5c6478;
       --accent: #818cf8;
       --accent2: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
       --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.15);
       --orange: #f59e0b;
       --purple: #8b5cf6;
       --pink: #ec4899;
+      --red: #ef4444;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
+      line-height: 1.7;
+      overflow-x: hidden;
     }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: #a5b4fc; text-decoration: underline; }
 
+    /* ── Nav ── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(10, 14, 23, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 1.1rem; color: var(--text);
+    }
+    .nav-brand svg { width: 28px; height: 28px; }
+    .nav-links { display: flex; gap: 24px; }
+    .nav-links a { color: var(--text2); font-size: 0.9rem; font-weight: 500; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── Hero ── */
     .hero {
       text-align: center;
-      padding: 80px 20px 60px;
-      background: linear-gradient(135deg, var(--bg) 0%, #1a1040 50%, var(--bg) 100%);
-      border-bottom: 1px solid var(--border);
+      padding: 140px 20px 80px;
+      position: relative;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99, 102, 241, 0.08), transparent),
+        radial-gradient(ellipse 40% 40% at 70% 80%, rgba(236, 72, 153, 0.06), transparent),
+        var(--bg);
+    }
+    .hero::after {
+      content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    }
+    .hero .version-badge {
+      display: inline-block;
+      background: var(--accent-glow);
+      color: var(--accent);
+      padding: 5px 16px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      margin-bottom: 20px;
     }
     .hero h1 {
-      font-size: 3rem;
+      font-size: 3.5rem;
       font-weight: 800;
-      letter-spacing: -1px;
-      background: linear-gradient(90deg, var(--accent), var(--pink));
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--pink) 50%, var(--orange) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -48,305 +96,474 @@
     .hero .tagline {
       font-size: 1.2rem;
       color: var(--text2);
-      margin: 12px 0 30px;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .hero .version {
-      display: inline-block;
-      background: var(--bg3);
-      color: var(--accent);
-      padding: 4px 14px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-bottom: 24px;
+      margin: 16px auto 32px;
+      max-width: 620px;
     }
     .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
     .btn {
-      display: inline-block;
+      display: inline-flex; align-items: center; gap: 8px;
       padding: 12px 28px;
-      border-radius: 8px;
-      font-size: 1rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
       font-weight: 600;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent2); text-decoration: none; }
-    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { background: var(--border); text-decoration: none; }
-
-    .container { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
-
-    .features {
-      padding: 60px 20px;
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
     }
-    .features h2 {
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4); text-decoration: none; }
+    .btn-secondary {
+      background: var(--bg3);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--bg4); text-decoration: none; }
+
+    .hero-stats {
+      display: flex; gap: 40px; justify-content: center; margin-top: 48px;
+      flex-wrap: wrap;
+    }
+    .hero-stat { text-align: center; }
+    .hero-stat .num { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+    .hero-stat .label { font-size: 0.8rem; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+
+    /* ── Container ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Features ── */
+    .features { padding: 80px 20px; }
+    .section-label {
       text-align: center;
-      font-size: 2rem;
-      margin-bottom: 40px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .section-title {
+      text-align: center;
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .section-desc {
+      text-align: center;
+      color: var(--text2);
+      max-width: 600px;
+      margin: 0 auto 48px;
     }
     .feature-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      max-width: 1000px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      max-width: 1100px;
       margin: 0 auto;
     }
     .feature-card {
       background: var(--bg2);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
+      border-radius: 14px;
+      padding: 28px 24px;
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+      position: relative;
+    }
+    .feature-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.1);
+    }
+    .feature-card .fc-icon {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 { font-size: 1.05rem; margin-bottom: 8px; font-weight: 600; }
+    .feature-card p { font-size: 0.88rem; color: var(--text2); line-height: 1.6; }
+
+    /* ── How it works ── */
+    .how-it-works { padding: 80px 20px; background: var(--bg2); }
+    .steps {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 24px; max-width: 1000px; margin: 0 auto;
+    }
+    .step {
+      text-align: center; padding: 24px 16px;
+      position: relative;
+    }
+    .step-num {
+      width: 44px; height: 44px;
+      background: var(--accent-glow);
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1.1rem; color: var(--accent);
+      margin: 0 auto 16px;
+    }
+    .step h3 { font-size: 0.95rem; margin-bottom: 6px; }
+    .step p { font-size: 0.82rem; color: var(--text2); }
+
+    /* ── Export formats ── */
+    .formats { padding: 80px 20px; }
+    .format-grid {
+      display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+      margin-top: 32px;
+    }
+    .format-tag {
+      padding: 10px 22px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
       transition: border-color 0.2s;
     }
-    .feature-card:hover { border-color: var(--accent); }
-    .feature-card .icon {
-      font-size: 1.8rem;
-      margin-bottom: 12px;
-      display: block;
-    }
-    .feature-card h3 {
-      font-size: 1.1rem;
-      margin-bottom: 8px;
-      color: var(--text);
-    }
-    .feature-card p {
-      font-size: 0.9rem;
-      color: var(--text2);
-      line-height: 1.5;
-    }
+    .format-tag:hover { border-color: var(--accent); }
 
-    .section {
-      padding: 50px 20px;
-      border-top: 1px solid var(--border);
+    /* ── CLI ── */
+    .cli-section { padding: 80px 20px; background: var(--bg2); }
+    .cli-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 32px; max-width: 1000px; margin: 0 auto;
     }
-    .section h2 {
-      font-size: 1.8rem;
-      margin-bottom: 20px;
-    }
-
-    .install-steps {
-      list-style: none;
-      counter-reset: step;
-    }
-    .install-steps li {
-      counter-increment: step;
-      padding: 12px 0 12px 50px;
+    .cli-info h3 { font-size: 1.3rem; margin-bottom: 12px; }
+    .cli-info p { color: var(--text2); margin-bottom: 16px; }
+    .cli-info ul { list-style: none; padding: 0; }
+    .cli-info li {
+      padding: 6px 0 6px 20px;
       position: relative;
-      border-left: 2px solid var(--border);
-      margin-left: 16px;
+      color: var(--text2);
+      font-size: 0.9rem;
     }
-    .install-steps li::before {
-      content: counter(step);
-      position: absolute;
-      left: -14px;
-      width: 26px;
-      height: 26px;
-      background: var(--accent);
-      color: #fff;
+    .cli-info li::before {
+      content: ""; position: absolute; left: 0; top: 14px;
+      width: 8px; height: 8px; background: var(--green);
       border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.8rem;
-      font-weight: 700;
     }
-    .install-steps li strong { color: var(--text); }
-    .install-steps li { color: var(--text2); }
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      color: var(--green);
+      line-height: 1.9;
+    }
+    pre .comment { color: var(--text3); }
+
+    /* ── Shortcuts ── */
+    .shortcuts { padding: 80px 20px; }
+    .shortcut-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px; max-width: 800px; margin: 0 auto;
+    }
+    .shortcut {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+    .shortcut .label { font-size: 0.9rem; color: var(--text2); }
+    kbd {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 3px 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      font-family: inherit;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding: 40px 20px;
+      border-top: 1px solid var(--border);
+      color: var(--text3);
+      font-size: 0.85rem;
+    }
+    .footer-links { display: flex; gap: 20px; justify-content: center; margin-bottom: 12px; }
+    .footer-links a { color: var(--text2); font-size: 0.85rem; }
 
     code {
       background: var(--bg3);
       padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.9em;
+      border-radius: 5px;
+      font-size: 0.88em;
       color: var(--orange);
     }
 
-    .cli-section pre {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
-      overflow-x: auto;
-      font-size: 0.85rem;
-      color: var(--green);
-      line-height: 1.8;
-    }
-
-    .footer {
-      text-align: center;
-      padding: 30px 20px;
-      border-top: 1px solid var(--border);
-      color: var(--text2);
-      font-size: 0.85rem;
-    }
-    .footer a { color: var(--accent); }
-
-    .badges { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
-    .badge {
-      display: inline-block;
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 12px;
-      color: #fff;
-    }
-
-    @media (max-width: 600px) {
-      .hero h1 { font-size: 2rem; }
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.2rem; }
       .hero .tagline { font-size: 1rem; }
       .feature-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .cli-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+    }
+    @media (max-width: 480px) {
+      .steps { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="nav-brand">
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="url(#logo-grad)"/>
+          <path d="M8 12h16M8 16h12M8 20h8" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="24" cy="20" r="3" fill="#10b981"/>
+          <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs>
+        </svg>
+        WebScraper Pro
+      </div>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#cli">CLI</a>
+        <a href="#shortcuts">Shortcuts</a>
+        <a href="https://github.com/minerofthesoal/Scraper">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
   <div class="hero">
-    <span class="version">v0.7.2</span>
+    <span class="version-badge">v0.7.2.2 &mdash; Now with AI Screenshot Extract & Video Scraping</span>
     <h1>WebScraper Pro</h1>
     <p class="tagline">
-      A powerful Firefox extension for smart web scraping with AI extraction, batch queuing, interactive graph visualization, and HuggingFace dataset upload.
+      The most powerful Firefox extension for web scraping. AI-powered extraction, interactive graph visualization, batch queuing, and one-click HuggingFace upload.
     </p>
     <div class="btn-row">
-      <a href="https://github.com/minerofthesoal/Scraper/releases" class="btn btn-primary">Download Latest Release</a>
-      <a href="https://github.com/minerofthesoal/Scraper" class="btn btn-secondary">View on GitHub</a>
+      <a href="https://github.com/minerofthesoal/Scraper/releases" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12zM3 14h10v-1H3v1z"/></svg>
+        Download v0.7.2.2
+      </a>
+      <a href="https://github.com/minerofthesoal/Scraper" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View Source
+      </a>
     </div>
-    <div class="badges">
-      <span class="badge" style="background: var(--accent)">Firefox Extension</span>
-      <span class="badge" style="background: var(--green)">Open Source</span>
-      <span class="badge" style="background: var(--orange)">Python CLI</span>
-      <span class="badge" style="background: var(--purple)">AI Powered</span>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">58+</div><div class="label">CLI Commands</div></div>
+      <div class="hero-stat"><div class="num">9</div><div class="label">Export Formats</div></div>
+      <div class="hero-stat"><div class="num">7</div><div class="label">Popup Tabs</div></div>
+      <div class="hero-stat"><div class="num">5</div><div class="label">Data Types</div></div>
     </div>
   </div>
 
-  <section class="features">
+  <!-- Features -->
+  <section class="features" id="features">
     <div class="container">
-      <h2>Features</h2>
+      <div class="section-label">Capabilities</div>
+      <h2 class="section-title">Everything You Need to Scrape the Web</h2>
+      <p class="section-desc">From simple text extraction to AI-powered structured data mining, WebScraper Pro handles it all.</p>
+
       <div class="feature-grid">
         <div class="feature-card">
-          <span class="icon" style="color:var(--accent)">&#128196;</span>
-          <h3>Universal Text Extraction</h3>
-          <p>Scrapes text from any site including SPAs, shadow DOM, web components, and dynamically-loaded content with multi-strategy fallback.</p>
+          <div class="fc-icon" style="background: var(--accent-glow); color: var(--accent)">&#128196;</div>
+          <h3>Smart Text Extraction</h3>
+          <p>Multi-strategy extraction from SPAs, shadow DOM, web components, JSON-LD, microdata, and dynamically-loaded content.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" style="color:var(--orange)">&#128248;</span>
-          <h3>Image &amp; Media Scraping</h3>
-          <p>Extracts images (including lazy-loaded, CSS backgrounds, srcset), audio sources, and video files with YouTube filtering toggle.</p>
+          <div class="fc-icon" style="background: rgba(245, 158, 11, 0.12); color: var(--orange)">&#127909;</div>
+          <h3>Video &amp; Media Scraping</h3>
+          <p>Extract video sources, embeds, posters, tracks, and subtitles. YouTube filtering toggle, audio capture, and image download.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" style="color:var(--green)">&#128279;</span>
-          <h3>Link Discovery</h3>
-          <p>Finds all links including onclick navigation, data-href attributes, role="link" elements, and JavaScript-rendered URLs.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon" style="color:var(--purple)">&#129302;</span>
+          <div class="fc-icon" style="background: rgba(139, 92, 246, 0.12); color: var(--purple)">&#129302;</div>
           <h3>AI-Powered Extraction</h3>
-          <p>Uses NuExtract-2.0-2B for intelligent structured data extraction. Supports custom templates, local regex fallback, and combined "All" mode.</p>
+          <p>NuExtract-2.0-2B for structured data. 9 built-in templates, custom JSON schemas, local regex fallback, batch processing.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" style="color:var(--pink)">&#128202;</span>
+          <div class="fc-icon" style="background: rgba(236, 72, 153, 0.12); color: var(--pink)">&#128248;</div>
+          <h3>Screenshot Extract (ASE)</h3>
+          <p>Take screenshots, OCR with Tesseract, auto-next page. Works on KDE, Hyprland, GNOME, and Cinnamon desktops.</p>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon" style="background: var(--green-glow); color: var(--green)">&#128202;</div>
           <h3>GwSS Visualization</h3>
-          <p>Interactive force-directed graph showing all scraped sites with live physics, favicons, unique composite edge patterns, and per-site data flow diagrams (SSDg).</p>
+          <p>Interactive force-directed graph of all scraped domains with live physics, unique composite edge patterns, favicons, and SSDg diagrams.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" style="color:var(--orange)">&#128640;</span>
+          <div class="fc-icon" style="background: rgba(245, 158, 11, 0.12); color: var(--orange)">&#128640;</div>
           <h3>HuggingFace Upload</h3>
-          <p>One-click upload to HuggingFace datasets with automatic JSONL sharding, MLA/APA citations, and community dataset support.</p>
+          <p>One-click upload with automatic JSONL sharding, MLA/APA citations, version-aware README, and community dataset support.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" style="color:var(--green)">&#9889;</span>
+          <div class="fc-icon" style="background: var(--green-glow); color: var(--green)">&#9889;</div>
           <h3>Batch Queue &amp; Auto-Scan</h3>
-          <p>Queue multiple URLs for background scraping. Auto-scan crawls linked pages automatically with configurable rate limiting and domain filtering.</p>
+          <p>Queue multiple URLs for background scraping. Auto-scan crawls pages with configurable rate limiting and domain filtering.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" style="color:var(--accent)">&#128737;</span>
+          <div class="fc-icon" style="background: rgba(239, 68, 68, 0.12); color: var(--red)">&#128737;</div>
           <h3>Privacy &amp; Security</h3>
-          <p>Content sanitization, robots.txt respect, sensitive data filtering (PII, API keys, slurs), and configurable redaction modes.</p>
+          <p>XSS sanitization, robots.txt compliance, PII/API key/slur filtering with configurable redaction modes.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" style="color:var(--purple)">&#128187;</span>
-          <h3>Python CLI</h3>
-          <p>Full-featured command-line interface with 55+ commands for data management, AI model serving, HuggingFace operations, and export formatting.</p>
+          <div class="fc-icon" style="background: var(--accent-glow); color: var(--accent)">&#128187;</div>
+          <h3>Python CLI (58+ Commands)</h3>
+          <p>Full CLI for data management, AI model serving, Parquet export, screenshot OCR, HuggingFace ops, and system diagnostics.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="section">
+  <!-- How it Works -->
+  <section class="how-it-works" id="install">
     <div class="container">
-      <h2>Installation</h2>
-      <ol class="install-steps">
-        <li><strong>Download</strong> the latest <code>.xpi</code> file from the <a href="https://github.com/minerofthesoal/Scraper/releases">Releases page</a></li>
-        <li><strong>Open Firefox</strong> and navigate to <code>about:addons</code></li>
-        <li><strong>Click the gear icon</strong> and select "Install Add-on From File..."</li>
-        <li><strong>Select the .xpi file</strong> and approve the permissions</li>
-        <li><strong>Optional:</strong> Install the CLI with <code>python install.py</code> for additional features</li>
-      </ol>
+      <div class="section-label">Getting Started</div>
+      <h2 class="section-title">Up and Running in Minutes</h2>
+      <p class="section-desc">Install the extension and start scraping in four easy steps.</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h3>Download</h3>
+          <p>Get the latest <code>.xpi</code> from <a href="https://github.com/minerofthesoal/Scraper/releases">GitHub Releases</a></p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h3>Install</h3>
+          <p>Open <code>about:addons</code> in Firefox, gear icon, "Install Add-on From File..."</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h3>Configure</h3>
+          <p>Set up HuggingFace token, data format, and scraping preferences in Settings</p>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <h3>Scrape</h3>
+          <p>Click the popup, select a mode (Full Page, Auto-Scan, Queue), and start collecting data</p>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section class="section cli-section">
+  <!-- Export Formats -->
+  <section class="formats">
     <div class="container">
-      <h2>CLI Quick Start</h2>
-<pre>
-# Install the CLI tool
+      <div class="section-label">Export</div>
+      <h2 class="section-title">Export in Any Format</h2>
+      <p class="section-desc">Your data, your format. Export to whatever works best for your workflow.</p>
+      <div class="format-grid">
+        <div class="format-tag" style="border-color: var(--green); color: var(--green)">JSONL</div>
+        <div class="format-tag" style="border-color: var(--orange); color: var(--orange)">JSON</div>
+        <div class="format-tag" style="border-color: var(--accent); color: var(--accent)">CSV</div>
+        <div class="format-tag" style="border-color: var(--purple); color: var(--purple)">Parquet</div>
+        <div class="format-tag" style="border-color: var(--pink); color: var(--pink)">XML</div>
+        <div class="format-tag" style="border-color: var(--text2); color: var(--text2)">Markdown</div>
+        <div class="format-tag" style="border-color: var(--orange); color: var(--orange)">PNG / WebP / JPEG</div>
+        <div class="format-tag" style="border-color: var(--green); color: var(--green)">BMP / SVG</div>
+        <div class="format-tag" style="border-color: var(--accent); color: var(--accent)">WAV (audio)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLI -->
+  <section class="cli-section" id="cli">
+    <div class="container">
+      <div class="section-label">Command Line</div>
+      <h2 class="section-title">Powerful CLI Companion</h2>
+      <p class="section-desc">58+ commands for data management, AI serving, exporting, and system diagnostics.</p>
+
+      <div class="cli-grid">
+        <div class="cli-info">
+          <h3>Key Commands</h3>
+          <ul>
+            <li>Export to JSONL, JSON, CSV, Parquet, XML, Markdown</li>
+            <li>AI extraction server with GPU/CPU auto-detect</li>
+            <li>Screenshot OCR extraction (Linux)</li>
+            <li>HuggingFace upload with auto-sharding</li>
+            <li>System diagnostics and environment check</li>
+            <li>Session management and data merging</li>
+            <li>Batch URL processing and rate limiting</li>
+            <li>One-command install and update</li>
+          </ul>
+        </div>
+        <div>
+<pre><span class="comment"># Install the CLI</span>
 python install.py
 
-# View all commands
-scrape help
+<span class="comment"># Export data in various formats</span>
+scrape export jsonl
+scrape export parquet --compression zstd
 
-# Export scraped data
-scrape export --format jsonl
+<span class="comment"># AI extraction server</span>
+scrape ai.serve --gpu
+scrape ai.setup
 
-# Start AI extraction server
-scrape ai.serve
+<span class="comment"># Screenshot OCR (Linux)</span>
+scrape ai.screenshot --pages 5
 
-# Upload to HuggingFace
+<span class="comment"># HuggingFace operations</span>
 scrape hf.push
+scrape hf.status
 
-# View scraping statistics
-scrape stats
-</pre>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="container">
-      <h2>Keyboard Shortcuts</h2>
-      <div class="feature-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">
-        <div class="feature-card">
-          <h3><code>Ctrl+Shift+S</code></h3>
-          <p>Start area selection</p>
-        </div>
-        <div class="feature-card">
-          <h3><code>Ctrl+Shift+P</code></h3>
-          <p>Scrape full page</p>
-        </div>
-        <div class="feature-card">
-          <h3><code>Ctrl+Shift+L</code></h3>
-          <p>Scroll &amp; scrape entire page</p>
-        </div>
-        <div class="feature-card">
-          <h3><code>Ctrl+Shift+A</code></h3>
-          <p>Start auto-scan</p>
-        </div>
-        <div class="feature-card">
-          <h3><code>Ctrl+Shift+X</code></h3>
-          <p>Stop all scraping</p>
+<span class="comment"># System info</span>
+scrape env
+scrape doctor</pre>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- Shortcuts -->
+  <section class="shortcuts" id="shortcuts">
+    <div class="container">
+      <div class="section-label">Keyboard</div>
+      <h2 class="section-title">Keyboard Shortcuts</h2>
+      <p class="section-desc">Fast access to all scraping modes without opening the popup.</p>
+
+      <div class="shortcut-grid">
+        <div class="shortcut">
+          <span class="label">Select Area</span>
+          <kbd>Ctrl+Shift+S</kbd>
+        </div>
+        <div class="shortcut">
+          <span class="label">Full Page</span>
+          <kbd>Ctrl+Shift+P</kbd>
+        </div>
+        <div class="shortcut">
+          <span class="label">Scroll &amp; Scrape</span>
+          <kbd>Ctrl+Shift+L</kbd>
+        </div>
+        <div class="shortcut">
+          <span class="label">Auto-Scan</span>
+          <kbd>Ctrl+Shift+A</kbd>
+        </div>
+        <div class="shortcut">
+          <span class="label">Stop All</span>
+          <kbd>Ctrl+Shift+X</kbd>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
   <footer class="footer">
+    <div class="footer-links">
+      <a href="https://github.com/minerofthesoal/Scraper">GitHub</a>
+      <a href="https://github.com/minerofthesoal/Scraper/releases">Releases</a>
+      <a href="https://huggingface.co/datasets/ray0rf1re/Site.scraped">Community Dataset</a>
+      <a href="https://github.com/minerofthesoal/Scraper/issues">Report Issue</a>
+    </div>
     <p>
       WebScraper Pro &copy; 2024-2026 &middot;
-      <a href="https://github.com/minerofthesoal/Scraper">GitHub</a> &middot;
-      <a href="https://huggingface.co/datasets/ray0rf1re/Site.scraped">Community Dataset</a> &middot;
-      Made by <a href="https://github.com/minerofthesoal">minerofthesoal</a>
+      Made by <a href="https://github.com/minerofthesoal">minerofthesoal</a> &middot;
+      Licensed under <a href="https://github.com/minerofthesoal/Scraper/blob/main/LICENSE">Uni-S License</a>
     </p>
   </footer>
 </body>
