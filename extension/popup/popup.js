@@ -575,9 +575,11 @@
       const statusText = $("#queue-status-text");
       if (statusText) statusText.textContent = done + "/" + total + " done, " + (stats.failed || 0) + " failed, " + (stats.pending || 0) + " pending";
 
+      const stopBtn = $("#btn-queue-stop");
       if (stats.processing) {
-        const stopBtn = $("#btn-queue-stop");
         if (stopBtn) stopBtn.classList.remove("hidden");
+      } else {
+        if (stopBtn) stopBtn.classList.add("hidden");
       }
     }).catch(err => console.warn("[WSP] loadQueue failed:", err));
   }

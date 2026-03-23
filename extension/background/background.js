@@ -466,6 +466,20 @@ function handleScrapedData(data) {
 
   persistState();
   broadcastStats();
+
+  /* Auto-stop: if no queue is processing, mark idle after a short delay
+     (allows auto-scan to continue without flashing idle). */
+  var queueActive = (typeof WSP_Queue !== "undefined" && WSP_Queue._processing);
+  if (!queueActive) {
+    setTimeout(function () {
+      /* Re-check after delay — auto-scan may have continued */
+      var stillQueueActive = (typeof WSP_Queue !== "undefined" && WSP_Queue._processing);
+      if (!stillQueueActive) {
+        browser.storage.local.set({ scrapeActive: false });
+        browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
+      }
+    }, 2000);
+  }
 }
 
 /* ── Get top domains from scraped records ── */
@@ -983,10 +997,16 @@ function scrapeAllTabs() {
           completed++;
           if (completed === validTabs.length) {
             notify("WebScraper Pro", "Finished scraping " + validTabs.length + " tabs.");
+            browser.storage.local.set({ scrapeActive: false });
+            browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
           }
         })
         .catch(function () {
           completed++;
+          if (completed === validTabs.length) {
+            browser.storage.local.set({ scrapeActive: false });
+            browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
+          }
         });
     }
   });
