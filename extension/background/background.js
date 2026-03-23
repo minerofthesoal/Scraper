@@ -115,19 +115,9 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
       exportImages(msg.format || "png", msg.imageIds);
       break;
 
-    // ── AI extraction ──
+    // ── Data extraction (local regex) ──
     case "AI_STATUS":
-      if (typeof WSP_AI !== "undefined") {
-        /* Refresh enabled flag from storage before returning status so the
-           popup always shows the correct state after a settings save. */
-        return WSP_AI.refreshEnabled().then(function () {
-          if (!WSP_AI._enabled) {
-            return { status: "disabled", message: "AI extraction is disabled. Enable it in Settings > AI Extraction, then Save." };
-          }
-          return WSP_AI.checkServer();
-        });
-      }
-      return Promise.resolve({ status: "disabled", message: "AI module not loaded" });
+      return Promise.resolve({ status: "local", mode: "local_regex" });
 
     case "AI_EXTRACT_RESULT":
       handleAIExtractResult(msg.data);
@@ -139,10 +129,6 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
 
     case "AI_BATCH_EXTRACT":
       handleAIBatchExtract(msg);
-      break;
-
-    case "AI_SCREENSHOT":
-      handleAIScreenshot(msg);
       break;
 
     // ── Queue actions ──
@@ -867,43 +853,34 @@ function handleAIExtractResult(data) {
   notify("WebScraper Pro", "AI extraction complete for " + (data.source_url || "page"));
 }
 
-/* ── Handle AI extraction request from content script ── */
+/* ── Handle extraction request from content script ── */
 function handleAIExtractRequest(msg) {
   if (typeof WSP_AI === "undefined") {
-    notify("WebScraper Pro", "AI module not loaded. Reload the extension.");
+    notify("WebScraper Pro", "Extract module not loaded. Reload the extension.");
     return;
   }
 
-  /* Always refresh enabled state from storage before checking — this fixes
-     the bug where settings changes don't take effect until extension reload. */
-  WSP_AI.refreshEnabled().then(function (enabled) {
-    if (!enabled) {
-      notify("WebScraper Pro", "AI extraction is disabled. Enable it in Settings > AI Extraction, then Save.");
+  var template;
+  if (msg.template === "custom" && msg.customTemplate) {
+    try {
+      template = typeof msg.customTemplate === "string" ? JSON.parse(msg.customTemplate) : msg.customTemplate;
+    } catch (e) {
+      notify("WebScraper Pro - Error", "Invalid custom template: " + e.message);
       return;
     }
+  } else {
+    template = WSP_AI.getTemplate(msg.template || "article");
+  }
 
-    var template;
-    if (msg.template === "custom" && msg.customTemplate) {
-      try {
-        template = typeof msg.customTemplate === "string" ? JSON.parse(msg.customTemplate) : msg.customTemplate;
-      } catch (e) {
-        notify("WebScraper Pro - Error", "Invalid custom template: " + e.message);
-        return;
-      }
-    } else {
-      template = WSP_AI.getTemplate(msg.template || "article");
-    }
-
-    WSP_AI.extract(msg.text, template).then(function (result) {
-      handleAIExtractResult({
-        template: msg.template,
-        result: result,
-        source_url: msg.source_url,
-        source_title: msg.source_title,
-      });
-    }).catch(function (err) {
-      notify("WebScraper Pro - Error", "AI extraction failed: " + err.message);
+  WSP_AI.extract(msg.text, template).then(function (result) {
+    handleAIExtractResult({
+      template: msg.template,
+      result: result,
+      source_url: msg.source_url,
+      source_title: msg.source_title,
     });
+  }).catch(function (err) {
+    notify("WebScraper Pro - Error", "Extraction failed: " + err.message);
   });
 }
 
@@ -949,13 +926,6 @@ function handleAIBatchExtract(msg) {
   }).catch(function (err) {
     notify("WebScraper Pro - Error", "Batch extraction failed: " + err.message);
   });
-}
-
-/* ── Handle AI screenshot extraction (ASE) ── */
-function handleAIScreenshot(msg) {
-  /* ASE requires the CLI tool (scrape ai.screenshot) which runs on Linux.
-     The extension can't directly take screenshots — inform the user to use the CLI. */
-  notify("WebScraper Pro", "Screenshot Extract (ASE) requires the CLI tool. Run: scrape ai.screenshot" + (msg.scroll ? " --scroll" : "") + " -n " + (msg.pages || 1));
 }
 
 /* ── Auto-navigate for pagination ── */

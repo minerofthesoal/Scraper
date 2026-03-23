@@ -1,243 +1,59 @@
-/* ── AI Extraction Module v0.7.2.2 ── */
-/* NuExtract-2.0-2B integration for structured data extraction */
-/* Supports auto-download (no server needed) or remote server mode */
-/* Falls back to regex-based local extraction when server unavailable */
+/* ── Local Data Extraction Module v0.8 ── */
+/* Regex-based structured data extraction — no external AI or server needed */
 /* eslint-env browser, webextensions */
-/* Exported as: window.WSP_AI */
+/* Exported as: window.WSP_AI (kept for backward compat) */
 
 var WSP_AI = {
 
-  /* Default server URL (CLI starts the server) */
-  _serverUrl: "http://127.0.0.1:8377",
-  _enabled: false,
-  _autoDownload: false,
-  _status: "disconnected", // disconnected, connecting, ready, downloading, error
-  _downloadProgress: 0,
   _lastResults: [],
 
   /**
-   * Initialize from stored config.
+   * Initialize (no-op — no server to connect to).
    */
-  init() {
-    var self = this;
-    try {
-      browser.storage.local.get(["aiEnabled", "aiServerUrl", "aiAutoDownload"]).then(function (cfg) {
-        self._enabled = !!cfg.aiEnabled;
-        self._autoDownload = !!cfg.aiAutoDownload;
-        if (cfg.aiServerUrl) self._serverUrl = cfg.aiServerUrl;
-        if (self._enabled) {
-          if (self._autoDownload) {
-            self._initAutoMode();
-          } else {
-            self.checkServer();
-          }
-        }
-      }).catch(function () {});
-    } catch (e) {
-      console.warn("[WSP] AI init error:", e);
-    }
-  },
+  init() {},
 
   /**
-   * Initialize auto-download mode (model runs via CLI subprocess).
-   */
-  _initAutoMode() {
-    var self = this;
-    self._status = "connecting";
-
-    fetch(self._serverUrl + "/health", { method: "GET" })
-      .then(function (resp) {
-        if (resp.ok) {
-          return resp.json().then(function (data) {
-            self._status = "ready";
-            self._modelInfo = data;
-          });
-        }
-        self._triggerAutoStart();
-      })
-      .catch(function () {
-        self._triggerAutoStart();
-      });
-  },
-
-  /**
-   * Signal background script to auto-start the AI model via native messaging.
-   */
-  _triggerAutoStart() {
-    var self = this;
-    self._status = "downloading";
-    self._downloadProgress = 0;
-
-    try {
-      browser.runtime.sendMessage({
-        action: "AI_AUTO_START",
-        serverUrl: self._serverUrl
-      }).then(function (resp) {
-        if (resp && resp.status === "started") {
-          self._status = "connecting";
-          self._pollServerReady(0);
-        } else if (resp && resp.status === "already_running") {
-          self._status = "ready";
-          self._modelInfo = resp.info || {};
-        } else {
-          self._status = "error";
-          console.warn("[WSP] AI auto-start failed:", resp);
-        }
-      }).catch(function () {
-        self._status = "disconnected";
-        console.info("[WSP] Auto-start unavailable. Run: scrape ai.serve");
-      });
-    } catch (e) {
-      self._status = "disconnected";
-    }
-  },
-
-  /**
-   * Poll the server until it becomes ready (model loading can take 10-60s).
-   */
-  _pollServerReady(attempt) {
-    var self = this;
-    var maxAttempts = 30; // 30 * 2s = 60s max wait
-    if (attempt >= maxAttempts) {
-      self._status = "error";
-      return;
-    }
-
-    setTimeout(function () {
-      fetch(self._serverUrl + "/health", { method: "GET" })
-        .then(function (resp) {
-          if (resp.ok) {
-            return resp.json().then(function (data) {
-              self._status = "ready";
-              self._modelInfo = data;
-            });
-          }
-          self._pollServerReady(attempt + 1);
-        })
-        .catch(function () {
-          self._pollServerReady(attempt + 1);
-        });
-    }, 2000);
-  },
-
-  /**
-   * Check if the NuExtract server is running.
-   */
-  checkServer() {
-    var self = this;
-    self._status = "connecting";
-    return fetch(self._serverUrl + "/health", { method: "GET" })
-      .then(function (resp) {
-        if (resp.ok) {
-          return resp.json().then(function (data) {
-            self._status = "ready";
-            self._modelInfo = data;
-            return { status: "ready", model: data.model || "NuExtract-2.0-2B", device: data.device || "unknown", gpu: data.gpu || null };
-          });
-        }
-        self._status = "error";
-        return { status: "error", message: "Server returned " + resp.status };
-      })
-      .catch(function () {
-        self._status = "disconnected";
-        return { status: "disconnected", message: "Cannot reach AI server at " + self._serverUrl + ". Start it with: scrape ai.serve" };
-      });
-  },
-
-  /**
-   * Refresh _enabled from storage (fixes out-of-sync state after settings save).
-   */
-  refreshEnabled() {
-    var self = this;
-    return browser.storage.local.get(["aiEnabled", "aiServerUrl", "aiAutoDownload"]).then(function (cfg) {
-      self._enabled = !!cfg.aiEnabled;
-      self._autoDownload = !!cfg.aiAutoDownload;
-      if (cfg.aiServerUrl) self._serverUrl = cfg.aiServerUrl;
-      return self._enabled;
-    });
-  },
-
-  /**
-   * Extract structured data from text using NuExtract.
-   * Falls back to local regex extraction if server unavailable.
+   * Extract structured data from text using local regex patterns.
    *
    * @param {string} text - The text to extract from
    * @param {object} template - JSON template defining what to extract
-   * @param {number} maxTokens - Max tokens to generate (default 2048)
    * @returns {Promise<object>} Extracted data matching the template
    */
-  extract(text, template, maxTokens) {
-    var self = this;
-
-    /* Re-read enabled state from storage every time to stay in sync
-       with options page saves (fixes "disabled" false-negative bug). */
-    return self.refreshEnabled().then(function (enabled) {
-      if (!enabled) {
-        /* AI not enabled — still run local regex extraction as fallback */
-        console.info("[WSP] AI not enabled, using local regex extraction");
-        return self._localExtract(text, template);
-      }
-      if (self._status !== "ready") {
-        if (self._autoDownload && self._status === "disconnected") {
-          self._initAutoMode();
-        }
-        /* Try a quick health check before falling back */
-        return self.checkServer().then(function (result) {
-          if (result.status === "ready") {
-            return self._doExtract(text, template, maxTokens);
-          }
-          /* Server unavailable — use local regex extraction */
-          console.info("[WSP] AI server unavailable, using local regex extraction");
-          return self._localExtract(text, template);
-        });
-      }
-      return self._doExtract(text, template, maxTokens).then(function (result) {
-        /* Check for empty results from server — fall back to local */
-        if (self._isEmptyResult(result)) {
-          console.info("[WSP] AI server returned empty result, supplementing with local extraction");
-          var local = self._localExtract(text, template);
-          return self._mergeResults(result, local);
-        }
-        return result;
-      });
-    });
-
+  extract(text, template) {
+    return Promise.resolve(this._localExtract(text, template));
   },
 
   /**
-   * Check if an extraction result is essentially empty.
+   * Extract structured data from a scraped page.
    */
-  _isEmptyResult(result) {
-    if (!result || typeof result !== "object") return true;
-    var keys = Object.keys(result);
-    if (keys.length === 0) return true;
-    for (var i = 0; i < keys.length; i++) {
-      var v = result[keys[i]];
-      if (v === null || v === undefined || v === "") continue;
-      if (Array.isArray(v) && v.length === 0) continue;
-      return false; /* found at least one non-empty value */
-    }
-    return true;
-  },
-
-  /**
-   * Merge two result objects, preferring non-empty values from either.
-   */
-  _mergeResults(a, b) {
-    var merged = Object.assign({}, a);
-    var keys = Object.keys(b);
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i];
-      var av = merged[k], bv = b[k];
-      if (!av || av === "" || (Array.isArray(av) && av.length === 0)) {
-        merged[k] = bv;
+  extractFromPage(text, extractionType, customTemplate) {
+    var template;
+    if (extractionType === "custom" && customTemplate) {
+      try {
+        template = typeof customTemplate === "string" ? JSON.parse(customTemplate) : customTemplate;
+      } catch (e) {
+        return Promise.reject(new Error("Invalid custom template JSON: " + e.message));
       }
+    } else {
+      template = this.getTemplate(extractionType);
     }
-    return merged;
+    return this.extract(text, template);
   },
 
   /**
-   * Local regex-based extraction fallback (no server needed).
+   * Get current status (always local).
+   */
+  getStatus() {
+    return {
+      enabled: true,
+      status: "local",
+      mode: "local_regex",
+      lastResultCount: this._lastResults.length,
+    };
+  },
+
+  /**
+   * Local regex-based extraction (no server needed).
    * Extracts common patterns from text using regex.
    */
   _localExtract(text, template) {
@@ -353,49 +169,6 @@ var WSP_AI = {
 
     result._extraction_method = "local_regex";
     return result;
-  },
-
-  /**
-   * Internal: perform the actual HTTP extraction call.
-   */
-  _doExtract(text, template, maxTokens) {
-    var self = this;
-    maxTokens = maxTokens || 2048;
-
-    return fetch(self._serverUrl + "/extract", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: text,
-        template: template,
-        max_tokens: maxTokens,
-      }),
-    }).then(function (resp) {
-      if (!resp.ok) {
-        return resp.text().then(function (err) {
-          throw new Error("AI extraction failed: " + err);
-        });
-      }
-      return resp.json();
-    });
-  },
-
-  /**
-   * Extract structured data from a scraped page.
-   * Uses predefined templates for common extraction tasks.
-   */
-  extractFromPage(text, extractionType, customTemplate) {
-    var template;
-    if (extractionType === "custom" && customTemplate) {
-      try {
-        template = typeof customTemplate === "string" ? JSON.parse(customTemplate) : customTemplate;
-      } catch (e) {
-        return Promise.reject(new Error("Invalid custom template JSON: " + e.message));
-      }
-    } else {
-      template = this.getTemplate(extractionType);
-    }
-    return this.extract(text, template);
   },
 
   /**
@@ -523,24 +296,6 @@ var WSP_AI = {
   },
 
   /**
-   * Get current status.
-   */
-  getStatus() {
-    return {
-      enabled: this._enabled,
-      status: this._status,
-      serverUrl: this._serverUrl,
-      autoDownload: this._autoDownload,
-      mode: this._autoDownload ? "local" : "server",
-      model: this._modelInfo ? this._modelInfo.model : null,
-      device: this._modelInfo ? this._modelInfo.device : null,
-      gpu: this._modelInfo ? this._modelInfo.gpu : null,
-      downloadProgress: this._downloadProgress,
-      lastResultCount: this._lastResults.length,
-    };
-  },
-
-  /**
    * Batch extract from multiple text records.
    */
   batchExtract(records, template, onProgress) {
@@ -581,6 +336,3 @@ var WSP_AI = {
     return processNext(0);
   }
 };
-
-// Initialize on load (safe)
-WSP_AI.init();

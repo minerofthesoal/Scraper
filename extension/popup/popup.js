@@ -1,24 +1,61 @@
-/* ── Popup Controller v0.7.2.2 ── */
+/* ── Popup Controller v0.8 ── */
 (function () {
   "use strict";
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
-  /* ── Tab Navigation ── */
+  /* ── Tab names in order (for swipe navigation) ── */
+  const TAB_ORDER = ["scrape", "queue", "data", "extract", "graph", "export", "sessions"];
+
+  function switchTab(tabName) {
+    $$(".tab-btn").forEach(b => b.classList.remove("active"));
+    $$(".tab-content").forEach(t => t.classList.remove("active"));
+    const btn = document.querySelector('.tab-btn[data-tab="' + tabName + '"]');
+    if (btn) btn.classList.add("active");
+    const tab = $("#tab-" + tabName);
+    if (tab) tab.classList.add("active");
+    if (tabName === "data") loadDataPreview();
+    if (tabName === "sessions") loadSessions();
+    if (tabName === "queue") loadQueue();
+    if (tabName === "graph") loadGraphPreview();
+  }
+
+  /* ── Tab Navigation (click) ── */
   for (const btn of $$(".tab-btn")) {
     btn.addEventListener("click", () => {
-      $$(".tab-btn").forEach(b => b.classList.remove("active"));
-      $$(".tab-content").forEach(t => t.classList.remove("active"));
-      btn.classList.add("active");
-      const tab = $("#tab-" + btn.dataset.tab);
-      if (tab) tab.classList.add("active");
-      if (btn.dataset.tab === "data") loadDataPreview();
-      if (btn.dataset.tab === "sessions") loadSessions();
-      if (btn.dataset.tab === "queue") loadQueue();
-      if (btn.dataset.tab === "ai") refreshAIStatus();
-      if (btn.dataset.tab === "graph") loadGraphPreview();
+      switchTab(btn.dataset.tab);
     });
+  }
+
+  /* ── Swipe Navigation (Android / touch) ── */
+  let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+  const popupContainer = $(".popup-container");
+  if (popupContainer) {
+    popupContainer.addEventListener("touchstart", (e) => {
+      if (e.target.closest("textarea, input, .queue-input, .data-preview, .ai-results, .session-list, .queue-list")) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, { passive: true });
+
+    popupContainer.addEventListener("touchend", (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const dt = Date.now() - touchStartTime;
+      if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx) || dt > 500) return;
+
+      const activeBtn = $(".tab-btn.active");
+      if (!activeBtn) return;
+      const currentIdx = TAB_ORDER.indexOf(activeBtn.dataset.tab);
+      if (currentIdx === -1) return;
+
+      if (dx < -50 && currentIdx < TAB_ORDER.length - 1) {
+        switchTab(TAB_ORDER[currentIdx + 1]);
+      } else if (dx > 50 && currentIdx > 0) {
+        switchTab(TAB_ORDER[currentIdx - 1]);
+      }
+    }, { passive: true });
   }
 
   /* ── Theme Toggle ── */
@@ -392,9 +429,7 @@
     setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 8000);
   });
 
-  /* ── AI Tab ── */
-  const aiDot = $("#ai-status-dot");
-
+  /* ── Extract Tab ── */
   // Custom template toggle
   const selAiTemplate = $("#sel-ai-template");
   const customSection = $("#custom-template-section");
@@ -405,35 +440,6 @@
       }
     });
   }
-
-  function refreshAIStatus() {
-    browser.runtime.sendMessage({ action: "AI_STATUS" }).then(resp => {
-      if (!resp) return;
-      const modeLabel = $("#ai-mode-label");
-      const infoModel = $("#ai-info-model");
-      const infoDevice = $("#ai-info-device");
-      const infoStatus = $("#ai-info-status");
-
-      if (resp.status === "ready") {
-        if (aiDot) { aiDot.className = "ai-dot ai-dot-on"; aiDot.title = "AI ready (" + (resp.device || "?") + ")"; }
-        if (modeLabel) modeLabel.textContent = "Connected";
-        if (infoModel) infoModel.textContent = resp.model || "NuExtract-2.0-2B";
-        if (infoDevice) infoDevice.textContent = (resp.device || "unknown").toUpperCase() + (resp.gpu ? " (" + resp.gpu + ")" : "");
-        if (infoStatus) { infoStatus.textContent = "Ready"; infoStatus.style.color = "var(--green)"; }
-      } else if (resp.status === "connecting") {
-        if (aiDot) aiDot.className = "ai-dot ai-dot-connecting";
-        if (modeLabel) modeLabel.textContent = "Connecting...";
-        if (infoStatus) { infoStatus.textContent = "Connecting..."; infoStatus.style.color = "var(--orange)"; }
-      } else {
-        if (aiDot) aiDot.className = "ai-dot ai-dot-off";
-        if (modeLabel) modeLabel.textContent = "Not connected";
-        if (infoStatus) { infoStatus.textContent = "Disconnected"; infoStatus.style.color = ""; }
-      }
-    }).catch(() => {});
-  }
-
-  // Initial AI status check
-  refreshAIStatus();
 
   bindClick("#btn-ai-extract", () => {
     const templateSel = ($("#sel-ai-template") || {}).value || "article";
@@ -793,9 +799,6 @@
       if (statusEl) statusEl.textContent = "Extraction complete!";
       setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
     }
-    if (msg.action === "AI_STATUS_UPDATE") {
-      refreshAIStatus();
-    }
   });
 
   /* ── Graph Tab (GwSS) ── */
@@ -847,23 +850,6 @@
       if (gsSize) gsSize.textContent = formatBytes(totalSize);
     }).catch(() => {});
   }
-
-  /* ── AI Screenshot Extract (ASE) ── */
-  bindClick("#btn-ai-screenshot", () => {
-    const pages = parseInt(($("#inp-ase-pages") || {}).value) || 1;
-    const statusEl = $("#ase-status");
-    if (statusEl) statusEl.textContent = "Starting screenshot extraction...";
-    sendToBackground("AI_SCREENSHOT", { pages, scroll: false });
-    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 15000);
-  });
-
-  bindClick("#btn-ai-screenshot-scroll", () => {
-    const pages = parseInt(($("#inp-ase-pages") || {}).value) || 1;
-    const statusEl = $("#ase-status");
-    if (statusEl) statusEl.textContent = "Starting screenshot + scroll extraction...";
-    sendToBackground("AI_SCREENSHOT", { pages, scroll: true });
-    setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 15000);
-  });
 
   /* ── Keyboard Navigation ── */
   document.addEventListener("keydown", (e) => {

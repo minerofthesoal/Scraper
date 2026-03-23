@@ -18,11 +18,11 @@
     </header>
 
     <!-- Tab Navigation -->
-    <nav class="tab-nav">
+    <nav class="tab-nav" id="tab-nav">
       <button class="tab-btn active" data-tab="scrape">Scrape</button>
       <button class="tab-btn" data-tab="queue">Queue</button>
       <button class="tab-btn" data-tab="data">Data</button>
-      <button class="tab-btn" data-tab="ai">AI</button>
+      <button class="tab-btn" data-tab="extract">Extract</button>
       <button class="tab-btn" data-tab="graph">Graph</button>
       <button class="tab-btn" data-tab="export">Export</button>
       <button class="tab-btn" data-tab="sessions">Sessions</button>
@@ -166,23 +166,12 @@
       </div>
     </div>
 
-    <!-- AI Tab (NEW) -->
-    <div id="tab-ai" class="tab-content">
+    <!-- Extract Tab (local regex, no external AI) -->
+    <div id="tab-extract" class="tab-content">
       <section class="ai-hero">
         <div class="ai-header-row">
-          <h2>AI Extract <span id="ai-status-dot" class="ai-dot ai-dot-off" title="AI server status"></span></h2>
-          <small id="ai-mode-label" class="ai-mode-label">Not connected</small>
-        </div>
-
-        <div class="ai-server-info" id="ai-server-info">
-          <div class="ai-info-grid">
-            <span class="ai-info-label">Model</span>
-            <span class="ai-info-value" id="ai-info-model">--</span>
-            <span class="ai-info-label">Device</span>
-            <span class="ai-info-value" id="ai-info-device">--</span>
-            <span class="ai-info-label">Status</span>
-            <span class="ai-info-value" id="ai-info-status">Disconnected</span>
-          </div>
+          <h2>Extract Data</h2>
+          <small class="ai-mode-label">Local regex patterns</small>
         </div>
 
         <div class="ai-template-section">
@@ -213,37 +202,11 @@
         <span id="ai-extract-status" class="export-status"></span>
       </section>
 
-      <section class="ai-ase-section">
-        <h2>Screenshot Extract (ASE)</h2>
-        <small class="ase-hint">Take a screenshot, OCR text via Tesseract, save to dataset. Linux only (KDE/Hyprland/GNOME/Cinnamon).</small>
-        <div class="btn-row-2">
-          <button id="btn-ai-screenshot" class="btn btn-accent">Screenshot Extract</button>
-          <button id="btn-ai-screenshot-scroll" class="btn btn-secondary">Screenshot + Scroll</button>
-        </div>
-        <div class="field-row" style="margin-top:6px">
-          <label for="inp-ase-pages">Pages:</label>
-          <input type="number" id="inp-ase-pages" value="1" min="1" max="100" style="width:60px">
-        </div>
-        <span id="ase-status" class="export-status"></span>
-      </section>
-
       <section class="ai-results-section">
         <h2>Results <span id="ai-result-count" class="result-count"></span></h2>
         <div id="ai-results" class="ai-results">
           <div class="data-empty">Run an extraction to see results</div>
         </div>
-      </section>
-
-      <section class="ai-help-section">
-        <details class="ai-help">
-          <summary>Setup Help</summary>
-          <div class="ai-help-content">
-            <p>1. Install: <code>scrape ai.setup</code></p>
-            <p>2. Start server: <code>scrape ai.serve</code></p>
-            <p>3. GPU mode: <code>scrape ai.serve --gpu</code></p>
-            <p>Requires Python 3.10+ and ~4GB disk space.</p>
-          </div>
-        </details>
       </section>
     </div>
 
