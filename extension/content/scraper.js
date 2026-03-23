@@ -615,38 +615,80 @@
     meta.title = document.title;
     meta.timestamp = new Date().toISOString();
 
-    // Author detection (multiple strategies)
+    // Author detection — multi-strategy (priority order)
+    // 1. meta[name="author"]
     const authorMeta = document.querySelector('meta[name="author"]');
-    if (authorMeta) meta.author = authorMeta.content;
+    if (authorMeta && authorMeta.content) meta.author = authorMeta.content.trim();
 
-    // JSON-LD
+    // 2. meta[property="article:author"]
+    if (!meta.author) {
+      const ogAuthor = document.querySelector('meta[property="article:author"]');
+      if (ogAuthor && ogAuthor.content) meta.author = ogAuthor.content.trim();
+    }
+
+    // 3. rel="author" link
+    if (!meta.author) {
+      const authorLink = document.querySelector('a[rel="author"], .author a, [itemprop="author"]');
+      if (authorLink) {
+        const name = (authorLink.textContent || "").trim();
+        if (name && name.length > 1 && name.length < 80) meta.author = name;
+      }
+    }
+
+    // 4. Visible byline patterns (class-based)
+    if (!meta.author) {
+      const bylineEl = document.querySelector('.byline, .author, .post-author, .entry-author, [class*="author-name"], [class*="byline"], [data-testid="authorName"], .article-author');
+      if (bylineEl) {
+        let txt = (bylineEl.textContent || "").trim();
+        // Strip common prefixes
+        txt = txt.replace(/^(by|author|written by|posted by)[:\s]*/i, "").trim();
+        if (txt && txt.length > 1 && txt.length < 80) meta.author = txt;
+      }
+    }
+
+    // JSON-LD (structured data — richest source)
     const ldJsonScripts = document.querySelectorAll('script[type="application/ld+json"]');
     for (const script of ldJsonScripts) {
       try {
         const ld = JSON.parse(script.textContent);
         const ldItems = Array.isArray(ld) ? ld : [ld];
         for (const item of ldItems) {
-          if (item.author && !meta.author) {
-            meta.author = typeof item.author === "string" ? item.author :
-                          Array.isArray(item.author) ? item.author.map(a => a.name || a).join(", ") :
-                          item.author.name || "";
+          // Recursively check @graph items too
+          const items = item["@graph"] ? item["@graph"].concat(item) : [item];
+          for (const obj of items) {
+            if (obj.author && !meta.author) {
+              meta.author = typeof obj.author === "string" ? obj.author :
+                            Array.isArray(obj.author) ? obj.author.map(a => a.name || a).join(", ") :
+                            obj.author.name || "";
+            }
+            if (obj.publisher && !meta.publisher) {
+              meta.publisher = typeof obj.publisher === "string" ? obj.publisher : obj.publisher.name || "";
+            }
+            if (obj.datePublished && !meta.datePublished) meta.datePublished = obj.datePublished;
+            if (obj.dateModified) meta.dateModified = obj.dateModified;
+            if (obj.description && !meta.description) meta.description = obj.description;
+            if (obj.license) meta.license = obj.license;
+            if (obj["@type"] && !meta.contentType) meta.contentType = Array.isArray(obj["@type"]) ? obj["@type"][0] : obj["@type"];
+            if (obj.isbn) meta.isbn = obj.isbn;
+            // Site name from Organization
+            if ((obj["@type"] === "WebSite" || obj["@type"] === "Organization") && obj.name && !meta.siteName) {
+              meta.siteName = obj.name;
+            }
           }
-          if (item.publisher && !meta.publisher) {
-            meta.publisher = typeof item.publisher === "string" ? item.publisher : item.publisher.name || "";
-          }
-          if (item.datePublished) meta.datePublished = item.datePublished;
-          if (item.dateModified) meta.dateModified = item.dateModified;
-          if (item.description) meta.description = item.description;
-          if (item.license) meta.license = item.license;
-          if (item["@type"]) meta.contentType = item["@type"];
-          if (item.isbn) meta.isbn = item.isbn;
         }
       } catch { /* ignore */ }
     }
 
+    // 5. Regex scan of visible text for "by Author Name" (last resort)
+    if (!meta.author) {
+      const bodyText = (document.body.innerText || "").slice(0, 3000);
+      const byMatch = bodyText.match(/\b(?:by|author|written by)\s+([A-Z][a-z]+ (?:[A-Z]\.?\s+)?[A-Z][a-z]+)/i);
+      if (byMatch) meta.author = byMatch[1].trim();
+    }
+
     // Open Graph
     const ogSiteName = document.querySelector('meta[property="og:site_name"]');
-    if (ogSiteName) meta.siteName = ogSiteName.content;
+    if (ogSiteName && !meta.siteName) meta.siteName = ogSiteName.content;
 
     const ogDesc = document.querySelector('meta[property="og:description"]');
     if (ogDesc && !meta.description) meta.description = ogDesc.content;
@@ -654,13 +696,36 @@
     const ogType = document.querySelector('meta[property="og:type"]');
     if (ogType) meta.ogType = ogType.content;
 
-    // Publish date
-    const pubDate = document.querySelector('meta[name="date"], meta[property="article:published_time"], time[datetime]');
-    if (pubDate) meta.datePublished = meta.datePublished || pubDate.content || pubDate.getAttribute("datetime");
+    // Publish date (expanded sources)
+    if (!meta.datePublished) {
+      const dateSels = [
+        'meta[property="article:published_time"]',
+        'meta[name="date"]',
+        'meta[name="DC.date"]',
+        'meta[name="sailthru.date"]',
+        'meta[name="pubdate"]',
+        'time[datetime]',
+        'time[pubdate]',
+        '[itemprop="datePublished"]',
+      ];
+      for (const sel of dateSels) {
+        const el = document.querySelector(sel);
+        if (el) {
+          meta.datePublished = el.content || el.getAttribute("datetime") || el.textContent.trim();
+          if (meta.datePublished) break;
+        }
+      }
+    }
 
     // Copyright / license
-    const copyright = document.querySelector('meta[name="copyright"], meta[name="rights"]');
+    const copyright = document.querySelector('meta[name="copyright"], meta[name="rights"], meta[name="dc.rights"]');
     if (copyright) meta.copyright = copyright.content;
+
+    // Creative Commons detection
+    if (!meta.license) {
+      const ccLink = document.querySelector('a[rel="license"][href*="creativecommons.org"]');
+      if (ccLink) meta.license = ccLink.href;
+    }
 
     // Description
     const descMeta = document.querySelector('meta[name="description"]');
