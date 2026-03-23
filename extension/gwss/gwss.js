@@ -726,7 +726,15 @@
     if (!c) return;
     var dpr = devicePixelRatio || 1;
     var w = c.parentElement.clientWidth - 32;
-    var h = 340;
+    /* Dynamic height based on content to prevent overlapping */
+    var pageCount = Object.keys(node.records.reduce(function (acc, r) {
+      var url = r.source_url || "unknown";
+      try { url = new URL(url).pathname || "/"; } catch (e) { url = "/"; }
+      acc[url] = 1; return acc;
+    }, {})).length;
+    var typeCount = Object.keys(node.types).length;
+    var maxRows = Math.max(Math.min(pageCount, 8), typeCount, 4);
+    var h = Math.max(280, maxRows * 42 + 60);
     c.width = w * dpr;
     c.height = h * dpr;
     c.style.width = w + "px";
@@ -829,7 +837,7 @@
 
     // Page nodes
     var usableH = h - rowStart - 20;
-    var pageSpacing = Math.min(36, usableH / Math.max(pageEntries.length, 1));
+    var pageSpacing = Math.max(30, Math.min(42, usableH / Math.max(pageEntries.length, 1)));
     var pageStartY = rowStart + (usableH - pageEntries.length * pageSpacing) / 2;
 
     pageEntries.forEach(function (pe, i) {
@@ -862,7 +870,7 @@
     });
 
     // Type nodes — only connect from pages that actually have this type
-    var typeSpacing = Math.min(44, usableH / Math.max(types.length, 1));
+    var typeSpacing = Math.max(34, Math.min(48, usableH / Math.max(types.length, 1)));
     var typeStartY = rowStart + (usableH - types.length * typeSpacing) / 2;
 
     types.forEach(function (te, i) {
@@ -898,7 +906,7 @@
       { label: "Time", value: node.timeMs > 0 ? (node.timeMs / 1000).toFixed(1) + "s" : "N/A", color: "#10b981" },
       { label: "Tags", value: (node.tags || []).length + "", color: "#f59e0b" },
     ];
-    var statSpacing = Math.min(46, usableH / statsData.length);
+    var statSpacing = Math.max(32, Math.min(46, usableH / statsData.length));
     var statStartY = rowStart + (usableH - statsData.length * statSpacing) / 2;
 
     statsData.forEach(function (st, i) {
