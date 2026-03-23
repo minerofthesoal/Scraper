@@ -732,3 +732,36 @@ select, input, textarea, button { transition: border-color 0.15s, box-shadow 0.1
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ── Android / Mobile responsive ── */
+@media (max-width: 420px) {
+  body { width: 100vw; min-width: 280px; font-size: 12px; }
+  .popup-container { padding: 8px 10px; }
+  header h1 { font-size: 13px; }
+  .tab-nav { gap: 1px; padding: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-btn { font-size: 10px; padding: 7px 1px; min-width: 0; white-space: nowrap; }
+  .btn { padding: 10px 12px; font-size: 13px; min-height: 38px; }
+  .btn-row-2 { gap: 4px; }
+  .stat-grid { grid-template-columns: repeat(3, 1fr); }
+  .stat span { font-size: 15px; }
+  .stat small { font-size: 8px; }
+  .toggle-row { padding: 5px 0; font-size: 13px; }
+  .toggle-row input[type="checkbox"] { width: 18px; height: 18px; }
+  .queue-input { font-size: 13px; padding: 10px; }
+  .data-search { font-size: 13px; padding: 8px; }
+  .data-record { padding: 10px; }
+  .session-item { padding: 10px; }
+  .modal-content { margin: 8px 4px; }
+  .modal-body { font-size: 11px; }
+  footer { font-size: 10px; }
+  /* Larger touch targets */
+  .btn-icon { padding: 6px 8px; font-size: 18px; }
+  .queue-item { padding: 8px; }
+  .graph-domain-item { padding: 10px; }
+}
+
+/* ── Swipe hint indicator ── */
+@media (hover: none) and (pointer: coarse) {
+  .tab-nav { scroll-snap-type: x mandatory; }
+  .tab-btn { scroll-snap-align: center; }
+}
