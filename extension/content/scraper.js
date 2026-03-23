@@ -784,10 +784,11 @@
    * Scrape a selected rectangle area.
    */
   async function scrapeRect(selRect) {
+    const _scrapeStart = performance.now();
     const elements = getElementsInRect(selRect);
     const data = await extractData(elements);
     const meta = pageMeta();
-    const result = { meta, ...data, scrapedAt: new Date().toISOString() };
+    const result = { meta, ...data, scrapedAt: new Date().toISOString(), scrape_time_ms: Math.round(performance.now() - _scrapeStart) };
 
     // Highlight scraped elements
     elements.forEach((el) => el.classList.add("wsp-scraped-highlight"));
@@ -805,6 +806,7 @@
    * Scrape the entire page (full document, not just visible viewport).
    */
   async function scrapeFullPage() {
+    const _scrapeStart = performance.now();
     const docWidth = Math.max(
       document.documentElement.scrollWidth,
       document.body ? document.body.scrollWidth : 0,
@@ -827,7 +829,7 @@
     const elements = getElementsInRect(selRect, true);
     const data = await extractData(elements);
     const meta = pageMeta();
-    const result = { meta, ...data, scrapedAt: new Date().toISOString() };
+    const result = { meta, ...data, scrapedAt: new Date().toISOString(), scrape_time_ms: Math.round(performance.now() - _scrapeStart) };
 
     // Highlight scraped elements briefly
     elements.forEach((el) => el.classList.add("wsp-scraped-highlight"));

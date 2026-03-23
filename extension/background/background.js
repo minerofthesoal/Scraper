@@ -297,6 +297,9 @@ function handleScrapedData(data) {
     return typeof WSP_Utils !== "undefined" ? WSP_Utils.extractDomain(url) : url;
   }
 
+  // Scrape time (for SSDg)
+  var scrapeTimeMs = data.scrape_time_ms || 0;
+
   // Grab favicon URL from the page meta
   var faviconUrl = meta.favicon || "";
   if (!faviconUrl && meta.url) {
@@ -325,6 +328,7 @@ function handleScrapedData(data) {
         author: meta.author || "Unknown",
         site_name: meta.siteName || extractDomain(meta.url),
         scraped_at: data.scrapedAt,
+        scrape_time_ms: scrapeTimeMs,
         citation_mla: citation.mla,
         citation_apa: citation.apa || "",
         favicon: faviconUrl,
@@ -353,6 +357,7 @@ function handleScrapedData(data) {
         source_title: meta.title,
         author: meta.author || "Unknown",
         scraped_at: data.scrapedAt,
+        scrape_time_ms: scrapeTimeMs,
         citation_mla: citation.mla,
         citation_apa: citation.apa || "",
       });
