@@ -250,6 +250,24 @@
       b.vx -= fx; b.vy -= fy;
     }
 
+    /* Collision avoidance — prevent node overlap */
+    for (i = 0; i < nodes.length; i++) {
+      for (j = i + 1; j < nodes.length; j++) {
+        dx = nodes[j].x - nodes[i].x;
+        dy = nodes[j].y - nodes[i].y;
+        var dist2c = Math.sqrt(dx * dx + dy * dy);
+        var minDist = nodes[i].radius + nodes[j].radius + 8;
+        if (dist2c < minDist && dist2c > 0) {
+          var overlap = (minDist - dist2c) * 0.5;
+          var nx = dx / dist2c, ny = dy / dist2c;
+          nodes[i].vx -= nx * overlap * 0.3;
+          nodes[i].vy -= ny * overlap * 0.3;
+          nodes[j].vx += nx * overlap * 0.3;
+          nodes[j].vy += ny * overlap * 0.3;
+        }
+      }
+    }
+
     /* Center gravity — pull nodes toward origin to prevent drift */
     for (i = 0; i < nodes.length; i++) {
       nodes[i].vx -= nodes[i].x * 0.002 * physicsAlpha;
@@ -357,22 +375,36 @@
     var style = getComputedStyle(document.body);
     var edgeColor = style.getPropertyValue("--edge-color").trim() || "rgba(129,140,248,0.15)";
 
-    /* Draw edges with unique mixed composite dash patterns per edge */
+    /* Draw edges with unique mixed composite dash patterns per edge + arrow heads */
     for (var ei = 0; ei < edges.length; ei++) {
       var ea = nodes[edges[ei].from], eb = nodes[edges[ei].to];
       var compositeDash = getEdgePattern(edges[ei]);
+      var elw = Math.min(3, 0.5 + (edges[ei].weight || 1) * 0.3) / camera.zoom;
       ctx.beginPath();
       ctx.setLineDash(compositeDash);
       ctx.lineDashOffset = 0;
       ctx.moveTo(ea.x, ea.y);
       ctx.lineTo(eb.x, eb.y);
       ctx.strokeStyle = edgeColor;
-      ctx.lineWidth = Math.min(3, 0.5 + (edges[ei].weight || 1) * 0.3) / camera.zoom;
+      ctx.lineWidth = elw;
       ctx.stroke();
+
+      /* Arrow head at midpoint */
+      var emx = (ea.x + eb.x) / 2, emy = (ea.y + eb.y) / 2;
+      var eang = Math.atan2(eb.y - ea.y, eb.x - ea.x);
+      var arrowSz = Math.max(4, 6 / camera.zoom);
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(emx + arrowSz * Math.cos(eang), emy + arrowSz * Math.sin(eang));
+      ctx.lineTo(emx - arrowSz * Math.cos(eang - 0.5), emy - arrowSz * Math.sin(eang - 0.5));
+      ctx.lineTo(emx - arrowSz * Math.cos(eang + 0.5), emy - arrowSz * Math.sin(eang + 0.5));
+      ctx.closePath();
+      ctx.fillStyle = edgeColor.replace("0.15", "0.35");
+      ctx.fill();
     }
     ctx.setLineDash([]);
 
-    var typeColors = { text: "#818cf8", image: "#f59e0b", link: "#10b981", audio: "#8b5cf6", ai_extract: "#ec4899" };
+    var typeColors = { text: "#818cf8", image: "#f59e0b", link: "#10b981", audio: "#8b5cf6", video: "#e11d48", ai_extract: "#ec4899" };
 
     /* Draw nodes */
     for (var ni = 0; ni < nodes.length; ni++) {
@@ -768,7 +800,7 @@
     });
     var pageEntries = Object.entries(pages).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
 
-    var typeColors = { text: "#818cf8", image: "#f59e0b", link: "#10b981", audio: "#8b5cf6", ai_extract: "#ec4899" };
+    var typeColors = { text: "#818cf8", image: "#f59e0b", link: "#10b981", audio: "#8b5cf6", video: "#e11d48", ai_extract: "#ec4899" };
     var typeIcons = { text: "\u2261", image: "\u25A3", link: "\u26D3", audio: "\u266B", ai_extract: "\u2726" };
 
     // 4 column positions
