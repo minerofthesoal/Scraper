@@ -30,7 +30,7 @@ setup(
             "scrape=scrape:cli",
         ],
     },
-    python_requires=">=3.10,<3.14",
+    python_requires=">=3.10,<3.15",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: Other/Proprietary License",  # Uni-S License
