@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.7.2.2 ── */
+/* ── WebScraper Pro Background Script v0.8.0 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -115,19 +115,9 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
       exportImages(msg.format || "png", msg.imageIds);
       break;
 
-    // ── AI extraction ──
+    // ── Data extraction (local regex) ──
     case "AI_STATUS":
-      if (typeof WSP_AI !== "undefined") {
-        /* Refresh enabled flag from storage before returning status so the
-           popup always shows the correct state after a settings save. */
-        return WSP_AI.refreshEnabled().then(function () {
-          if (!WSP_AI._enabled) {
-            return { status: "disabled", message: "AI extraction is disabled. Enable it in Settings > AI Extraction, then Save." };
-          }
-          return WSP_AI.checkServer();
-        });
-      }
-      return Promise.resolve({ status: "disabled", message: "AI module not loaded" });
+      return Promise.resolve({ status: "local", mode: "local_regex" });
 
     case "AI_EXTRACT_RESULT":
       handleAIExtractResult(msg.data);
@@ -139,10 +129,6 @@ browser.runtime.onMessage.addListener(function (msg, sender) {
 
     case "AI_BATCH_EXTRACT":
       handleAIBatchExtract(msg);
-      break;
-
-    case "AI_SCREENSHOT":
-      handleAIScreenshot(msg);
       break;
 
     // ── Queue actions ──
@@ -311,6 +297,9 @@ function handleScrapedData(data) {
     return typeof WSP_Utils !== "undefined" ? WSP_Utils.extractDomain(url) : url;
   }
 
+  // Scrape time (for SSDg)
+  var scrapeTimeMs = data.scrape_time_ms || 0;
+
   // Grab favicon URL from the page meta
   var faviconUrl = meta.favicon || "";
   if (!faviconUrl && meta.url) {
@@ -339,6 +328,7 @@ function handleScrapedData(data) {
         author: meta.author || "Unknown",
         site_name: meta.siteName || extractDomain(meta.url),
         scraped_at: data.scrapedAt,
+        scrape_time_ms: scrapeTimeMs,
         citation_mla: citation.mla,
         citation_apa: citation.apa || "",
         favicon: faviconUrl,
@@ -367,6 +357,7 @@ function handleScrapedData(data) {
         source_title: meta.title,
         author: meta.author || "Unknown",
         scraped_at: data.scrapedAt,
+        scrape_time_ms: scrapeTimeMs,
         citation_mla: citation.mla,
         citation_apa: citation.apa || "",
       });
@@ -480,6 +471,20 @@ function handleScrapedData(data) {
 
   persistState();
   broadcastStats();
+
+  /* Auto-stop: if no queue is processing, mark idle after a short delay
+     (allows auto-scan to continue without flashing idle). */
+  var queueActive = (typeof WSP_Queue !== "undefined" && WSP_Queue._processing);
+  if (!queueActive) {
+    setTimeout(function () {
+      /* Re-check after delay — auto-scan may have continued */
+      var stillQueueActive = (typeof WSP_Queue !== "undefined" && WSP_Queue._processing);
+      if (!stillQueueActive) {
+        browser.storage.local.set({ scrapeActive: false });
+        browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
+      }
+    }, 2000);
+  }
 }
 
 /* ── Get top domains from scraped records ── */
@@ -565,7 +570,7 @@ function exportData(format, options) {
 function toMarkdown(texts, images, links, audio, citationsList) {
   var md = "# WebScraper Pro Export\n\n";
   md += "**Generated:** " + new Date().toISOString() + "  \n";
-  md += "**Version:** v0.7.2.2  \n";
+  md += "**Version:** v0.8.0  \n";
   md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
   md += "---\n\n";
 
@@ -629,7 +634,7 @@ function toMarkdown(texts, images, links, audio, citationsList) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.7.2.2</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.8.0</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
@@ -867,43 +872,34 @@ function handleAIExtractResult(data) {
   notify("WebScraper Pro", "AI extraction complete for " + (data.source_url || "page"));
 }
 
-/* ── Handle AI extraction request from content script ── */
+/* ── Handle extraction request from content script ── */
 function handleAIExtractRequest(msg) {
   if (typeof WSP_AI === "undefined") {
-    notify("WebScraper Pro", "AI module not loaded. Reload the extension.");
+    notify("WebScraper Pro", "Extract module not loaded. Reload the extension.");
     return;
   }
 
-  /* Always refresh enabled state from storage before checking — this fixes
-     the bug where settings changes don't take effect until extension reload. */
-  WSP_AI.refreshEnabled().then(function (enabled) {
-    if (!enabled) {
-      notify("WebScraper Pro", "AI extraction is disabled. Enable it in Settings > AI Extraction, then Save.");
+  var template;
+  if (msg.template === "custom" && msg.customTemplate) {
+    try {
+      template = typeof msg.customTemplate === "string" ? JSON.parse(msg.customTemplate) : msg.customTemplate;
+    } catch (e) {
+      notify("WebScraper Pro - Error", "Invalid custom template: " + e.message);
       return;
     }
+  } else {
+    template = WSP_AI.getTemplate(msg.template || "article");
+  }
 
-    var template;
-    if (msg.template === "custom" && msg.customTemplate) {
-      try {
-        template = typeof msg.customTemplate === "string" ? JSON.parse(msg.customTemplate) : msg.customTemplate;
-      } catch (e) {
-        notify("WebScraper Pro - Error", "Invalid custom template: " + e.message);
-        return;
-      }
-    } else {
-      template = WSP_AI.getTemplate(msg.template || "article");
-    }
-
-    WSP_AI.extract(msg.text, template).then(function (result) {
-      handleAIExtractResult({
-        template: msg.template,
-        result: result,
-        source_url: msg.source_url,
-        source_title: msg.source_title,
-      });
-    }).catch(function (err) {
-      notify("WebScraper Pro - Error", "AI extraction failed: " + err.message);
+  WSP_AI.extract(msg.text, template).then(function (result) {
+    handleAIExtractResult({
+      template: msg.template,
+      result: result,
+      source_url: msg.source_url,
+      source_title: msg.source_title,
     });
+  }).catch(function (err) {
+    notify("WebScraper Pro - Error", "Extraction failed: " + err.message);
   });
 }
 
@@ -949,13 +945,6 @@ function handleAIBatchExtract(msg) {
   }).catch(function (err) {
     notify("WebScraper Pro - Error", "Batch extraction failed: " + err.message);
   });
-}
-
-/* ── Handle AI screenshot extraction (ASE) ── */
-function handleAIScreenshot(msg) {
-  /* ASE requires the CLI tool (scrape ai.screenshot) which runs on Linux.
-     The extension can't directly take screenshots — inform the user to use the CLI. */
-  notify("WebScraper Pro", "Screenshot Extract (ASE) requires the CLI tool. Run: scrape ai.screenshot" + (msg.scroll ? " --scroll" : "") + " -n " + (msg.pages || 1));
 }
 
 /* ── Auto-navigate for pagination ── */
@@ -1013,10 +1002,16 @@ function scrapeAllTabs() {
           completed++;
           if (completed === validTabs.length) {
             notify("WebScraper Pro", "Finished scraping " + validTabs.length + " tabs.");
+            browser.storage.local.set({ scrapeActive: false });
+            browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
           }
         })
         .catch(function () {
           completed++;
+          if (completed === validTabs.length) {
+            browser.storage.local.set({ scrapeActive: false });
+            browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
+          }
         });
     }
   });

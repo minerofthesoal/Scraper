@@ -1,8 +1,8 @@
 # WebScraper Pro
 
-**v0.7.2** | Firefox Extension + Python CLI + Full GUI | Android supported
+**v0.8.0** | Firefox Extension + Python CLI + Full GUI | Android supported
 
-A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, video, and structured data with smart extraction, AI-powered parsing, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Features GwSS interactive graph visualization, content sanitization, deobfuscation, cookie auto-dismiss, tab scraping, clipboard scraping, and auto XPI builds.
+A powerful, open-source web scraping toolkit that combines a Firefox browser extension with a 50+ command Python CLI and a full graphical interface. Scrape text, images, links, audio, video, and structured data with smart extraction, regex-based data extraction, batch queuing, session management, rate limiting, HuggingFace dataset upload, and automatic MLA/APA citation generation. Features GwSS interactive graph visualization, content sanitization, deobfuscation, cookie auto-dismiss, tab scraping, clipboard scraping, and auto XPI builds.
 
 **[Homepage](https://minerofthesoal.github.io/Scraper/)** | **[Releases](https://github.com/minerofthesoal/Scraper/releases)** | **[Community Dataset](https://huggingface.co/datasets/ray0rf1re/Site.scraped)**
 
@@ -76,7 +76,7 @@ scrape export jsonl
 | **Cookie Auto-Dismiss** | Auto-click cookie consent banners (disabled by default) |
 | **Deobfuscation** | Detect and reverse Base64, hex, ROT13, CSS-hidden text (disabled by default) |
 | **Content Sanitizer** | XSS detection, URL validation, HTML sanitization |
-| **GwSS Visualization** | Interactive force-directed graph of all scraped sites with live physics, favicons, unique composite edge patterns, SSDg per-site data flow diagrams, SVG/PNG/CSV/JSON/GraphML export |
+| **GwSS Visualization** | Interactive force-directed graph of all scraped sites with live physics, favicons, unique composite edge patterns, collision avoidance, directional edge arrows, SSDg per-site data flow diagrams with timing data, SVG/PNG/CSV/JSON/GraphML export |
 | **Sensitive Content Filter** | Auto-detect and redact PII, API keys, credit cards, SSNs, slurs |
 | **Auto-Save** | Automatic session persistence with periodic backups |
 
@@ -119,19 +119,22 @@ Pretty-print JSON/JSONL exports are supported for human-readable output.
 - Detect original authors via meta tags, JSON-LD, and Open Graph
 - Include citations in HuggingFace README and export files
 
-### AI-Powered Extraction
+### Local Data Extraction
 
-- **NuExtract-2.0-2B** integration for structured data extraction
-- Auto-download model (~1.5GB) - no separate server needed
-- Template-based extraction with custom schemas and "All (Combined)" mode
-- Local regex fallback when server is unavailable (emails, phones, names, dates, prices, etc.)
-- Local GPU/CPU inference (server or auto mode)
-- Batch processing support
+- Template-based structured data extraction using local regex patterns
+- 9 built-in templates: Article, Product, Contact, Event, Recipe, Research, Job, Review, All (Combined)
+- Custom template support with user-defined JSON schemas
+- Extracts emails, phones, names, dates, prices, addresses, companies, URLs, and more
+- Batch extraction across multiple records
+- No external server or AI model required
 
 ### Android Support
 
 - Works on Firefox for Android (Fenix 120+)
-- Full popup menu with all tabs and features
+- Responsive UI optimized for small screens (420px breakpoint)
+- Swipe left/right to navigate between tabs
+- Larger touch targets (38px buttons, 18px checkboxes)
+- Scroll-snap tab navigation on touch devices
 
 ---
 
@@ -283,15 +286,13 @@ Or: Firefox -> `about:addons` -> gear icon -> **Install Add-on From File** -> se
 | `scrape filter FIELD VALUE` | Filter records by field value |
 | `scrape validate` | Validate data integrity |
 
-### AI Extraction
+### Data Extraction
 
 | Command | Description |
 |---------|-------------|
-| `scrape ai.serve [--gpu\|--cpu]` | Start NuExtract AI server |
-| `scrape ai.extract TEMPLATE TEXT` | Extract structured data with AI |
-| `scrape ai.status` | Check AI server status |
-| `scrape ai.setup` | Download and configure NuExtract model |
-| `scrape ai.batch` | Batch AI extraction |
+| `scrape ai.extract TEMPLATE TEXT` | Extract structured data using local regex |
+| `scrape ai.status` | Check extraction engine status |
+| `scrape ai.batch` | Batch extraction across records |
 
 ### Build & Package
 
@@ -380,7 +381,7 @@ Scraper/
 │   │   ├── rate_limiter.js      # Per-domain rate limiting
 │   │   ├── session_manager.js   # Session, queue, domain filtering
 │   │   ├── image_export.js      # Image processing and export
-│   │   ├── ai_extract.js        # AI extraction integration
+│   │   ├── ai_extract.js        # Local regex data extraction
 │   │   ├── sanitizer.js        # Content security sanitizer
 │   │   └── content_filter.js   # Sensitive data filtering
 │   ├── gwss/                    # GwSS visualization page

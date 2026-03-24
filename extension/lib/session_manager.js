@@ -235,6 +235,9 @@ var WSP_Queue = {
         self._processing = false;
         self._currentIndex = -1;
         self._persist();
+        /* Auto-stop: notify popup that queue is done */
+        browser.storage.local.set({ scrapeActive: false });
+        browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
         return;
       }
 
