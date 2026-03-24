@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
-VERSION = "0.7.2.2"
+VERSION = "0.8.0"
 
 # Python version requirements for PyTorch compatibility
 # PyTorch 2.6+ supports Python 3.13, and 3.14 support is expected
