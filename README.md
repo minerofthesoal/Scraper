@@ -176,11 +176,27 @@ cd packaging/arch
 makepkg -si
 ```
 
-### Manual CLI Install
+### pip Install (One-Liner)
 
 ```bash
-cd cli
-pip install -e .
+pip install git+https://github.com/minerofthesoal/Scraper.git#subdirectory=cli
+```
+
+Or from a local clone:
+```bash
+cd cli && pip install .
+```
+
+### Auto-Install Script
+
+Download and run the standalone installer — no clone required:
+```bash
+curl -fsSL https://raw.githubusercontent.com/minerofthesoal/Scraper/main/auto_install.sh | bash
+```
+
+Or on Windows (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/minerofthesoal/Scraper/main/auto_install.sh | bash
 ```
 
 ### Update
@@ -398,6 +414,7 @@ Scraper/
 ├── install.sh                   # Linux/macOS installer
 ├── install.bat                  # Windows installer
 ├── build_xpi.sh                 # Auto XPI builder script
+├── auto_install.sh              # One-command installer (clone + pip + xpi)
 ├── install.py                   # Cross-platform Python installer
 ├── LICENSE                      # Uni-S License v3.0
 └── README.md
