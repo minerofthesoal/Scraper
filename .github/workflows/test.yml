@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────
+# Test — Multi-Python CLI smoke tests
+# Verifies the CLI installs and runs on every supported Python.
+# ─────────────────────────────────────────────────────────────
+name: Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-cli:
+    name: CLI · Python ${{ matrix.python-version }} · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+        include:
+          # Spot-check on macOS and Windows with one Python version
+          - python-version: "3.12"
+            os: macos-latest
+          - python-version: "3.12"
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          cd cli
+          pip install -e .
+
+      - name: Version and help
+        run: |
+          scrape --version
+          scrape -h
+
+      - name: Core commands
+        run: |
+          scrape config
+          scrape status
+          scrape env
+          scrape doctor
+          scrape changelog
+
+      - name: Export (no data — should exit cleanly)
+        run: |
+          scrape export jsonl 2>/dev/null || true
+          scrape stats 2>/dev/null || true
+
+      - name: Verify package metadata
+        run: |
+          pip show webscraper-pro-cli

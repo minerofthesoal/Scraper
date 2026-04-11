@@ -6,8 +6,10 @@ A powerful, open-source web scraping toolkit that combines a Firefox browser ext
 
 **[Homepage](https://minerofthesoal.github.io/Scraper/)** | **[Releases](https://github.com/minerofthesoal/Scraper/releases)** | **[Community Dataset](https://huggingface.co/datasets/ray0rf1re/Site.scraped)**
 
-[![Build & Release](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml)
-[![Lint & Validate](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/lint.yml)
+[![CI](https://github.com/minerofthesoal/Scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/ci.yml)
+[![Test](https://github.com/minerofthesoal/Scraper/actions/workflows/test.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/test.yml)
+[![Build](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/build.yml)
+[![Release](https://github.com/minerofthesoal/Scraper/actions/workflows/release.yml/badge.svg)](https://github.com/minerofthesoal/Scraper/actions/workflows/release.yml)
 
 ---
 

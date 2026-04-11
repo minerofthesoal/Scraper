@@ -1,0 +1,207 @@
+# ─────────────────────────────────────────────────────────────
+# Release — Create a GitHub Release with all artifacts
+# Triggers automatically when Build succeeds on main/master,
+# or can be run manually from the Actions tab.
+# ─────────────────────────────────────────────────────────────
+name: Release
+
+on:
+  # Auto-trigger when the Build workflow completes on main
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches: [main, master]
+
+  # Manual trigger from the Actions tab
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Build workflow run ID to pull artifacts from (leave blank for latest)"
+        required: false
+        type: string
+      force:
+        description: "Force re-release even if tag already exists"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only run if: (a) Build succeeded, or (b) manual dispatch
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Resolve which Build run to pull artifacts from ──
+      - name: Resolve build run ID
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            echo "Source: automatic (workflow_run trigger)"
+          elif [[ -n "${{ inputs.build_run_id }}" ]]; then
+            RUN_ID="${{ inputs.build_run_id }}"
+            echo "Source: manual (user-specified run $RUN_ID)"
+          else
+            echo "Source: manual (finding latest successful Build on main)"
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build.yml/runs?status=success&branch=main&per_page=1" \
+              --jq '.workflow_runs[0].id')
+            if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
+              echo "::error::No successful Build run found on main"
+              exit 1
+            fi
+          fi
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "::notice::Using Build run: $RUN_ID"
+
+      # ── Read version ──
+      - name: Get version from manifest
+        id: version
+        run: |
+          VER=$(python3 -c "import json; print(json.load(open('extension/manifest.json'))['version'])")
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "::notice::Releasing version $VER"
+
+      # ── Download all artifacts from the Build run ──
+      - name: Download XPI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webscraper-pro-xpi
+          path: release-assets/
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.run.outputs.run_id }}
+
+      - name: Download Python package
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: release-assets/
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.run.outputs.run_id }}
+
+      - name: Download Arch package (optional)
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-package
+          path: release-assets/
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.run.outputs.run_id }}
+        continue-on-error: true
+
+      - name: List release assets
+        run: |
+          echo "## Release Assets" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          find release-assets/ -type f -exec ls -lh {} \; | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ASSET_COUNT=$(find release-assets/ -type f | wc -l)
+          if [[ "$ASSET_COUNT" -eq 0 ]]; then
+            echo "::error::No release assets found"
+            exit 1
+          fi
+          echo "::notice::$ASSET_COUNT release assets ready"
+
+      # ── Clean up any existing release for this version ──
+      - name: Remove existing release & tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          gh release delete "$TAG" --yes 2>/dev/null \
+            && echo "Deleted existing release $TAG" \
+            || echo "No existing release for $TAG"
+          git push origin ":refs/tags/$TAG" 2>/dev/null \
+            && echo "Deleted remote tag $TAG" \
+            || echo "No remote tag $TAG to delete"
+          git tag -d "$TAG" 2>/dev/null || true
+
+      # ── Create tag and release ──
+      - name: Create and push tag
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "::notice::Pushed tag $TAG"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          pip install -q click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm 2>/dev/null
+          cd cli && pip install -e . -q 2>/dev/null && cd ..
+          {
+            echo 'body<<EOFCL'
+            scrape changelog 2>/dev/null | head -40 || echo "See commit history for changes."
+            echo 'EOFCL'
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: WebScraper Pro v${{ steps.version.outputs.version }}
+          files: release-assets/*
+          generate_release_notes: true
+          body: |
+            ## WebScraper Pro v${{ steps.version.outputs.version }}
+
+            ### Downloads
+
+            | Package | Description |
+            |---------|-------------|
+            | `webscraper-pro.xpi` | Firefox extension — load via `about:addons` |
+            | `webscraper_pro_cli-*.whl` | Python CLI wheel — `pip install <file>` |
+            | `webscraper_pro_cli-*.tar.gz` | Python CLI source — `pip install <file>` |
+
+            ### Install
+
+            ```bash
+            # One-command auto-installer (clone + pip + xpi)
+            curl -fsSL https://raw.githubusercontent.com/minerofthesoal/Scraper/main/auto_install.sh | bash
+
+            # Or pip install directly from GitHub
+            pip install git+https://github.com/minerofthesoal/Scraper.git#subdirectory=cli
+
+            # Or clone and run the full installer
+            git clone https://github.com/minerofthesoal/Scraper.git
+            cd Scraper && python install.py
+
+            # Update an existing installation
+            scrape -U
+            ```
+
+            ### Uninstall
+
+            ```bash
+            scrape -rmv
+            ```
+
+            ### Changelog
+
+            ```
+            ${{ steps.changelog.outputs.body }}
+            ```
+
+      - name: Summary
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          echo "## Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** $TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://github.com/${{ github.repository }}/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
