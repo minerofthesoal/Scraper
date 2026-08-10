@@ -1,57 +1,53 @@
 ```
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+*.min.js
+*.bundle.js
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.py.class
-*.py.backup
-*.swp
-*.swo
 
-# Dependencies
-.venv/
-venv/
-env/
-.env
-.env.local
-.env.*
-requirements.txt.bak
-Pipfile.lock
-poetry.lock
-
-# Build/dist
-build/
-dist/
-*.egg
-*.egg-info/
-.installed.cfg
-*.egg-info/
-
-# Testing
-.coverage
-coverage/
-htmlcov/
-.nyc_output/
-.mypy_cache/
-.pytest_cache/
-.hypothesis/
-
-# Logs
-*.log
-
-# OS generated files
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Icon?
-.directory
-*.nfs*
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Compression
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```

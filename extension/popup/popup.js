@@ -96,6 +96,7 @@
   const chkScrapeVideo = $("#chk-scrape-video");
   const chkAllowYoutube = $("#chk-allow-youtube");
   const chkScrapeJs = $("#chk-scrape-js");
+  const chkCaptureFullHTML = $("#chk-capture-full-html");
   const selFormat = $("#sel-format");
 
   /* ── Session Timer ── */
@@ -133,7 +134,7 @@
   browser.storage.local.get([
     "autoScroll", "autoNext", "dataFormat", "sessionStats", "scrapeActive",
     "cookieDismissEnabled", "deobfuscateEnabled", "downloadImages",
-    "scrapeVideo", "allowYouTube", "scrapeJS"
+    "scrapeVideo", "allowYouTube", "scrapeJS", "captureFullHTML"
   ]).then((cfg) => {
     if (chkAutoScroll) chkAutoScroll.checked = cfg.autoScroll !== false;
     if (chkAutoNext) chkAutoNext.checked = cfg.autoNext !== false;
@@ -143,6 +144,7 @@
     if (chkScrapeVideo) chkScrapeVideo.checked = cfg.scrapeVideo !== false;
     if (chkAllowYoutube) chkAllowYoutube.checked = !!cfg.allowYouTube;
     if (chkScrapeJs) chkScrapeJs.checked = !!cfg.scrapeJS;
+    if (chkCaptureFullHTML) chkCaptureFullHTML.checked = !!cfg.captureFullHTML;
     if (selFormat) selFormat.value = cfg.dataFormat || "jsonl";
     updateStats(cfg.sessionStats || {});
     updateStatus(cfg.scrapeActive ? "scraping" : "idle");
@@ -160,10 +162,11 @@
       scrapeVideo: chkScrapeVideo ? chkScrapeVideo.checked : true,
       allowYouTube: chkAllowYoutube ? chkAllowYoutube.checked : false,
       scrapeJS: chkScrapeJs ? chkScrapeJs.checked : false,
+      captureFullHTML: chkCaptureFullHTML ? chkCaptureFullHTML.checked : false,
       dataFormat: selFormat ? selFormat.value : "jsonl",
     });
   }
-  [chkAutoScroll, chkAutoNext, chkCookieDismiss, chkDeobfuscate, chkDownloadImages, chkScrapeVideo, chkAllowYoutube, chkScrapeJs, selFormat].forEach(el => {
+  [chkAutoScroll, chkAutoNext, chkCookieDismiss, chkDeobfuscate, chkDownloadImages, chkScrapeVideo, chkAllowYoutube, chkScrapeJs, chkCaptureFullHTML, selFormat].forEach(el => {
     if (el) el.addEventListener("change", saveQuickSettings);
   });
 
@@ -400,7 +403,8 @@
   bindClick("#btn-export", () => {
     const fmt = selFormat ? selFormat.value : "jsonl";
     const prettyPrint = !!($("#chk-pretty-print") && $("#chk-pretty-print").checked);
-    sendToBackground("EXPORT_DATA", { format: fmt, options: { prettyPrint } });
+    const captureFullHTML = !!(chkCaptureFullHTML && chkCaptureFullHTML.checked);
+    sendToBackground("EXPORT_DATA", { format: fmt, options: { prettyPrint, captureFullHTML } });
     const statusEl = $("#export-status");
     if (statusEl) { statusEl.textContent = "Exporting..."; setTimeout(() => { statusEl.textContent = ""; }, 5000); }
   });

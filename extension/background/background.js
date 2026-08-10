@@ -463,6 +463,23 @@ function handleScrapedData(data) {
     }
   }
 
+  // Process full HTML capture
+  if (data.fullHTML) {
+    var htmlFp = _fingerprint(data.fullHTML);
+    if (!seenFingerprints.has(htmlFp)) {
+      seenFingerprints.add(htmlFp);
+      scrapedRecords.push({
+        id: uid(),
+        _fp: htmlFp,
+        type: "html",
+        fullHTML: data.fullHTML,
+        source_url: meta.url,
+        source_title: meta.title,
+        scraped_at: data.scrapedAt,
+      });
+    }
+  }
+
   sessionStats.pages += 1;
   // Track how many duplicates were skipped this round
   var expectedNew = (data.texts ? data.texts.length : 0) + (data.images ? data.images.length : 0) + (data.links ? data.links.length : 0) + (data.audio ? data.audio.length : 0);
@@ -528,6 +545,7 @@ function exportData(format, options) {
   }
 
   var prettyPrint = !!(options && options.prettyPrint);
+  var captureFullHTML = !!(options && options.captureFullHTML);
   var timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   var clean = function (r) { var c = Object.assign({}, r); delete c._fp; return c; };
   var texts = scrapedRecords.filter(function (r) { return r.type === "text"; }).map(clean);
@@ -535,6 +553,15 @@ function exportData(format, options) {
   var links = scrapedRecords.filter(function (r) { return r.type === "link"; }).map(clean);
   var audioRecs = scrapedRecords.filter(function (r) { return r.type === "audio"; }).map(clean);
   var videoRecs = scrapedRecords.filter(function (r) { return r.type === "video"; }).map(clean);
+  var htmlRecords = scrapedRecords.filter(function (r) { return r.type === "html"; }).map(clean);
+
+  // If exporting HTML with fullHTML enabled, create a complete HTML archive
+  if (format === "html" && captureFullHTML && htmlRecords.length > 0) {
+    var fullHtmlExport = createFullHTMLExport(htmlRecords, timestamp);
+    WSP_Utils.downloadText(fullHtmlExport, "webscraper-pro/data/full_html_export_" + timestamp + ".html", "text/html");
+    notify("WebScraper Pro", "Exported " + htmlRecords.length + " full HTML pages.");
+    return;
+  }
 
   if (format === "jsonl") {
     var toJL = prettyPrint
@@ -546,10 +573,11 @@ function exportData(format, options) {
     if (links.length > 0) WSP_Utils.downloadText(toJL(links), "webscraper-pro/data/links_" + timestamp + ext);
     if (audioRecs.length > 0) WSP_Utils.downloadText(toJL(audioRecs), "webscraper-pro/data/audio_" + timestamp + ext);
     if (videoRecs.length > 0) WSP_Utils.downloadText(toJL(videoRecs), "webscraper-pro/data/video_" + timestamp + ext);
+    if (htmlRecords.length > 0) WSP_Utils.downloadText(toJL(htmlRecords), "webscraper-pro/data/html_" + timestamp + ext);
     WSP_Utils.downloadText(toJL(citations), "webscraper-pro/data/citations_" + timestamp + ext);
   } else if (format === "json") {
     var indent = prettyPrint ? 4 : 2;
-    WSP_Utils.downloadText(JSON.stringify({ texts: texts, images: images, links: links, audio: audioRecs, video: videoRecs, citations: citations }, null, indent),
+    WSP_Utils.downloadText(JSON.stringify({ texts: texts, images: images, links: links, audio: audioRecs, video: videoRecs, html: htmlRecords, citations: citations }, null, indent),
       "webscraper-pro/data/full_export_" + timestamp + ".json");
   } else if (format === "csv") {
     if (texts.length > 0) WSP_Utils.downloadText(WSP_Utils.toCSV(texts), "webscraper-pro/data/text_data_" + timestamp + ".csv", "text/csv");
