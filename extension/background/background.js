@@ -1,4 +1,4 @@
-/* ── WebScraper Pro Background Script v0.8.0 ── */
+/* ── WebScraper Pro Background Script v0.8.2 ── */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -561,6 +561,9 @@ function exportData(format, options) {
   } else if (format === "md" || format === "markdown") {
     var md = toMarkdown(texts, images, links, audioRecs, citations);
     WSP_Utils.downloadText(md, "webscraper-pro/data/export_" + timestamp + ".md", "text/markdown");
+  } else if (format === "html") {
+    var html = toHTML(texts, images, links, audioRecs, videoRecs, citations);
+    WSP_Utils.downloadText(html, "webscraper-pro/data/export_" + timestamp + ".html", "text/html");
   }
 
   notify("WebScraper Pro", "Exported " + scrapedRecords.length + " records in " + format.toUpperCase() + " format.");
@@ -570,7 +573,7 @@ function exportData(format, options) {
 function toMarkdown(texts, images, links, audio, citationsList) {
   var md = "# WebScraper Pro Export\n\n";
   md += "**Generated:** " + new Date().toISOString() + "  \n";
-  md += "**Version:** v0.8.0  \n";
+  md += "**Version:** v0.8.2  \n";
   md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
   md += "---\n\n";
 
@@ -634,7 +637,7 @@ function toMarkdown(texts, images, links, audio, citationsList) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.8.0</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.8.2</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
@@ -695,6 +698,107 @@ function toXML(texts, images, links, audio, citationsList) {
 
   xml += '</dataset>\n';
   return xml;
+}
+
+/* ── HTML export ── */
+function toHTML(texts, images, links, audio, video, citationsList) {
+  var html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>WebScraper Pro Export</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; }\n    h1 { color: #6366f1; border-bottom: 2px solid #6366f1; padding-bottom: 10px; }\n    h2 { color: #4f46e5; margin-top: 30px; }\n    .stats { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }\n    .stat-item { display: inline-block; margin-right: 20px; font-weight: 600; }\n    .record { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 15px; }\n    .record-meta { font-size: 12px; color: #6b7280; margin-bottom: 10px; }\n    .record-content { white-space: pre-wrap; } \n    img { max-width: 100%; height: auto; border-radius: 6px; }\n    table { width: 100%; border-collapse: collapse; margin: 15px 0; }\n    th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }\n    th { background: #f9fafb; font-weight: 600; }\n    a { color: #6366f1; text-decoration: none; }\n    a:hover { text-decoration: underline; }\n    .citation { background: #fef3c7; padding: 10px; border-left: 3px solid #f59e0b; margin: 10px 0; font-style: italic; }\n    footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }\n  </style>\n</head>\n<body>\n  <h1>WebScraper Pro Export</h1>\n  \n  <div class="stats">\n    <strong>Generated:</strong> ' + new Date().toISOString() + '<br>\n    <strong>Version:</strong> v0.8.2<br><br>\n    <span class="stat-item">📄 ' + texts.length + ' text records</span>\n    <span class="stat-item">🖼️ ' + images.length + ' images</span>\n    <span class="stat-item">🔗 ' + links.length + ' links</span>\n    <span class="stat-item">🎵 ' + audio.length + ' audio</span>\n    <span class="stat-item">🎬 ' + video.length + ' videos</span>\n    <span class="stat-item">📚 ' + citationsList.length + ' citations</span>\n  </div>\n';
+
+  if (texts.length > 0) {
+    html += '  <h2>📝 Text Content (' + texts.length + ' records)</h2>\n';
+    for (var i = 0; i < texts.length; i++) {
+      var t = texts[i];
+      html += '  <div class="record">\n';
+      html += '    <div class="record-meta">\n';
+      html += '      <strong>Source:</strong> <a href="' + esc(t.source_url || '#') + '" target="_blank">' + esc(t.source_title || t.source_url || 'Untitled') + '</a><br>\n';
+      if (t.author) html += '      <strong>Author:</strong> ' + esc(t.author) + '<br>\n';
+      if (t.scraped_at) html += '      <strong>Scraped:</strong> ' + esc(t.scraped_at) + '\n';
+      html += '    </div>\n';
+      html += '    <div class="record-content">' + esc(t.text || '') + '</div>\n';
+      if (t.citation_mla) html += '    <div class="citation">' + esc(t.citation_mla) + '</div>\n';
+      html += '  </div>\n';
+    }
+  }
+
+  if (images.length > 0) {
+    html += '  <h2>🖼️ Images (' + images.length + ')</h2>\n';
+    html += '  <table>\n    <thead>\n      <tr><th>#</th><th>Preview</th><th>Source</th><th>Alt</th><th>Dimensions</th></tr>\n    </thead>\n    <tbody>\n';
+    for (var j = 0; j < images.length; j++) {
+      var img = images[j];
+      html += '      <tr>\n';
+      html += '        <td>' + (j + 1) + '</td>\n';
+      html += '        <td><img src="' + esc(img.src) + '" alt="' + esc(img.alt || '') + '" style="max-width:100px;max-height:100px;"></td>\n';
+      html += '        <td><a href="' + esc(img.source_url || img.src) + '" target="_blank">' + esc((img.source_url || img.src).substring(0, 50)) + '...</a></td>\n';
+      html += '        <td>' + esc(img.alt || '-') + '</td>\n';
+      html += '        <td>' + (img.width || '?') + 'x' + (img.height || '?') + '</td>\n';
+      html += '      </tr>\n';
+    }
+    html += '    </tbody>\n  </table>\n';
+  }
+
+  if (links.length > 0) {
+    html += '  <h2>🔗 Links (' + links.length + ')</h2>\n';
+    html += '  <table>\n    <thead>\n      <tr><th>#</th><th>URL</th><th>Text</th><th>Title</th></tr>\n    </thead>\n    <tbody>\n';
+    for (var k = 0; k < links.length; k++) {
+      var lnk = links[k];
+      html += '      <tr>\n';
+      html += '        <td>' + (k + 1) + '</td>\n';
+      html += '        <td><a href="' + esc(lnk.href) + '" target="_blank">' + esc(lnk.href.substring(0, 60)) + '...</a></td>\n';
+      html += '        <td>' + esc(lnk.text || '-') + '</td>\n';
+      html += '        <td>' + esc(lnk.title || '-') + '</td>\n';
+      html += '      </tr>\n';
+    }
+    html += '    </tbody>\n  </table>\n';
+  }
+
+  if (audio.length > 0) {
+    html += '  <h2>🎵 Audio Files (' + audio.length + ')</h2>\n';
+    html += '  <table>\n    <thead>\n      <tr><th>#</th><th>Source</th><th>Type</th></tr>\n    </thead>\n    <tbody>\n';
+    for (var m = 0; m < audio.length; m++) {
+      var a = audio[m];
+      html += '      <tr>\n';
+      html += '        <td>' + (m + 1) + '</td>\n';
+      html += '        <td><a href="' + esc(a.src) + '" target="_blank">' + esc(a.src.substring(0, 60)) + '...</a></td>\n';
+      html += '        <td>' + esc(a.media_type || 'audio') + '</td>\n';
+      html += '      </tr>\n';
+    }
+    html += '    </tbody>\n  </table>\n';
+  }
+
+  if (video.length > 0) {
+    html += '  <h2>🎬 Video Files (' + video.length + ')</h2>\n';
+    html += '  <table>\n    <thead>\n      <tr><th>#</th><th>Source</th><th>Type</th><th>Duration</th></tr>\n    </thead>\n    <tbody>\n';
+    for (var n = 0; n < video.length; n++) {
+      var v = video[n];
+      html += '      <tr>\n';
+      html += '        <td>' + (n + 1) + '</td>\n';
+      html += '        <td><a href="' + esc(v.src) + '" target="_blank">' + esc(v.src.substring(0, 60)) + '...</a></td>\n';
+      html += '        <td>' + esc(v.mime || v.type || 'video') + '</td>\n';
+      html += '        <td>' + (v.duration ? Math.round(v.duration) + 's' : '-') + '</td>\n';
+      html += '      </tr>\n';
+    }
+    html += '    </tbody>\n  </table>\n';
+  }
+
+  if (citationsList.length > 0) {
+    html += '  <h2>📚 Citations (' + citationsList.length + ')</h2>\n';
+    for (var p = 0; p < citationsList.length; p++) {
+      var c = citationsList[p];
+      html += '  <div class="record">\n';
+      html += '    <strong>' + esc(c.title || 'Untitled') + '</strong><br>\n';
+      if (c.author) html += '    <em>By ' + esc(c.author) + '</em><br>\n';
+      html += '    <a href="' + esc(c.url) + '" target="_blank">' + esc(c.url) + '</a><br>\n';
+      if (c.mla) html += '    <div class="citation"><strong>MLA:</strong> ' + esc(c.mla) + '</div>\n';
+      if (c.apa) html += '    <div class="citation"><strong>APA:</strong> ' + esc(c.apa) + '</div>\n';
+      html += '  </div>\n';
+    }
+  }
+
+  html += '  <footer>\n';
+  html += '    <p>Exported by <strong>WebScraper Pro v0.8.2</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
+  html += '  </footer>\n';
+  html += '</body>\n</html>\n';
+  return html;
 }
 
 var OWNER_HF_REPO = "ray0rf1re/Site.scraped";
