@@ -1,4 +1,4 @@
-/* ── Scraper Module v0.8.0 ── */
+/* ── Scraper Module v0.8.2 ── */
 /* Universal text/image/link/audio/video extraction that works on ANY site */
 /* Added: Full HTML capture, enhanced link extraction, fixed sizing, Shelf.it/RedShelf support */
 (function () {

@@ -1,4 +1,57 @@
 ```
-# CI/CD
-.github/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py.class
+*.py.backup
+*.swp
+*.swo
+
+# Dependencies
+.venv/
+venv/
+env/
+.env
+.env.local
+.env.*
+requirements.txt.bak
+Pipfile.lock
+poetry.lock
+
+# Build/dist
+build/
+dist/
+*.egg
+*.egg-info/
+.installed.cfg
+*.egg-info/
+
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nyc_output/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+.directory
+*.nfs*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 ```

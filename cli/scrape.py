@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.8.0"
+VERSION = "0.8.2"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1487,6 +1487,9 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.8.2", "2026-03-24", [
+            "Update version to 0.8.2 across all files",
+        ]),
         ("0.8.0", "2026-03-24", [
             "Remove external AI/NuExtract server — all extraction is now local regex",
             "Fix auto-stop: queue, auto-scrape, and tab scraping auto-idle when finished",

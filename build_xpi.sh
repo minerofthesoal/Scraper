@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════
-# WebScraper Pro v0.8.0 - Auto XPI Builder
+# WebScraper Pro v0.8.2 - Auto XPI Builder
 # Packages the Firefox extension into a .xpi file
 # Usage: ./build_xpi.sh [--output PATH]
 # ══════════════════════════════════════════════════════════════
