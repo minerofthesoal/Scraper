@@ -1,5 +1,6 @@
-/* ── Auto-Scan Module v0.6.3b1 ── */
+/* ── Auto-Scan Module v0.8.0 ── */
 /* Scroll-first approach: fully scrapes current page, THEN finds next page. */
+/* Added: Depth scraping, concurrent tab support, improved pagination detection */
 (function () {
   "use strict";
 
@@ -7,8 +8,10 @@
   let scrollTimer = null;
   let pageCount = 0;
   let MAX_PAGES = 200;
+  let SCRAPE_DEPTH = 1; // Depth level for recursive scraping
   let lastScrapedUrl = ""; // Track URL to detect actual page changes
-
+  let visitedUrls = new Set(); // Prevent infinite loops
+  
   /* ── Next-page button detection ── */
   const NEXT_PATTERNS = [
     // English
@@ -56,6 +59,10 @@
         return el;
       }
     }
+    
+    // 5. Shelf.it/RedShelf specific patterns
+    const shelfNext = document.querySelector('[class*="next"], [class*="arrow-right"], .pagination-next');
+    if (shelfNext) return shelfNext;
 
     return null;
   }
@@ -124,8 +131,9 @@
     showProgress(Math.min((pageCount / MAX_PAGES) * 100, 100));
 
     // Load config
-    const cfg = await browser.storage.local.get(["autoScroll", "autoNext", "maxPages", "scrapeDelay"]);
+    const cfg = await browser.storage.local.get(["autoScroll", "autoNext", "maxPages", "scrapeDelay", "scrapeDepth"]);
     if (cfg.maxPages) MAX_PAGES = cfg.maxPages;
+    if (cfg.scrapeDepth) SCRAPE_DEPTH = cfg.scrapeDepth;
     const doScroll = cfg.autoScroll !== false;
     const doNext = cfg.autoNext !== false;
     const scrapeDelay = cfg.scrapeDelay || 1500;
@@ -135,6 +143,7 @@
     // ══════════════════════════════════════════════════════════════
 
     lastScrapedUrl = window.location.href;
+    visitedUrls.add(lastScrapedUrl);
 
     if (typeof WSP_Scraper !== "undefined" && WSP_Scraper.scrapeWithScroll) {
       if (typeof WSP_Toast !== "undefined") WSP_Toast.show(`Page ${pageCount}: scrolling & scraping...`);
@@ -201,6 +210,13 @@
         }
 
         if (nextBtn.tagName === "A" && nextBtn.href) {
+          // Check if we've already visited this URL (prevent loops)
+          if (visitedUrls.has(nextBtn.href)) {
+            if (typeof WSP_Toast !== "undefined") WSP_Toast.show("Already visited this page, stopping.");
+            stop();
+            return;
+          }
+          
           // Navigation via link — background script handles page load
           browser.runtime.sendMessage({
             action: "AUTO_NAVIGATE",
@@ -261,6 +277,7 @@
     active = true;
     pageCount = 0;
     lastScrapedUrl = "";
+    visitedUrls.clear();
 
     // Reset scroll tracking for fresh session
     if (typeof WSP_Scraper !== "undefined" && WSP_Scraper.resetScrollPosition) {
