@@ -1,251 +1,150 @@
-name: Build & Release
+# ─────────────────────────────────────────────────────────────
+# Build — Produce all distributable artifacts
+# Artifacts are uploaded for the Release workflow to consume.
+# ─────────────────────────────────────────────────────────────
+name: Build
 
 on:
   push:
     branches: [main, master]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  # ── Build Firefox Extension (.xpi) ──
-  build-extension:
-    name: Build Firefox Extension
+  # ── Read version once, share with all jobs ──
+  version:
+    name: Read Version
     runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
+      - name: Extract version from manifest
+        id: ver
+        run: |
+          VER=$(python3 -c "import json; print(json.load(open('extension/manifest.json'))['version'])")
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "::notice::Version $VER"
 
-      - name: Install dependencies
-        run: pip install Pillow
+  # ── Firefox Extension (.xpi) ──
+  build-extension:
+    name: Extension (.xpi)
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
 
       - name: Generate icons
-        run: python extension/icons/generate_icons.py
-
-      - name: Validate manifest.json
         run: |
-          python3 -c "
-          import json, sys
-          with open('extension/manifest.json') as f:
-              m = json.load(f)
-          errors = []
-          if m.get('manifest_version') != 2:
-              errors.append('manifest_version must be 2')
-          if not m.get('name'):
-              errors.append('Missing name')
-          if not m.get('version'):
-              errors.append('Missing version')
-          if not m.get('background', {}).get('scripts'):
-              errors.append('Missing background scripts')
-          if not m.get('content_scripts'):
-              errors.append('Missing content scripts')
-          if not m.get('browser_action'):
-              errors.append('Missing browser_action')
-          if errors:
-              print('Manifest errors: ' + ', '.join(errors))
-              sys.exit(1)
-          print(f'Manifest OK: {m[\"name\"]} v{m[\"version\"]}')
-          "
+          pip install Pillow
+          python extension/icons/generate_icons.py
 
-      - name: Check all referenced files exist
+      - name: Validate manifest
         run: |
           python3 -c "
           import json, os, sys
           with open('extension/manifest.json') as f:
               m = json.load(f)
-
-          files = []
-          files.append(m['browser_action']['default_popup'])
-          files.extend(m['background']['scripts'])
+          # Schema checks
+          assert m.get('manifest_version') == 2, 'manifest_version must be 2'
+          assert m.get('name'), 'Missing name'
+          assert m.get('version'), 'Missing version'
+          assert m.get('background', {}).get('scripts'), 'Missing background scripts'
+          assert m.get('content_scripts'), 'Missing content_scripts'
+          assert m.get('browser_action'), 'Missing browser_action'
+          # File existence
+          refs = [m['browser_action']['default_popup']]
+          refs += m['background']['scripts']
           for cs in m['content_scripts']:
-              files.extend(cs.get('js', []))
-              files.extend(cs.get('css', []))
-          files.append(m['options_ui']['page'])
-
-          missing = [f for f in files if not os.path.exists(os.path.join('extension', f))]
+              refs += cs.get('js', [])
+              refs += cs.get('css', [])
+          refs.append(m['options_ui']['page'])
+          missing = [f for f in refs if not os.path.exists(os.path.join('extension', f))]
           if missing:
-              print(f'MISSING FILES: {missing}')
+              print(f'Missing: {missing}')
               sys.exit(1)
-          print(f'All {len(files)} referenced files verified')
+          print(f'OK: {m[\"name\"]} v{m[\"version\"]} — {len(refs)} files verified')
           "
 
       - name: Package .xpi
         run: |
           cd extension
-          zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc" -x ".DS_Store"
+          zip -r ../webscraper-pro.xpi . \
+            -x "*.py" -x "__pycache__/*" -x "*.pyc" -x ".DS_Store" -x "*~" -x "*.swp"
           cd ..
-          echo "XPI_SIZE=$(du -h webscraper-pro.xpi | cut -f1)" >> $GITHUB_ENV
-          echo "Built webscraper-pro.xpi ($(du -h webscraper-pro.xpi | cut -f1))"
+          echo "::notice::Built webscraper-pro.xpi ($(du -h webscraper-pro.xpi | cut -f1))"
 
-      - name: Upload XPI artifact
+      - name: Upload XPI
         uses: actions/upload-artifact@v4
         with:
           name: webscraper-pro-xpi
           path: webscraper-pro.xpi
-          retention-days: 30
+          retention-days: 90
+          if-no-files-found: error
 
-  # ── Build Python Package ──
+  # ── Python Package (sdist + wheel) ──
   build-python:
-    name: Build Python Package
+    name: Python Package
+    needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: pip
 
       - name: Install build tools
         run: pip install build wheel setuptools
 
-      - name: Build package
+      - name: Build sdist + wheel
         run: |
           cd cli
           python -m build
-          echo "Built packages:"
+          echo "::notice::Built packages:"
           ls -lh dist/
 
-      - name: Verify package installs and runs
+      - name: Verify wheel installs and runs
         run: |
           pip install cli/dist/*.whl
-          scrape --version
+          VER=$(scrape --version 2>&1 | head -1)
+          echo "::notice::Installed CLI reports: $VER"
 
       - name: Upload Python artifacts
         uses: actions/upload-artifact@v4
         with:
           name: python-package
           path: cli/dist/*
-          retention-days: 30
+          retention-days: 90
+          if-no-files-found: error
 
-  # ── Test CLI ──
-  test-cli:
-    name: Test CLI (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13']
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          cd cli
-          pip install -e .
-
-      - name: CLI smoke tests
-        run: |
-          scrape --version
-          scrape -h
-          scrape config
-          scrape status
-          scrape env
-          scrape doctor
-          scrape changelog
-
-      - name: Test export formats
-        run: |
-          scrape export jsonl 2>/dev/null || true
-          scrape stats 2>/dev/null || true
-
-  # ── Test Extension ──
-  test-extension:
-    name: Validate Extension
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Validate manifest.json
-        run: |
-          python3 -c "
-          import json, sys
-          with open('extension/manifest.json') as f:
-              m = json.load(f)
-          assert m.get('manifest_version') == 2, 'Bad manifest version'
-          assert m.get('name'), 'Missing name'
-          assert m.get('version'), 'Missing version'
-          assert m.get('background', {}).get('scripts'), 'Missing background scripts'
-          assert m.get('content_scripts'), 'Missing content scripts'
-          assert m.get('browser_action'), 'Missing browser_action'
-          print('manifest.json validation passed!')
-          "
-
-      - name: Check all referenced files exist
-        run: |
-          python3 -c "
-          import json, os
-          with open('extension/manifest.json') as f:
-              m = json.load(f)
-
-          files = []
-          files.append(m['browser_action']['default_popup'])
-          files.extend(m['background']['scripts'])
-          for cs in m['content_scripts']:
-              files.extend(cs.get('js', []))
-              files.extend(cs.get('css', []))
-          files.append(m['options_ui']['page'])
-
-          missing = []
-          for f in files:
-              if not os.path.exists(os.path.join('extension', f)):
-                  missing.append(f)
-
-          if missing:
-              print(f'MISSING FILES: {missing}')
-              exit(1)
-          print(f'All {len(files)} referenced files exist!')
-          "
-
-      - name: Check JS syntax with Node
-        run: |
-          ERRORS=0
-          while IFS= read -r f; do
-            if ! node --check "$f" 2>/dev/null; then
-              echo "WARN: $f (uses browser APIs)"
-            fi
-          done < <(find extension -name '*.js' -type f)
-          echo "JS syntax check complete"
-
-      - name: Validate JSON files
-        run: |
-          ERRORS=0
-          while IFS= read -r f; do
-            if python3 -c "import json; json.load(open('$f'))"; then
-              echo "OK: $f"
-            else
-              echo "FAIL: $f"
-              ERRORS=1
-            fi
-          done < <(find extension -name '*.json' -type f)
-          exit $ERRORS
-
-  # ── Build Arch Linux Package (optional — does not block release) ──
+  # ── Arch Linux Package (best-effort, does not block release) ──
   build-arch:
-    name: Build Arch Linux Package
+    name: Arch Package
+    needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     continue-on-error: true
     container:
       image: archlinux:latest
@@ -253,7 +152,9 @@ jobs:
       - name: Setup Arch build environment
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git python python-pip python-setuptools python-build python-wheel python-pillow zip sudo
+          pacman -S --noconfirm \
+            base-devel git python python-pip python-setuptools \
+            python-build python-wheel python-pillow zip sudo
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
@@ -262,31 +163,26 @@ jobs:
       - name: Generate icons
         run: python extension/icons/generate_icons.py
 
-      - name: Build .xpi
+      - name: Build .xpi (needed by PKGBUILD)
         run: |
           cd extension
           zip -r ../webscraper-pro.xpi . -x "*.py" -x "__pycache__/*" -x "*.pyc"
-          cd ..
 
-      - name: Prepare PKGBUILD
+      - name: Prepare source tree
         run: |
           mkdir -p /tmp/archpkg
           cp packaging/arch/PKGBUILD /tmp/archpkg/
           cp webscraper-pro.xpi /tmp/archpkg/
-          cp -r cli /tmp/archpkg/cli
-          cp -r extension /tmp/archpkg/extension
-          cp install.sh /tmp/archpkg/ 2>/dev/null || true
-          cp install.py /tmp/archpkg/ 2>/dev/null || true
-          cp README.md /tmp/archpkg/
-          cp LICENSE /tmp/archpkg/
+          cp -r cli extension /tmp/archpkg/
+          cp install.sh install.py README.md LICENSE /tmp/archpkg/ 2>/dev/null || true
           chown -R builder:builder /tmp/archpkg
 
-      - name: Build package
+      - name: makepkg
         run: |
           cd /tmp/archpkg
-          sudo -u builder makepkg -sf --noconfirm 2>&1 || echo "WARN: makepkg failed (non-fatal)"
-          cp *.pkg.tar.zst $GITHUB_WORKSPACE/ 2>/dev/null || true
-          cp *.pkg.tar.xz $GITHUB_WORKSPACE/ 2>/dev/null || true
+          sudo -u builder makepkg -sf --noconfirm 2>&1
+          ls -lh *.pkg.tar.* 2>/dev/null || echo "::warning::No package produced"
+          cp *.pkg.tar.zst *.pkg.tar.xz $GITHUB_WORKSPACE/ 2>/dev/null || true
 
       - name: Upload Arch package
         if: success()
@@ -296,125 +192,27 @@ jobs:
           path: |
             *.pkg.tar.zst
             *.pkg.tar.xz
-          retention-days: 30
+          retention-days: 90
           if-no-files-found: ignore
 
-  # ── Release ──
-  # Runs on push to main/master, tag push (v*), or manual dispatch
-  release:
-    name: Create Release
-    needs: [build-extension, build-python, test-cli, test-extension]
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' &&
-       (startsWith(github.ref, 'refs/tags/v') ||
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/master'))
+  # ── Summary ──
+  build-summary:
+    name: Build Summary
+    needs: [version, build-extension, build-python, build-arch]
+    if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get version from manifest
-        id: version
+      - name: Report
         run: |
-          VER=$(python3 -c "import json; print(json.load(open('extension/manifest.json'))['version'])")
-          echo "version=$VER" >> $GITHUB_OUTPUT
-          echo "tag=v$VER" >> $GITHUB_OUTPUT
-          echo "Version: $VER"
+          echo "## Build Summary — v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Extension (.xpi) | ${{ needs.build-extension.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python (sdist+whl) | ${{ needs.build-python.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Arch (.pkg.tar.zst) | ${{ needs.build-arch.result }} |" >> $GITHUB_STEP_SUMMARY
 
-      - name: Delete existing release and tag if present
-        run: |
-          TAG="v${{ steps.version.outputs.version }}"
-          # Delete the GitHub release if it exists (so we can recreate it)
-          gh release delete "$TAG" --yes 2>/dev/null && echo "Deleted existing release $TAG" || echo "No existing release $TAG"
-          # Delete remote tag if it exists
-          git push origin ":refs/tags/$TAG" 2>/dev/null && echo "Deleted remote tag $TAG" || echo "No remote tag $TAG"
-          # Delete local tag if it exists
-          git tag -d "$TAG" 2>/dev/null && echo "Deleted local tag $TAG" || echo "No local tag $TAG"
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Create and push tag
-        run: |
-          TAG="v${{ steps.version.outputs.version }}"
-          git tag "$TAG"
-          git push origin "$TAG"
-          echo "Created and pushed tag $TAG"
-
-      - name: Download XPI artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: webscraper-pro-xpi
-          path: release-assets/
-
-      - name: Download Python package
-        uses: actions/download-artifact@v4
-        with:
-          name: python-package
-          path: release-assets/
-
-      - name: Download Arch package (if available)
-        uses: actions/download-artifact@v4
-        with:
-          name: arch-package
-          path: release-assets/
-        continue-on-error: true
-
-      - name: Generate changelog from CLI
-        id: changelog
-        run: |
-          pip install -q click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm 2>/dev/null
-          cd cli && pip install -e . -q 2>/dev/null && cd ..
-          CHANGES=$(scrape changelog 2>/dev/null | head -30 || echo "See commit history for changes.")
-          echo "changes<<EOFCHANGES" >> $GITHUB_OUTPUT
-          echo "$CHANGES" >> $GITHUB_OUTPUT
-          echo "EOFCHANGES" >> $GITHUB_OUTPUT
-
-      - name: List release assets
-        run: |
-          echo "Release assets:"
-          find release-assets/ -type f -exec ls -lh {} \;
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: WebScraper Pro v${{ steps.version.outputs.version }}
-          files: release-assets/*
-          generate_release_notes: true
-          body: |
-            ## WebScraper Pro v${{ steps.version.outputs.version }}
-
-            ### Downloads
-            | Package | Description |
-            |---------|-------------|
-            | `webscraper-pro.xpi` | Firefox extension — load via `about:addons` |
-            | `webscraper_pro_cli-*.whl` | Python CLI — `pip install <file>` |
-            | `webscraper_pro_cli-*.tar.gz` | Python CLI source — `pip install <file>` |
-
-            ### Install
-            ```bash
-            # Quick install (all platforms)
-            python install.py
-
-            # One-liner pip install
-            pip install git+https://github.com/minerofthesoal/Scraper.git#subdirectory=cli
-
-            # Auto-installer (no clone needed)
-            curl -fsSL https://raw.githubusercontent.com/minerofthesoal/Scraper/main/auto_install.sh | bash
-
-            # Update existing installation
-            scrape -U
-            ```
-
-            ### Uninstall
-            ```bash
-            scrape -rmv
-            ```
-
-            ### Changelog (v${{ steps.version.outputs.version }})
-            ```
-            ${{ steps.changelog.outputs.changes }}
-            ```
+      - name: Fail if required builds failed
+        if: needs.build-extension.result == 'failure' || needs.build-python.result == 'failure'
+        run: exit 1

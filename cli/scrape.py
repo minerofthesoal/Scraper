@@ -2079,44 +2079,71 @@ def upload_owner():
 @click.option("--depth", "-d", default=1, help="Crawl depth (1=single page)")
 @click.option("--output", "-o", default=None, help="Output file")
 @click.option("--images/--no-images", default=True, help="Download images")
-def scrape_url(target_url, depth, output, images):
-    """Scrape a URL directly from the command line."""
+@click.option("--concurrent", "-c", default=1, help="Number of concurrent pages to scrape")
+@click.option("--full-html/--no-full-html", default=False, help="Capture full HTML")
+def scrape_url(target_url, depth, output, images, concurrent, full_html):
+    """Scrape a URL directly from the command line with depth and concurrency support."""
     try:
         import requests
         from bs4 import BeautifulSoup
+        from concurrent.futures import ThreadPoolExecutor, as_completed
     except ImportError:
         console.print("[red]Install: pip install requests beautifulsoup4[/red]")
         return
 
     cfg = load_config()
+    all_records = []
+    visited_urls = set()
+    
+    def resolve_url(href, base_url, domain):
+        """Resolve relative URLs to absolute."""
+        if not href:
+            return None
+        if href.startswith("http"):
+            return href
+        if href.startswith("/"):
+            return f"{urlparse(base_url).scheme}://{domain}{href}"
+        if href.startswith("#") or href.startswith("javascript:"):
+            return None
+        return f"{base_url.rsplit('/', 1)[0]}/{href}"
 
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        task = progress.add_task(f"Scraping {target_url}...", total=None)
-
-        headers = {"User-Agent": cfg.get("user_agent", "WebScraperPro/1.0")}
-        try:
-            resp = requests.get(target_url, headers=headers, timeout=cfg.get("timeout", 30))
-            resp.raise_for_status()
-        except Exception as e:
-            console.print(f"[red]Request failed:[/red] {e}")
-            return
-
-        soup = BeautifulSoup(resp.text, "html.parser")
+    def scrape_single_url(url, current_depth):
+        """Scrape a single URL and return records."""
         records = []
         now_str = datetime.now().isoformat()
+        
+        try:
+            headers = {"User-Agent": cfg.get("user_agent", "WebScraperPro/1.0")}
+            resp = requests.get(url, headers=headers, timeout=cfg.get("timeout", 30))
+            resp.raise_for_status()
+        except Exception as e:
+            console.print(f"[yellow]Request failed for {url}: {e}[/yellow]")
+            return records, []
 
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
         # Page metadata
         title = soup.title.string if soup.title else ""
         author_tag = soup.find("meta", attrs={"name": "author"})
         author = author_tag["content"] if author_tag else "Unknown"
         site_name_tag = soup.find("meta", attrs={"property": "og:site_name"})
         site_name = site_name_tag["content"] if site_name_tag else ""
-
-        # MLA citation
+        
         from urllib.parse import urlparse
-        domain = urlparse(target_url).hostname or target_url
+        domain = urlparse(url).hostname or url
         access_date = datetime.now().strftime("%d %b. %Y")
-        mla = f'{author}. "{title}." *{site_name or domain}*, {target_url}. Accessed {access_date}.'
+        mla = f'{author}. "{title}." *{site_name or domain}*, {url}. Accessed {access_date}.'
+        
+        # Capture full HTML if enabled
+        if full_html:
+            records.append({
+                "id": hashlib.md5(url.encode()).hexdigest()[:12],
+                "type": "html",
+                "source_url": url,
+                "html_content": resp.text,
+                "scraped_at": now_str,
+                "citation_mla": mla,
+            })
 
         # Extract text
         for tag in soup.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th",
@@ -2128,7 +2155,7 @@ def scrape_url(target_url, depth, output, images):
                     "type": "text",
                     "text": txt,
                     "tag": tag.name,
-                    "source_url": target_url,
+                    "source_url": url,
                     "source_title": title,
                     "author": author,
                     "site_name": site_name or domain,
@@ -2140,34 +2167,57 @@ def scrape_url(target_url, depth, output, images):
         for img in soup.find_all("img"):
             src = img.get("src", "")
             if src:
-                if src.startswith("/"):
-                    src = f"{urlparse(target_url).scheme}://{domain}{src}"
-                records.append({
-                    "id": hashlib.md5(src.encode()).hexdigest()[:12],
-                    "type": "image",
-                    "src": src,
-                    "alt": img.get("alt", ""),
-                    "source_url": target_url,
-                    "source_title": title,
-                    "author": author,
-                    "scraped_at": now_str,
-                    "citation_mla": mla,
-                })
+                src = resolve_url(src, url, domain)
+                if src:
+                    records.append({
+                        "id": hashlib.md5(src.encode()).hexdigest()[:12],
+                        "type": "image",
+                        "src": src,
+                        "alt": img.get("alt", ""),
+                        "source_url": url,
+                        "source_title": title,
+                        "author": author,
+                        "scraped_at": now_str,
+                        "citation_mla": mla,
+                    })
 
-        # Extract links
+        # Extract links - enhanced for Shelf.it/RedShelf
+        next_urls = []
         for a in soup.find_all("a", href=True):
             href = a["href"]
-            if href.startswith("/"):
-                href = f"{urlparse(target_url).scheme}://{domain}{href}"
-            if href.startswith("http"):
+            href = resolve_url(href, url, domain)
+            if href and href.startswith("http"):
                 records.append({
                     "id": hashlib.md5(href.encode()).hexdigest()[:12],
                     "type": "link",
                     "href": href,
                     "text": a.get_text(strip=True),
-                    "source_url": target_url,
+                    "source_url": url,
                     "scraped_at": now_str,
                 })
+                # Collect links for depth scraping
+                if current_depth < depth and href not in visited_urls:
+                    if domain in href:  # Stay on same domain
+                        next_urls.append(href)
+        
+        # Shelf.it/RedShelf specific: book cards
+        for card in soup.select('[class*="book"], [class*="card"], [class*="item"]'):
+            anchor = card.select_one('a[href^="http"], a[href^="/"]')
+            if anchor:
+                href = resolve_url(anchor.get("href"), url, domain)
+                if href and href not in visited_urls:
+                    card_text = card.get_text(strip=True)[:200]
+                    records.append({
+                        "id": hashlib.md5(href.encode()).hexdigest()[:12],
+                        "type": "link",
+                        "href": href,
+                        "text": card_text or anchor.get_text(strip=True),
+                        "source_url": url,
+                        "context": "book-card",
+                        "scraped_at": now_str,
+                    })
+                    if current_depth < depth and domain in href:
+                        next_urls.append(href)
 
         # Extract audio
         for audio in soup.find_all(["audio", "video"]):
@@ -2176,36 +2226,71 @@ def scrape_url(target_url, depth, output, images):
             if not src and source_tag:
                 src = source_tag.get("src", "")
             if src:
-                records.append({
-                    "id": hashlib.md5(src.encode()).hexdigest()[:12],
-                    "type": "audio",
-                    "src": src,
-                    "media_type": audio.name,
-                    "source_url": target_url,
-                    "scraped_at": now_str,
-                    "citation_mla": mla,
-                })
+                src = resolve_url(src, url, domain)
+                if src:
+                    records.append({
+                        "id": hashlib.md5(src.encode()).hexdigest()[:12],
+                        "type": "audio",
+                        "src": src,
+                        "media_type": audio.name,
+                        "source_url": url,
+                        "scraped_at": now_str,
+                        "citation_mla": mla,
+                    })
 
-        progress.update(task, description="Saving...")
+        return records, next_urls
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task(f"Scraping {target_url} (depth={depth}, concurrent={concurrent})...", total=None)
+        
+        # BFS-style depth scraping with concurrency
+        urls_to_scrape = [(target_url, 1)]
+        visited_urls.add(target_url)
+        
+        while urls_to_scrape:
+            batch = urls_to_scrape[:concurrent]
+            urls_to_scrape = urls_to_scrape[concurrent:]
+            
+            new_urls = []
+            with ThreadPoolExecutor(max_workers=concurrent) as executor:
+                futures = {executor.submit(scrape_single_url, url, d): (url, d) for url, d in batch}
+                for future in as_completed(futures):
+                    url, d = futures[future]
+                    try:
+                        records, next_urls = future.result()
+                        all_records.extend(records)
+                        for next_url in next_urls:
+                            if next_url not in visited_urls:
+                                visited_urls.add(next_url)
+                                new_urls.append((next_url, d + 1))
+                        progress.update(task, description=f"Scraped {len(visited_urls)} URLs...")
+                    except Exception as e:
+                        console.print(f"[red]Error scraping {url}: {e}[/red]")
+            
+            urls_to_scrape.extend(new_urls)
 
     # Save
     if not output:
         save_path = cfg.get("save_path", os.path.join(DATA_DIR, "scraped"))
         os.makedirs(save_path, exist_ok=True)
+        from urllib.parse import urlparse
+        domain = urlparse(target_url).hostname or target_url
         safe_domain = domain.replace(".", "_")
         output = os.path.join(save_path, f"url_{safe_domain}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl")
 
     with open(output, "w") as f:
-        for r in records:
+        for r in all_records:
             f.write(json.dumps(r) + "\n")
 
-    texts = sum(1 for r in records if r["type"] == "text")
-    imgs = sum(1 for r in records if r["type"] == "image")
-    lnks = sum(1 for r in records if r["type"] == "link")
+    texts = sum(1 for r in all_records if r["type"] == "text")
+    imgs = sum(1 for r in all_records if r["type"] == "image")
+    lnks = sum(1 for r in all_records if r["type"] == "link")
+    htmls = sum(1 for r in all_records if r["type"] == "html")
 
-    log_history("url", f"Scraped {target_url}: {len(records)} records")
+    log_history("url", f"Scraped {target_url}: {len(all_records)} records, depth={depth}")
     console.print(f"[green]Scraped {target_url}[/green]")
-    console.print(f"  Texts: {texts} | Images: {imgs} | Links: {lnks}")
+    console.print(f"  URLs visited: {len(visited_urls)} | Depth: {depth}")
+    console.print(f"  Texts: {texts} | Images: {imgs} | Links: {lnks} | HTMLs: {htmls}")
     console.print(f"  Saved to: [cyan]{output}[/cyan]")
 
 
