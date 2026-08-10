@@ -1,4 +1,4 @@
-/* ── GwSS + SSDg Engine v0.8.2 ── */
+/* ── GwSS + SSDg Engine v0.8.0 ── */
 /* Interactive force-directed node graph with live physics, favicon, tags */
 /* eslint-env browser, webextensions */
 (function () {
@@ -1176,7 +1176,7 @@
 
   function exportJSON() {
     var data = {
-      version: "0.8.2",
+      version: "0.8.0",
       exported: new Date().toISOString(),
       nodes: nodes.map(function (n) {
         return {

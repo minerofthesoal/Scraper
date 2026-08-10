@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════
-# WebScraper Pro v0.8.2 - Auto Installer
+# WebScraper Pro v0.8.0 - Auto Installer
 # Downloads, installs the CLI, and builds the XPI in one step.
 # Usage: curl -fsSL <url>/auto_install.sh | bash
 #   or:  ./auto_install.sh [--cli-only] [--dir PATH]

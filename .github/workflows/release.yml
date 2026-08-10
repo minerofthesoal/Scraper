@@ -198,50 +198,6 @@ jobs:
             ${{ steps.changelog.outputs.body }}
             ```
 
-      # ── Publish to Firefox Add-ons (AMO) ──
-      - name: Publish to Firefox Add-ons
-        id: amo-publish
-        if: github.event_name != 'pull_request'
-        env:
-          JWT_ISSUER: ${{ secrets.FIREFOX_ADDONS_JWT_ISSUER }}
-          JWT_SECRET: ${{ secrets.FIREFOX_ADDONS_JWT_SECRET }}
-        run: |
-          if [[ -z "$JWT_ISSUER" || -z "$JWT_SECRET" ]]; then
-            echo "::warning::Firefox Add-ons credentials not found. Skipping AMO publish."
-            echo "published=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          echo "::notice::Publishing to Firefox Add-ons..."
-          
-          # Install web-ext
-          npm install -g web-ext
-          
-          # Submit to AMO
-          cd extension
-          web-ext sign \
-            --api-key="$JWT_ISSUER" \
-            --api-secret="$JWT_SECRET" \
-            --source-dir=. \
-            --artifacts-dir=../release-assets/amo \
-            --channel listed \
-            --timeout 300000 || {
-              echo "::error::Failed to publish to Firefox Add-ons"
-              echo "published=false" >> $GITHUB_OUTPUT
-              exit 1
-            }
-          
-          echo "::notice::Successfully published to Firefox Add-ons"
-          echo "published=true" >> $GITHUB_OUTPUT
-          
-          # List signed files
-          if [[ -d ../release-assets/amo ]]; then
-            echo "## Signed Extension" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            ls -lh ../release-assets/amo/ >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
-
       - name: Summary
         run: |
           TAG="v${{ steps.version.outputs.version }}"
@@ -249,8 +205,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tag:** $TAG" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** https://github.com/${{ github.repository }}/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ steps.amo-publish.outputs.published }}" == "true" ]]; then
-            echo "**Firefox Add-ons:** Published ✅" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Firefox Add-ons:** Not published ⚠️" >> $GITHUB_STEP_SUMMARY
-          fi
