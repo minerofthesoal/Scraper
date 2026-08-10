@@ -829,6 +829,68 @@ function toHTML(texts, images, links, audio, video, citationsList) {
   return html;
 }
 
+/* ── Full HTML Export (all captured pages in one file) ── */
+function createFullHTMLExport(htmlRecords, timestamp) {
+  var esc = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  
+  var html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>WebScraper Pro - Full HTML Export</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f3f4f6; margin: 0; padding: 20px; }\n    .nav-header { position: sticky; top: 0; background: #1f2937; color: #fff; padding: 15px 20px; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }\n    .nav-header h1 { margin: 0 0 10px 0; font-size: 1.5rem; }\n    .nav-header p { margin: 0; opacity: 0.8; font-size: 0.9rem; }\n    .page-nav { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }\n    .page-nav a { color: #fff; background: #374151; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-size: 0.85rem; transition: background 0.2s; }\n    .page-nav a:hover { background: #4b5563; }\n    .page-container { margin-top: 20px; }\n    .page-section { background: #fff; border-radius: 12px; overflow: hidden; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }\n    .page-header { background: #6366f1; color: #fff; padding: 15px 20px; }\n    .page-header h2 { margin: 0; font-size: 1.2rem; }\n    .page-header .meta { font-size: 0.8rem; opacity: 0.9; margin-top: 5px; }\n    .page-header .meta a { color: #c7d2fe; }\n    .page-content { position: relative; }\n    .page-content iframe { width: 100%; height: 800px; border: none; display: block; }\n    .page-toggle { background: #f3f4f6; border: none; padding: 10px 20px; cursor: pointer; font-weight: 600; color: #374151; width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center; }\n    .page-toggle:hover { background: #e5e7eb; }\n    .page-toggle::after { content: "▼"; font-size: 0.8rem; transition: transform 0.3s; }\n    .page-toggle.active::after { transform: rotate(180deg); }\n    .page-body { display: none; padding: 0; }\n    .page-body.visible { display: block; }\n    footer { text-align: center; padding: 30px; color: #6b7280; font-size: 0.85rem; }\n  </style>\n</head>\n<body>\n  <div class="nav-header">\n    <h1>📦 Full HTML Export</h1>\n    <p>Generated: ' + new Date().toISOString() + ' | ' + htmlRecords.length + ' pages captured</p>\n    <div class="page-nav">\n';
+
+  // Navigation links
+  for (var i = 0; i < htmlRecords.length; i++) {
+    var rec = htmlRecords[i];
+    var pageName = (rec.source_title || 'Untitled') || (rec.source_url || 'page-' + (i + 1));
+    if (pageName.length > 40) pageName = pageName.substring(0, 40) + '...';
+    html += '      <a href="#page-' + (i + 1) + '">' + esc(pageName) + '</a>\n';
+  }
+
+  html += '    </div>\n  </div>\n\n  <div class="page-container">\n';
+
+  // Page sections with collapsible iframes
+  for (var j = 0; j < htmlRecords.length; j++) {
+    var r = htmlRecords[j];
+    var title = r.source_title || 'Untitled Page';
+    var url = r.source_url || '';
+    var scrapedAt = r.scraped_at || '';
+    
+    html += '    <div class="page-section" id="page-' + (j + 1) + '">\n';
+    html += '      <div class="page-header">\n';
+    html += '        <h2>' + esc(j + 1) + '. ' + esc(title) + '</h2>\n';
+    html += '        <div class="meta">Source: <a href="' + esc(url) + '" target="_blank">' + esc(url) + '</a>';
+    if (scrapedAt) html += ' | Scraped: ' + esc(scrapedAt);
+    html += '</div>\n';
+    html += '      </div>\n';
+    html += '      <button class="page-toggle" onclick="togglePage(this)">View Captured HTML</button>\n';
+    html += '      <div class="page-body">\n';
+    // Embed the full HTML as a data URL in an iframe
+    var dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(r.fullHTML || '<html><body>No content captured</body></html>');
+    html += '        <iframe src="' + esc(dataUrl) + '" loading="lazy"></iframe>\n';
+    html += '      </div>\n';
+    html += '    </div>\n';
+  }
+
+  html += '  </div>\n\n';
+  html += '  <footer>\n';
+  html += '    <p>Exported by <strong>WebScraper Pro v0.8.2</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
+  html += '    <p>All ' + htmlRecords.length + ' pages are embedded as iframes. Click "View Captured HTML" to expand each page.</p>\n';
+  html += '  </footer>\n\n';
+  html += '  <script>\n';
+  html += '    function togglePage(btn) {\n';
+  html += '      var body = btn.nextElementSibling;\n';
+  html += '      var isVisible = body.classList.contains("visible");\n';
+  html += '      if (isVisible) {\n';
+  html += '        body.classList.remove("visible");\n';
+  html += '        btn.classList.remove("active");\n';
+  html += '      } else {\n';
+  html += '        body.classList.add("visible");\n';
+  html += '        btn.classList.add("active");\n';
+  html += '      }\n';
+  html += '    }\n';
+  html += '  </script>\n';
+  html += '</body>\n</html>\n';
+  
+  return html;
+}
+
 var OWNER_HF_REPO = "ray0rf1re/Site.scraped";
 
 /* ── Upload to HuggingFace ── */
@@ -1116,7 +1178,7 @@ function clearData() {
   broadcastStats();
 }
 
-/* ── Scrape all open tabs ── */
+/* ── Scrape all open tabs (simultaneous multi-page scraping) ── */
 function scrapeAllTabs() {
   browser.tabs.query({}).then(function (tabs) {
     var validTabs = tabs.filter(function (t) {
@@ -1126,26 +1188,47 @@ function scrapeAllTabs() {
       notify("WebScraper Pro", "No valid tabs to scrape.");
       return;
     }
-    notify("WebScraper Pro", "Scraping " + validTabs.length + " tabs...");
-    var completed = 0;
-    for (var i = 0; i < validTabs.length; i++) {
-      browser.tabs.sendMessage(validTabs[i].id, { action: "SCRAPE_FULL_PAGE" })
-        .then(function () {
-          completed++;
-          if (completed === validTabs.length) {
-            notify("WebScraper Pro", "Finished scraping " + validTabs.length + " tabs.");
-            browser.storage.local.set({ scrapeActive: false });
-            browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
-          }
-        })
-        .catch(function () {
-          completed++;
-          if (completed === validTabs.length) {
-            browser.storage.local.set({ scrapeActive: false });
-            browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
-          }
-        });
-    }
+    notify("WebScraper Pro", "Simultaneously scraping " + validTabs.length + " tabs...");
+    
+    // Get current config for fullHTML capture
+    browser.storage.local.get(["captureFullHTML", "scrapeJS", "scrapeVideo", "allowYouTube"]).then(function(cfg) {
+      var completed = 0;
+      var errors = 0;
+      
+      for (var i = 0; i < validTabs.length; i++) {
+        (function(tab, index) {
+          browser.tabs.sendMessage(tab.id, { 
+            action: "SCRAPE_FULL_PAGE",
+            captureFullHTML: cfg.captureFullHTML,
+            scrapeJS: cfg.scrapeJS,
+            scrapeVideo: cfg.scrapeVideo !== false,
+            allowYouTube: cfg.allowYouTube
+          })
+            .then(function () {
+              completed++;
+              console.log("[WSP] Tab " + (index + 1) + "/" + validTabs.length + " scraped: " + tab.url);
+              if (completed + errors === validTabs.length) {
+                var msg = "Finished scraping " + completed + "/" + validTabs.length + " tabs";
+                if (errors > 0) msg += " (" + errors + " failed)";
+                notify("WebScraper Pro", msg + ".");
+                browser.storage.local.set({ scrapeActive: false });
+                browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
+              }
+            })
+            .catch(function (err) {
+              errors++;
+              console.warn("[WSP] Failed to scrape tab " + (index + 1) + ": " + tab.url, err);
+              if (completed + errors === validTabs.length) {
+                var msg = "Finished scraping " + completed + "/" + validTabs.length + " tabs";
+                if (errors > 0) msg += " (" + errors + " failed)";
+                notify("WebScraper Pro", msg + ".");
+                browser.storage.local.set({ scrapeActive: false });
+                browser.runtime.sendMessage({ action: "STATUS_CHANGE", status: "idle" }).catch(function () {});
+              }
+            });
+        })(validTabs[i], i);
+      }
+    });
   });
 }
 
