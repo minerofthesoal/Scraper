@@ -8,7 +8,7 @@
   let scrollTimer = null;
   let pageCount = 0;
   let MAX_PAGES = 200;
-  let SCRAPE_DEPTH = 1; // Depth level for recursive scraping
+  let SCRAPE_DEPTH = 3; // Depth level for recursive scraping
   let lastScrapedUrl = ""; // Track URL to detect actual page changes
   let visitedUrls = new Set(); // Prevent infinite loops
   
