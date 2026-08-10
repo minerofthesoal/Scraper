@@ -1,4 +1,4 @@
-/* ── Auto-Scan Module v0.8.0 ── */
+/* ── Auto-Scan Module v0.8.2 ── */
 /* Scroll-first approach: fully scrapes current page, THEN finds next page. */
 /* Added: Depth scraping, concurrent tab support, improved pagination detection */
 (function () {
