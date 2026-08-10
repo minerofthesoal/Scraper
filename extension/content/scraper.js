@@ -1,10 +1,26 @@
-/* ── Scraper Module v0.7.2 ── */
+/* ── Scraper Module v0.8.0 ── */
 /* Universal text/image/link/audio/video extraction that works on ANY site */
+/* Added: Full HTML capture, enhanced link extraction, fixed sizing, Shelf.it/RedShelf support */
 (function () {
   "use strict";
 
   /* ── Track last scrape viewport position ── */
   let lastScrapeBottomY = 0;
+
+  /**
+   * Get full page HTML with proper normalization and size fixing
+   */
+  function getFullHTML() {
+    const doc = document.documentElement;
+    const serializer = new XMLSerializer();
+    let html = serializer.serializeToString(doc);
+    
+    // Fix common issues
+    html = html.replace(/<script[^>]*>\s*<\/script>/g, ''); // Remove empty scripts
+    html = html.replace(/\s+/g, ' '); // Normalize whitespace
+    
+    return html;
+  }
 
   /**
    * Collect all elements whose bounding rect intersects with the given selection rect.
@@ -298,6 +314,7 @@
             href,
             text: getDeepText(el) || el.title || "",
             rel: el.rel || "",
+            title: el.title || "",
           });
         }
       }
@@ -327,6 +344,20 @@
         if (href && !seenHref.has(href)) {
           seenHref.add(href);
           links.push({ href, text: getDeepText(el), rel: "role-link" });
+        }
+      }
+      
+      // Shelf.it/RedShelf specific: book card links
+      if (el.matches('[class*="book"], [class*="card"], [class*="item"]')) {
+        const anchor = el.querySelector('a[href^="http"]');
+        if (anchor && anchor.href && !seenHref.has(anchor.href)) {
+          seenHref.add(anchor.href);
+          links.push({ 
+            href: anchor.href, 
+            text: getDeepText(el) || anchor.textContent.trim(), 
+            rel: "shelf-item",
+            context: "book-card"
+          });
         }
       }
     }
@@ -749,7 +780,7 @@
    * Main extraction pipeline.
    */
   async function extractData(elements) {
-    const cfg = await browser.storage.local.get(["scrapeJS", "minTextLength", "scrapeVideo", "allowYouTube"]);
+    const cfg = await browser.storage.local.get(["scrapeJS", "minTextLength", "scrapeVideo", "allowYouTube", "captureFullHTML"]);
     const minLen = cfg.minTextLength || 3;
 
     // Universal text extraction
@@ -777,7 +808,17 @@
       jsContent = await extractJSContent(elements);
     }
 
-    return { texts, images, links, audio, video, jsContent, totalWords };
+    // Capture full HTML if enabled
+    let fullHTML = null;
+    if (cfg.captureFullHTML) {
+      try {
+        fullHTML = getFullHTML();
+      } catch (e) {
+        console.warn("Failed to capture full HTML:", e);
+      }
+    }
+
+    return { texts, images, links, audio, video, jsContent, fullHTML, totalWords };
   }
 
   /**
