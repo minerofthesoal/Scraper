@@ -8,16 +8,16 @@
   let lastScrapeBottomY = 0;
 
   /**
-   * Get full page HTML with proper normalization and size fixing
+   * Get full page HTML with all CSS, JS, and resources preserved
    */
   function getFullHTML() {
     const doc = document.documentElement;
     const serializer = new XMLSerializer();
     let html = serializer.serializeToString(doc);
     
-    // Fix common issues
-    html = html.replace(/<script[^>]*>\s*<\/script>/g, ''); // Remove empty scripts
-    html = html.replace(/\s+/g, ' '); // Normalize whitespace
+    // Only remove completely empty script tags (no content at all)
+    // Keep scripts with src attributes or inline content
+    html = html.replace(/<script\s*src\s*=\s*["']\s*["']\s*><\/script>/gi, '');
     
     return html;
   }
