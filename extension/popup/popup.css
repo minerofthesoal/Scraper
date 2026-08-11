@@ -1,16 +1,17 @@
-/* ── WebScraper Pro Popup v0.7.2.2 ── */
-/* Dark-first theme with light mode toggle - Compact sizing */
+/* ── WebScraper Pro Popup v0.8.4.1 ── */
+/* Minimalistic Dark/Light theme with system detection - Compact sizing */
 
 :root {
-  --bg-primary: #111827;
-  --bg-secondary: #1f2937;
-  --bg-tertiary: #374151;
-  --bg-hover: #4b5563;
-  --border: #374151;
-  --border-subtle: #2a3441;
-  --text-primary: #f3f4f6;
-  --text-secondary: #d1d5db;
-  --text-muted: #9ca3af;
+  /* Dark theme (default) */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-hover: #475569;
+  --border: #334155;
+  --border-subtle: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
   --accent: #818cf8;
   --accent-hover: #6366f1;
   --accent-glow: rgba(129, 140, 248, 0.15);
@@ -21,11 +22,13 @@
   --green: #10b981;
   --green-bg: rgba(16, 185, 129, 0.1);
   --pink: #ec4899;
+  --purple: #a855f7;
 }
 
 [data-theme="light"] {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
+  /* Light theme */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
   --bg-tertiary: #f1f5f9;
   --bg-hover: #e2e8f0;
   --border: #e2e8f0;
@@ -36,6 +39,24 @@
   --accent: #6366f1;
   --accent-hover: #4f46e5;
   --accent-glow: rgba(99, 102, 241, 0.1);
+}
+
+/* Auto-detect system theme */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --bg-hover: #e2e8f0;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --accent-glow: rgba(99, 102, 241, 0.1);
+  }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }

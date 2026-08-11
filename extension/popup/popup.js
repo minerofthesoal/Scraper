@@ -58,22 +58,46 @@
     }, { passive: true });
   }
 
-  /* ── Theme Toggle ── */
+  /* ── Theme Toggle with System Detection ── */
   const btnTheme = $("#btn-theme");
+  
+  // Check system preference on load
+  const systemPrefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+  
   browser.storage.local.get(["theme"]).then(cfg => {
     if (cfg.theme === "light") {
       document.body.setAttribute("data-theme", "light");
       if (btnTheme) btnTheme.textContent = "\u2600";
+    } else if (cfg.theme === "dark") {
+      document.body.setAttribute("data-theme", "dark");
+      if (btnTheme) btnTheme.textContent = "\u263E";
+    } else {
+      // Auto-detect: use system preference if no explicit setting
+      if (systemPrefersLight) {
+        document.body.setAttribute("data-theme", "light");
+        if (btnTheme) btnTheme.textContent = "\u2600";
+      } else {
+        document.body.removeAttribute("data-theme");
+        if (btnTheme) btnTheme.textContent = "\u263E";
+      }
     }
   });
+  
   if (btnTheme) {
     btnTheme.addEventListener("click", () => {
-      const isLight = document.body.getAttribute("data-theme") === "light";
-      if (isLight) {
-        document.body.removeAttribute("data-theme");
+      const currentTheme = document.body.getAttribute("data-theme");
+      if (currentTheme === "light") {
+        // Switch to dark
+        document.body.setAttribute("data-theme", "dark");
         btnTheme.textContent = "\u263E";
         browser.storage.local.set({ theme: "dark" });
+      } else if (currentTheme === "dark") {
+        // Switch to auto (remove attribute)
+        document.body.removeAttribute("data-theme");
+        btnTheme.textContent = "\u26A1"; // Lightning bolt for auto
+        browser.storage.local.set({ theme: "auto" });
       } else {
+        // Currently auto, switch to light
         document.body.setAttribute("data-theme", "light");
         btnTheme.textContent = "\u2600";
         browser.storage.local.set({ theme: "light" });
