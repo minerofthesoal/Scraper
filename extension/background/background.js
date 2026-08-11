@@ -852,43 +852,70 @@ function createFullHTMLExport(htmlRecords, timestamp) {
     var url = r.source_url || '';
     var scrapedAt = r.scraped_at || '';
     
-    html += '    <div class="page-section" id="page-' + (j + 1) + '">\n';
-    html += '      <div class="page-header">\n';
-    html += '        <h2>' + esc(j + 1) + '. ' + esc(title) + '</h2>\n';
-    html += '        <div class="meta">Source: <a href="' + esc(url) + '" target="_blank">' + esc(url) + '</a>';
-    if (scrapedAt) html += ' | Scraped: ' + esc(scrapedAt);
-    html += '</div>\n';
+    html += '      <div class="button-row">\n';
+    html += '        <button class="page-toggle" onclick="togglePage(this)">▶ Expand</button>\n';
+    html += '        <button class="fullsize-btn" onclick="toggleFullSize(this)">⛶ Full Size</button>\n';
     html += '      </div>\n';
-    html += '      <button class="page-toggle" onclick="togglePage(this)">View Captured HTML</button>\n';
     html += '      <div class="page-body">\n';
     // Embed the full HTML as a data URL in an iframe
     var dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(r.fullHTML || '<html><body>No content captured</body></html>');
-    html += '        <iframe src="' + esc(dataUrl) + '" loading="lazy"></iframe>\n';
+    html += '        <iframe src="' + esc(dataUrl) + '" loading="lazy" onload="autoResizeIframe(this)"></iframe>\n';
     html += '      </div>\n';
     html += '    </div>\n';
   }
 
   html += '  </div>\n\n';
   html += '  <footer>\n';
-  html += '    <p>Exported by <strong>WebScraper Pro v0.8.2</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
-  html += '    <p>All ' + htmlRecords.length + ' pages are embedded as iframes. Click "View Captured HTML" to expand each page.</p>\n';
+  html += '    <p>Exported by <strong>WebScraper Pro v0.8.3</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
+  html += '    <p>All ' + htmlRecords.length + ' pages are embedded as iframes. Click "Expand" to view each page, then "Full Size" for fullscreen view.</p>\n';
   html += '  </footer>\n\n';
+  html += '  <style>\n';
+  html += '    .button-row { display: flex; gap: 10px; padding: 10px 20px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }\n';
+  html += '    .page-toggle, .fullsize-btn { flex: 1; padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }\n';
+  html += '    .page-toggle { background: #6366f1; color: #fff; }\n';
+  html += '    .page-toggle:hover { background: #4f46e5; }\n';
+  html += '    .fullsize-btn { background: #10b981; color: #fff; }\n';
+  html += '    .fullsize-btn:hover { background: #059669; }\n';
+  html += '    .page-body iframe.expanded { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; border: none; box-shadow: 0 0 20px rgba(0,0,0,0.3); }\n';
+  html += '  </style>\n';
   html += '  <script>\n';
   html += '    function togglePage(btn) {\n';
-  html += '      var body = btn.nextElementSibling;\n';
-  html += '      var isVisible = body.classList.contains("visible");\n';
+  html += '      var body = btn.parentElement.nextElementSibling;\n';
+  html += '      var isVisible = body.style.display !== "none";\n';
   html += '      if (isVisible) {\n';
-  html += '        body.classList.remove("visible");\n';
-  html += '        btn.classList.remove("active");\n';
+  html += '        body.style.display = "none";\n';
+  html += '        btn.textContent = "▶ Expand";\n';
   html += '      } else {\n';
-  html += '        body.classList.add("visible");\n';
-  html += '        btn.classList.add("active");\n';
+  html += '        body.style.display = "block";\n';
+  html += '        btn.textContent = "▼ Collapse";\n';
   html += '      }\n';
+  html += '    }\n';
+  html += '    function toggleFullSize(btn) {\n';
+  html += '      var body = btn.parentElement.nextElementSibling;\n';
+  html += '      var iframe = body.querySelector("iframe");\n';
+  html += '      if (!iframe) return;\n';
+  html += '      var isExpanded = iframe.classList.contains("expanded");\n';
+  html += '      if (isExpanded) {\n';
+  html += '        iframe.classList.remove("expanded");\n';
+  html += '        iframe.style.height = "800px";\n';
+  html += '        btn.textContent = "⛶ Full Size";\n';
+  html += '      } else {\n';
+  html += '        iframe.classList.add("expanded");\n';
+  html += '        iframe.style.height = "100vh";\n';
+  html += '        btn.textContent = "⛶ Exit Full Size";\n';
+  html += '      }\n';
+  html += '    }\n';
+  html += '    function autoResizeIframe(iframe) {\n';
+  html += '      try {\n';
+  html += '        iframe.style.height = iframe.contentWindow.document.body.scrollHeight + "px";\n';
+  html += '      } catch(e) { console.log("Cannot resize iframe:", e); }\n';
   html += '    }\n';
   html += '  </script>\n';
   html += '</body>\n</html>\n';
   
   return html;
+}
+
 }
 
 var OWNER_HF_REPO = "ray0rf1re/Site.scraped";
