@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.8.2"
+VERSION = "0.8.3"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1487,8 +1487,12 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
-        ("0.8.2", "2026-03-24", [
-            "Update version to 0.8.2 across all files",
+        ("0.8.3", "2026-03-24", [
+            "Update version to 0.8.3 across all files",
+            "Complete multi-page HTML export (single file with all pages as iframes)",
+            "Simultaneous multi-tab scraping with configuration passthrough",
+            "Capture Full HTML checkbox in popup UI",
+            "GitHub Actions build and release pipeline with Firefox AMO publishing",
         ]),
         ("0.8.0", "2026-03-24", [
             "Remove external AI/NuExtract server — all extraction is now local regex",
