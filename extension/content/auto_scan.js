@@ -1,4 +1,5 @@
-/* ── Auto-Scan Module v0.8.2 ── */
+/* ── Auto-Scan Module v0.8.4.1 ── */
+/* Minimalistic Dark/Light Theme Support */
 /* Scroll-first approach: fully scrapes current page, THEN finds next page. */
 /* Added: Depth scraping, concurrent tab support, improved pagination detection */
 (function () {

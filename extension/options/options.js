@@ -1,4 +1,5 @@
-/* ── Options Page Controller v0.6.7.0.1 ── */
+/* ── Options Page Controller v0.8.4.1 ── */
+/* Minimalistic Dark/Light Theme with Auto-Detection */
 (function () {
   "use strict";
 

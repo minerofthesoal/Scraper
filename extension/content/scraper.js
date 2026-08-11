@@ -1,4 +1,5 @@
-/* ── Scraper Module v0.8.2 ── */
+/* ── Scraper Module v0.8.4.1 ── */
+/* Minimalistic Dark/Light Theme Support */
 /* Universal text/image/link/audio/video extraction that works on ANY site */
 /* Added: Full HTML capture, enhanced link extraction, fixed sizing, Shelf.it/RedShelf support */
 (function () {

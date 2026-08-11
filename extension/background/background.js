@@ -1,4 +1,5 @@
-/* ── WebScraper Pro Background Script v0.8.2 ── */
+/* ── WebScraper Pro Background Script v0.8.4.1 ── */
+/* Minimalistic Dark/Light Theme with Auto-Detection */
 /* eslint-env browser, webextensions */
 /* Depends on: WSP_Utils, WSP_Citation, WSP_HFUpload, WSP_Queue, WSP_Session */
 
@@ -601,7 +602,7 @@ function exportData(format, options) {
 function toMarkdown(texts, images, links, audio, citationsList) {
   var md = "# WebScraper Pro Export\n\n";
   md += "**Generated:** " + new Date().toISOString() + "  \n";
-  md += "**Version:** v0.8.2  \n";
+  md += "**Version:** v0.8.4.1  \n";
   md += "**Stats:** " + sessionStats.words + " words | " + sessionStats.pages + " pages | " + sessionStats.images + " images | " + sessionStats.links + " links | " + sessionStats.audio + " audio\n\n";
   md += "---\n\n";
 
@@ -665,7 +666,7 @@ function toMarkdown(texts, images, links, audio, citationsList) {
 /* ── XML export ── */
 function toXML(texts, images, links, audio, citationsList) {
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<dataset>\n  <metadata>\n';
-  xml += '    <generator>WebScraper Pro v0.8.2</generator>\n';
+  xml += '    <generator>WebScraper Pro v0.8.4.1</generator>\n';
   xml += '    <exported>' + new Date().toISOString() + '</exported>\n';
   xml += '    <stats words="' + sessionStats.words + '" pages="' + sessionStats.pages + '" images="' + sessionStats.images + '" links="' + sessionStats.links + '" audio="' + sessionStats.audio + '"/>\n';
   xml += '  </metadata>\n';
@@ -730,7 +731,7 @@ function toXML(texts, images, links, audio, citationsList) {
 
 /* ── HTML export ── */
 function toHTML(texts, images, links, audio, video, citationsList) {
-  var html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>WebScraper Pro Export</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; }\n    h1 { color: #6366f1; border-bottom: 2px solid #6366f1; padding-bottom: 10px; }\n    h2 { color: #4f46e5; margin-top: 30px; }\n    .stats { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }\n    .stat-item { display: inline-block; margin-right: 20px; font-weight: 600; }\n    .record { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 15px; }\n    .record-meta { font-size: 12px; color: #6b7280; margin-bottom: 10px; }\n    .record-content { white-space: pre-wrap; } \n    img { max-width: 100%; height: auto; border-radius: 6px; }\n    table { width: 100%; border-collapse: collapse; margin: 15px 0; }\n    th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }\n    th { background: #f9fafb; font-weight: 600; }\n    a { color: #6366f1; text-decoration: none; }\n    a:hover { text-decoration: underline; }\n    .citation { background: #fef3c7; padding: 10px; border-left: 3px solid #f59e0b; margin: 10px 0; font-style: italic; }\n    footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }\n  </style>\n</head>\n<body>\n  <h1>WebScraper Pro Export</h1>\n  \n  <div class="stats">\n    <strong>Generated:</strong> ' + new Date().toISOString() + '<br>\n    <strong>Version:</strong> v0.8.2<br><br>\n    <span class="stat-item">📄 ' + texts.length + ' text records</span>\n    <span class="stat-item">🖼️ ' + images.length + ' images</span>\n    <span class="stat-item">🔗 ' + links.length + ' links</span>\n    <span class="stat-item">🎵 ' + audio.length + ' audio</span>\n    <span class="stat-item">🎬 ' + video.length + ' videos</span>\n    <span class="stat-item">📚 ' + citationsList.length + ' citations</span>\n  </div>\n';
+  var html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>WebScraper Pro Export</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; }\n    h1 { color: #6366f1; border-bottom: 2px solid #6366f1; padding-bottom: 10px; }\n    h2 { color: #4f46e5; margin-top: 30px; }\n    .stats { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }\n    .stat-item { display: inline-block; margin-right: 20px; font-weight: 600; }\n    .record { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 15px; }\n    .record-meta { font-size: 12px; color: #6b7280; margin-bottom: 10px; }\n    .record-content { white-space: pre-wrap; } \n    img { max-width: 100%; height: auto; border-radius: 6px; }\n    table { width: 100%; border-collapse: collapse; margin: 15px 0; }\n    th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }\n    th { background: #f9fafb; font-weight: 600; }\n    a { color: #6366f1; text-decoration: none; }\n    a:hover { text-decoration: underline; }\n    .citation { background: #fef3c7; padding: 10px; border-left: 3px solid #f59e0b; margin: 10px 0; font-style: italic; }\n    footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }\n  </style>\n</head>\n<body>\n  <h1>WebScraper Pro Export</h1>\n  \n  <div class="stats">\n    <strong>Generated:</strong> ' + new Date().toISOString() + '<br>\n    <strong>Version:</strong> v0.8.4.1<br><br>\n    <span class="stat-item">📄 ' + texts.length + ' text records</span>\n    <span class="stat-item">🖼️ ' + images.length + ' images</span>\n    <span class="stat-item">🔗 ' + links.length + ' links</span>\n    <span class="stat-item">🎵 ' + audio.length + ' audio</span>\n    <span class="stat-item">🎬 ' + video.length + ' videos</span>\n    <span class="stat-item">📚 ' + citationsList.length + ' citations</span>\n  </div>\n';
 
   if (texts.length > 0) {
     html += '  <h2>📝 Text Content (' + texts.length + ' records)</h2>\n';
@@ -823,7 +824,7 @@ function toHTML(texts, images, links, audio, video, citationsList) {
   }
 
   html += '  <footer>\n';
-  html += '    <p>Exported by <strong>WebScraper Pro v0.8.2</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
+  html += '    <p>Exported by <strong>WebScraper Pro v0.8.4.1</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
   html += '  </footer>\n';
   html += '</body>\n</html>\n';
   return html;

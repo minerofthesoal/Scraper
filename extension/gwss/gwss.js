@@ -1,4 +1,5 @@
-/* ── GwSS + SSDg Engine v0.8.2 ── */
+/* ── GwSS + SSDg Engine v0.8.4.1 ── */
+/* Minimalistic Dark/Light Theme with Auto-Detection */
 /* Interactive force-directed node graph with live physics, favicon, tags */
 /* eslint-env browser, webextensions */
 (function () {

@@ -1,4 +1,5 @@
-/* ── Popup Controller v0.8 ── */
+/* ── Popup Controller v0.8.4.1 ── */
+/* Minimalistic Dark/Light Theme with Auto-Detection */
 (function () {
   "use strict";
 
