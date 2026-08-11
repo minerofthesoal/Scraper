@@ -859,8 +859,10 @@ function createFullHTMLExport(htmlRecords, timestamp) {
     html += '        <button class="fullsize-btn" onclick="toggleFullSize(this)">⛶ Full Size</button>\n';
     html += '      </div>\n';
     html += '      <div class="page-body">\n';
-    // Embed the full HTML as a data URL in an iframe
-    var dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(r.fullHTML || '<html><body>No content captured</body></html>');
+    // Embed the full HTML as a base64 data URL in an iframe for proper encoding
+    var fullHtmlContent = r.fullHTML || '<html><body>No content captured</body></html>';
+    var base64Html = btoa(unescape(encodeURIComponent(fullHtmlContent)));
+    var dataUrl = 'data:text/html;base64,' + base64Html;
     html += '        <iframe src="' + esc(dataUrl) + '" loading="lazy" onload="autoResizeIframe(this)"></iframe>\n';
     html += '      </div>\n';
     html += '    </div>\n';
