@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.8.3"
+VERSION = "0.8.4"
 
 # ── Config paths ──
 def get_config_dir():
@@ -1487,6 +1487,12 @@ def benchmark(url, rounds):
 def changelog():
     """Show version history and changelog."""
     entries = [
+        ("0.8.4", "2026-03-24", [
+            "Minimalistic dark/light theme (auto-detects device theme) for extension and exported HTML",
+            "Full-size button for each merged scraped page in HTML export",
+            "Clean UI styling with system-aware color scheme",
+            "Update version to 0.8.4 across all files",
+        ]),
         ("0.8.3", "2026-03-24", [
             "Update version to 0.8.3 across all files",
             "Complete multi-page HTML export (single file with all pages as iframes)",

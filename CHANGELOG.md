@@ -5,6 +5,34 @@ All notable changes to WebScraper Pro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2025-01-XX
+
+### 🎉 Added
+
+- **Minimalistic Dark/Light Theme** - Auto-detects and adapts to device theme preference
+  - CSS custom properties for seamless light/dark mode switching
+  - `@media (prefers-color-scheme: dark)` support for system-level theme detection
+  - Clean, modern color palette optimized for both modes
+  - Smooth transitions between theme states
+
+- **Full Size Button for Exported Pages** - View each scraped page in fullscreen
+  - Dedicated "Full Size" button next to expand/collapse toggle
+  - Fullscreen iframe overlay covering entire viewport
+  - Doesn't open external links - keeps everything in single export file
+  - Toggle between normal and full size view instantly
+
+- **Clean UI Styling** - Minimalistic design with consistent aesthetics
+  - Unified color scheme using CSS variables
+  - Subtle borders and shadows for depth
+  - Optimized button sizing and spacing
+  - Professional typography and layout
+
+### 🔧 Changed
+
+- Updated version to 0.8.4 across all files (manifest.json, CLI tools, installer, build scripts)
+- Enhanced HTML export with system-aware theming
+- Improved button controls for better user experience
+
 ## [0.8.3] - 2025-01-XX
 
 ### 🎉 Added

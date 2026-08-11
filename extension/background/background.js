@@ -866,7 +866,7 @@ function createFullHTMLExport(htmlRecords, timestamp) {
 
   html += '  </div>\n\n';
   html += '  <footer>\n';
-  html += '    <p>Exported by <strong>WebScraper Pro v0.8.3</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
+  html += '    <p>Exported by <strong>WebScraper Pro v0.8.4</strong> | <a href="https://github.com/minerofthesoal/Scraper" target="_blank">GitHub</a></p>\n';
   html += '    <p>All ' + htmlRecords.length + ' pages are embedded as iframes. Click "Expand" to view each page, then "Full Size" for fullscreen view.</p>\n';
   html += '  </footer>\n\n';
   html += '  <style>\n';
