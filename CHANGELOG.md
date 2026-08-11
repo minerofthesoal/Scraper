@@ -32,9 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Manual trigger option from Actions tab with configurable settings
   - Builds extension (.xpi), Python CLI packages (.whl, .tar.gz), and source zip
   - Creates GitHub release with comprehensive changelog
-  - **AI Token Support** for Firefox Add-ons submission
-    - Supports FIREFOX_AI_TOKEN for automated AMO publishing
-    - Falls back to JWT credentials or API key if AI token unavailable
+  - **Firefox Add-ons API Token Support** for automated AMO publishing
+    - Uses JWT API credentials (FIREFOX_JWT_ISSUER, FIREFOX_JWT_SECRET) for secure submission
+    - Falls back to legacy API key if JWT unavailable
+    - Clear instructions for obtaining credentials from Mozilla Developer Hub
     - Comprehensive error handling and status reporting
 
 ### 🔧 Fixed

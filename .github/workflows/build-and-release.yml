@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
 # Build & Release — Complete pipeline with Firefox AMO publish
 # Triggers on version bump, manual dispatch, or push to main
-# Uses AI token for automated Firefox Add-ons submission
+# Uses JWT API credentials for automated Firefox Add-ons submission
 # ─────────────────────────────────────────────────────────────
 name: Build and Release
 
@@ -192,30 +192,30 @@ jobs:
             scrape -rmv
             ```
 
-      # ── Publish to Firefox Add-ons using AI Token ──
+      # ── Publish to Firefox Add-ons using JWT API Token ──
       - name: Publish to Firefox Add-ons (AMO)
         id: amo-publish
         if: inputs.upload_to_amo == true || github.event_name == 'push'
         env:
-          # Support both legacy JWT and new AI token methods
-          JWT_ISSUER: ${{ secrets.FIREFOX_ADDONS_JWT_ISSUER }}
-          JWT_SECRET: ${{ secrets.FIREFOX_ADDONS_JWT_SECRET }}
-          # New AI-powered token for automated submissions
-          FIREFOX_AI_TOKEN: ${{ secrets.FIREFOX_AI_TOKEN }}
+          # Firefox Add-ons JWT API credentials (required for publishing)
+          # Get these from: https://addons.mozilla.org/developers/addon/api/key/
+          JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+          # Legacy API key support (deprecated, use JWT instead)
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
         run: |
           # Check which authentication method is available
-          if [[ -n "$FIREFOX_AI_TOKEN" ]]; then
-            echo "::notice::Using AI Token for Firefox Add-ons submission"
-            AUTH_METHOD="ai_token"
-          elif [[ -n "$JWT_ISSUER" && -n "$JWT_SECRET" ]]; then
-            echo "::notice::Using JWT credentials for Firefox Add-ons submission"
+          if [[ -n "$JWT_ISSUER" && -n "$JWT_SECRET" ]]; then
+            echo "::notice::Using JWT API credentials for Firefox Add-ons submission"
             AUTH_METHOD="jwt"
           elif [[ -n "$WEB_EXT_API_KEY" ]]; then
-            echo "::notice::Using API Key for Firefox Add-ons submission"
+            echo "::notice::Using legacy API Key for Firefox Add-ons submission"
             AUTH_METHOD="api_key"
           else
             echo "::warning::No Firefox Add-ons credentials found. Skipping AMO publish."
+            echo "To enable auto-publishing, add these secrets to your repository:"
+            echo "  - FIREFOX_JWT_ISSUER (from addons.mozilla.org/developers/addon/api/key/)"
+            echo "  - FIREFOX_JWT_SECRET (from addons.mozilla.org/developers/addon/api/key/)"
             echo "published=false" >> $GITHUB_OUTPUT
             echo "reason=no_credentials" >> $GITHUB_OUTPUT
             exit 0
@@ -226,24 +226,8 @@ jobs:
           cd extension
           
           case $AUTH_METHOD in
-            ai_token)
-              # Use AI token for automated submission with enhanced metadata
-              web-ext sign \
-                --api-key="$FIREFOX_AI_TOKEN" \
-                --api-secret="" \
-                --source-dir=. \
-                --artifacts-dir=../release-assets/amo \
-                --channel listed \
-                --timeout 300000 \
-                --verbose || {
-                  echo "::error::Failed to publish to Firefox Add-ons with AI token"
-                  echo "published=false" >> $GITHUB_OUTPUT
-                  echo "reason=ai_token_failed" >> $GITHUB_OUTPUT
-                  exit 1
-                }
-              ;;
             jwt)
-              # Traditional JWT authentication
+              # JWT authentication (recommended)
               web-ext sign \
                 --api-key="$JWT_ISSUER" \
                 --api-secret="$JWT_SECRET" \
@@ -258,7 +242,7 @@ jobs:
                 }
               ;;
             api_key)
-              # Direct API key method
+              # Direct API key method (legacy)
               web-ext sign \
                 --api-key="$WEB_EXT_API_KEY" \
                 --source-dir=. \
