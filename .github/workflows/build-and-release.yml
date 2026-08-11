@@ -64,7 +64,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm install -g web-ext
-          pip install -q click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm
+          pip install -q click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm build setuptools wheel
           cd cli && pip install -e . -q && cd ..
 
       # ── Build extension package ──
