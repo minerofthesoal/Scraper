@@ -86,7 +86,7 @@ except ImportError:
     sys.exit(1)
 
 console = Console()
-VERSION = "0.8.4"
+VERSION = "0.8.4.1"
 
 # ── Config paths ──
 def get_config_dir():
