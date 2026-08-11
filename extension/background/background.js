@@ -916,7 +916,6 @@ function createFullHTMLExport(htmlRecords, timestamp) {
   return html;
 }
 
-}
 
 var OWNER_HF_REPO = "ray0rf1re/Site.scraped";
 
