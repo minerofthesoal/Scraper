@@ -1190,7 +1190,7 @@ function scrapeAllTabs() {
     }
     notify("WebScraper Pro", "Simultaneously scraping " + validTabs.length + " tabs...");
     
-    // Get current config for fullHTML capture
+    // Get current config for fullHTML capture and other options
     browser.storage.local.get(["captureFullHTML", "scrapeJS", "scrapeVideo", "allowYouTube"]).then(function(cfg) {
       var completed = 0;
       var errors = 0;
@@ -1198,7 +1198,7 @@ function scrapeAllTabs() {
       for (var i = 0; i < validTabs.length; i++) {
         (function(tab, index) {
           browser.tabs.sendMessage(tab.id, { 
-            action: "SCRAPE_FULL_PAGE",
+            action: "SCRAPE_DOCUMENT",
             captureFullHTML: cfg.captureFullHTML,
             scrapeJS: cfg.scrapeJS,
             scrapeVideo: cfg.scrapeVideo !== false,

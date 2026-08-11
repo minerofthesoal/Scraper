@@ -884,6 +884,77 @@
   }
 
   /**
+   * Scrape entire document with config options passed from background
+   */
+  async function scrapeEntireDocument(configOverride) {
+    const _scrapeStart = performance.now();
+    const docWidth = Math.max(
+      document.documentElement.scrollWidth,
+      document.body ? document.body.scrollWidth : 0,
+      window.innerWidth
+    );
+    const docHeight = Math.max(
+      document.documentElement.scrollHeight,
+      document.body ? document.body.scrollHeight : 0,
+      window.innerHeight
+    );
+
+    const selRect = {
+      left: 0,
+      top: 0,
+      right: docWidth,
+      bottom: docHeight,
+    };
+
+    const elements = getElementsInRect(selRect, true);
+    
+    // Use provided config or fetch from storage
+    let cfg = configOverride || {};
+    if (!cfg.captureFullHTML && !cfg.scrapeJS) {
+      cfg = await browser.storage.local.get(["scrapeJS", "minTextLength", "scrapeVideo", "allowYouTube", "captureFullHTML"]);
+    }
+    
+    const minLen = cfg.minTextLength || 3;
+    const { texts: rawTexts, totalWords } = extractTextUniversal(elements);
+    const texts = rawTexts.filter(t => t.text.length >= minLen);
+    const images = extractImagesUniversal(elements);
+    const links = extractLinksUniversal(elements);
+    const audio = extractAudioUniversal(elements);
+    
+    let video = [];
+    if (cfg.scrapeVideo !== false) {
+      video = extractVideoUniversal(elements, !!cfg.allowYouTube);
+    }
+    
+    let jsContent = [];
+    if (cfg.scrapeJS) {
+      jsContent = await extractJSContent(elements);
+    }
+    
+    let fullHTML = null;
+    if (cfg.captureFullHTML) {
+      try {
+        fullHTML = getFullHTML();
+      } catch (e) {
+        console.warn("Failed to capture full HTML:", e);
+      }
+    }
+    
+    const data = { texts, images, links, audio, video, jsContent, fullHTML, totalWords };
+    const meta = pageMeta();
+    const result = { meta, ...data, scrapedAt: new Date().toISOString(), scrape_time_ms: Math.round(performance.now() - _scrapeStart) };
+
+    elements.forEach((el) => el.classList.add("wsp-scraped-highlight"));
+    setTimeout(() => elements.forEach((el) => el.classList.remove("wsp-scraped-highlight")), 2000);
+
+    browser.runtime.sendMessage({ action: "SCRAPED_DATA", data: result });
+    if (typeof WSP_Toast !== "undefined") {
+      WSP_Toast.show(`Scraped: ${data.totalWords} words, ${data.images.length} imgs, ${data.links.length} links, ${data.video.length} videos${fullHTML ? ', full HTML captured' : ''}`);
+    }
+    return result;
+  }
+
+  /**
    * Scroll-first full document scraping.
    * 1. First scrolls down to determine full page length
    * 2. Then scrolls back to where last scrape ended
@@ -1043,7 +1114,12 @@
       scrapeFullPage();
     }
     if (msg.action === "SCRAPE_DOCUMENT") {
-      scrapeEntireDocument();
+      scrapeEntireDocument({
+        captureFullHTML: msg.captureFullHTML,
+        scrapeJS: msg.scrapeJS,
+        scrapeVideo: msg.scrapeVideo,
+        allowYouTube: msg.allowYouTube
+      });
     }
     if (msg.action === "SCRAPE_WITH_SCROLL") {
       scrapeWithScroll();
