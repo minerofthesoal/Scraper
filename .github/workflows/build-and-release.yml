@@ -1,0 +1,329 @@
+# ─────────────────────────────────────────────────────────────
+# Build & Release — Complete pipeline with Firefox AMO publish
+# Triggers on version bump, manual dispatch, or push to main
+# Uses AI token for automated Firefox Add-ons submission
+# ─────────────────────────────────────────────────────────────
+name: Build and Release
+
+on:
+  # Trigger on version changes in manifest.json
+  push:
+    branches: [main, master]
+    paths:
+      - 'extension/manifest.json'
+  
+  # Manual trigger from Actions tab
+  workflow_dispatch:
+    inputs:
+      upload_to_amo:
+        description: "Upload to Firefox Add-ons (AMO)"
+        required: false
+        type: boolean
+        default: true
+      force_release:
+        description: "Force create release even if tag exists"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-and-release:
+    name: Build, Release & Publish to Firefox
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Read version from manifest ──
+      - name: Get version from manifest
+        id: version
+        run: |
+          VER=$(python3 -c "import json; print(json.load(open('extension/manifest.json'))['version'])")
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "::notice::Building version $VER"
+
+      # ── Set up Node.js for web-ext ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Install dependencies ──
+      - name: Install dependencies
+        run: |
+          npm install -g web-ext
+          pip install -q click rich requests beautifulsoup4 huggingface-hub Pillow pydub tqdm
+          cd cli && pip install -e . -q && cd ..
+
+      # ── Build extension package ──
+      - name: Build extension
+        id: build
+        run: |
+          mkdir -p release-assets
+          cd extension
+          
+          # Create XPI package
+          web-ext build --source-dir=. --artifacts-dir=../release-assets --filename webscraper-pro.xpi
+          
+          # Also create zip for distribution
+          zip -r ../release-assets/webscraper-pro-source.zip . \
+            -x "*.git*" -x "*.md" -x "node_modules/*" -x "*.pyc"
+          
+          cd ..
+          
+          echo "::notice::Extension built successfully"
+          ls -lh release-assets/
+
+      # ── Build Python CLI package ──
+      - name: Build Python package
+        id: python-build
+        run: |
+          cd cli
+          python -m build --outdir ../release-assets
+          cd ..
+          echo "::notice::Python package built successfully"
+
+      # ── List all build artifacts ──
+      - name: List build artifacts
+        run: |
+          echo "## Build Assets" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          find release-assets/ -type f -exec ls -lh {} \; | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          ASSET_COUNT=$(find release-assets/ -type f | wc -l)
+          echo "::notice::$ASSET_COUNT build artifacts created"
+
+      # ── Clean up existing release if force ──
+      - name: Remove existing release (if forced)
+        if: inputs.force_release == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          gh release delete "$TAG" --yes 2>/dev/null \
+            && echo "Deleted existing release $TAG" \
+            || echo "No existing release for $TAG"
+          git push origin ":refs/tags/$TAG" 2>/dev/null \
+            && echo "Deleted remote tag $TAG" \
+            || echo "No remote tag $TAG to delete"
+          git tag -d "$TAG" 2>/dev/null || true
+
+      # ── Create and push tag ──
+      - name: Create and push tag
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "::notice::Created and pushed tag $TAG"
+          else
+            echo "::notice::Tag $TAG already exists"
+          fi
+
+      # ── Generate changelog ──
+      - name: Generate changelog
+        id: changelog
+        run: |
+          {
+            echo 'body<<EOFCL'
+            scrape changelog 2>/dev/null | head -50 || echo "See commit history for changes."
+            echo 'EOFCL'
+          } >> $GITHUB_OUTPUT
+
+      # ── Create GitHub Release ──
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: WebScraper Pro v${{ steps.version.outputs.version }}
+          files: |
+            release-assets/*.xpi
+            release-assets/*.whl
+            release-assets/*.tar.gz
+            release-assets/*.zip
+          generate_release_notes: true
+          body: |
+            ## WebScraper Pro v${{ steps.version.outputs.version }}
+            
+            ### 🎉 What's New
+            
+            ${{ steps.changelog.outputs.body }}
+            
+            ### 📦 Downloads
+            
+            | Package | Description |
+            |---------|-------------|
+            | `webscraper-pro.xpi` | Firefox extension — load via `about:addons` |
+            | `webscraper-pro-source.zip` | Complete extension source code |
+            | `webscraper_pro_cli-*.whl` | Python CLI wheel — `pip install <file>` |
+            | `webscraper_pro_cli-*.tar.gz` | Python CLI source — `pip install <file>` |
+            
+            ### 🚀 Quick Install
+            
+            ```bash
+            # One-command auto-installer
+            curl -fsSL https://raw.githubusercontent.com/minerofthesoal/Scraper/main/auto_install.sh | bash
+            
+            # Or pip install directly
+            pip install git+https://github.com/minerofthesoal/Scraper.git#subdirectory=cli
+            
+            # Update existing installation
+            scrape -U
+            ```
+            
+            ### 🗑️ Uninstall
+            
+            ```bash
+            scrape -rmv
+            ```
+
+      # ── Publish to Firefox Add-ons using AI Token ──
+      - name: Publish to Firefox Add-ons (AMO)
+        id: amo-publish
+        if: inputs.upload_to_amo == true || github.event_name == 'push'
+        env:
+          # Support both legacy JWT and new AI token methods
+          JWT_ISSUER: ${{ secrets.FIREFOX_ADDONS_JWT_ISSUER }}
+          JWT_SECRET: ${{ secrets.FIREFOX_ADDONS_JWT_SECRET }}
+          # New AI-powered token for automated submissions
+          FIREFOX_AI_TOKEN: ${{ secrets.FIREFOX_AI_TOKEN }}
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+        run: |
+          # Check which authentication method is available
+          if [[ -n "$FIREFOX_AI_TOKEN" ]]; then
+            echo "::notice::Using AI Token for Firefox Add-ons submission"
+            AUTH_METHOD="ai_token"
+          elif [[ -n "$JWT_ISSUER" && -n "$JWT_SECRET" ]]; then
+            echo "::notice::Using JWT credentials for Firefox Add-ons submission"
+            AUTH_METHOD="jwt"
+          elif [[ -n "$WEB_EXT_API_KEY" ]]; then
+            echo "::notice::Using API Key for Firefox Add-ons submission"
+            AUTH_METHOD="api_key"
+          else
+            echo "::warning::No Firefox Add-ons credentials found. Skipping AMO publish."
+            echo "published=false" >> $GITHUB_OUTPUT
+            echo "reason=no_credentials" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "::notice::Publishing to Firefox Add-ons..."
+          
+          cd extension
+          
+          case $AUTH_METHOD in
+            ai_token)
+              # Use AI token for automated submission with enhanced metadata
+              web-ext sign \
+                --api-key="$FIREFOX_AI_TOKEN" \
+                --api-secret="" \
+                --source-dir=. \
+                --artifacts-dir=../release-assets/amo \
+                --channel listed \
+                --timeout 300000 \
+                --verbose || {
+                  echo "::error::Failed to publish to Firefox Add-ons with AI token"
+                  echo "published=false" >> $GITHUB_OUTPUT
+                  echo "reason=ai_token_failed" >> $GITHUB_OUTPUT
+                  exit 1
+                }
+              ;;
+            jwt)
+              # Traditional JWT authentication
+              web-ext sign \
+                --api-key="$JWT_ISSUER" \
+                --api-secret="$JWT_SECRET" \
+                --source-dir=. \
+                --artifacts-dir=../release-assets/amo \
+                --channel listed \
+                --timeout 300000 || {
+                  echo "::error::Failed to publish to Firefox Add-ons"
+                  echo "published=false" >> $GITHUB_OUTPUT
+                  echo "reason=jwt_failed" >> $GITHUB_OUTPUT
+                  exit 1
+                }
+              ;;
+            api_key)
+              # Direct API key method
+              web-ext sign \
+                --api-key="$WEB_EXT_API_KEY" \
+                --source-dir=. \
+                --artifacts-dir=../release-assets/amo \
+                --channel listed \
+                --timeout 300000 || {
+                  echo "::error::Failed to publish to Firefox Add-ons"
+                  echo "published=false" >> $GITHUB_OUTPUT
+                  echo "reason=api_key_failed" >> $GITHUB_OUTPUT
+                  exit 1
+                }
+              ;;
+          esac
+          
+          cd ..
+          
+          echo "::notice::Successfully published to Firefox Add-ons"
+          echo "published=true" >> $GITHUB_OUTPUT
+          echo "auth_method=$AUTH_METHOD" >> $GITHUB_OUTPUT
+          
+          # List signed files
+          if [[ -d release-assets/amo ]]; then
+            echo "## ✅ Signed Extension" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            ls -lh release-assets/amo/ >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            
+            # Move signed XPI to main assets folder
+            cp release-assets/amo/*.xpi release-assets/ 2>/dev/null || true
+          fi
+
+      # ── Upload all artifacts to release ──
+      - name: Upload remaining assets to release
+        uses: softprops/action-gh-release@v2
+        if: steps.amo-publish.outputs.published == 'true'
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          files: release-assets/amo/*.xpi
+        continue-on-error: true
+
+      # ── Final Summary ──
+      - name: Release Summary
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          
+          echo "## 🎉 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**Release URL:** $REPO_URL/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.amo-publish.outputs.published }}" == "true" ]]; then
+            echo "### ✅ Firefox Add-ons Status" >> $GITHUB_STEP_SUMMARY
+            echo "- **Published:** Yes" >> $GITHUB_STEP_SUMMARY
+            echo "- **Auth Method:** ${{ steps.amo-publish.outputs.auth_method }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** Pending review by Mozilla" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Firefox Add-ons Status" >> $GITHUB_STEP_SUMMARY
+            echo "- **Published:** No" >> $GITHUB_STEP_SUMMARY
+            echo "- **Reason:** ${{ steps.amo-publish.outputs.reason || 'Skipped' }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Build Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -lh release-assets/*.xpi release-assets/*.whl release-assets/*.tar.gz 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "No standard artifacts" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
